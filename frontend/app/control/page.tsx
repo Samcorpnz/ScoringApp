@@ -13,10 +13,25 @@ type Tab = "score" | "outputs" | "logos" | "settings";
 
 export default function ControlPanel() {
   const { state, status, sendManualUpdate, sendReset } = useMatchState({ secret: CONTROL_SECRET, role: "control" });
-  const { data: session } = useSession();
+  // Redirect to login if not authenticated — runs client-side, no Edge Function needed
+  const { data: session, status: authStatus } = useSession({
+    required: true,
+    onUnauthenticated() {
+      window.location.href = "/login?callbackUrl=/control";
+    },
+  });
   const [tab, setTab] = useState<Tab>("score");
 
   const push = (patch: Partial<MatchState>) => sendManualUpdate(patch);
+
+  // Show nothing while checking auth — prevents flash of content
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
+        <div className="text-sm" style={{ color: "var(--text-dim)" }}>Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
