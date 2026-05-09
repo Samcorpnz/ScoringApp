@@ -283,8 +283,9 @@ function toPossession(code: number | null): Possession {
 
 function toSport(code: number): SportType {
   const map: SportType[] = [
-    "basketball_netball", "volleyball", "football",
+    "netball", "volleyball", "football",
     "handball", "hockey", "waterpolo", "tennis",
+    "basketball", "rugby_union", "rugby_league",
   ];
   return map[code] ?? "custom";
 }
