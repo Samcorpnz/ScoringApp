@@ -18,6 +18,9 @@ export default function Home() {
       <div className="max-w-2xl w-full">
         {/* Wordmark */}
         <div className="mb-12 text-center">
+          <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--accent)" }}>
+            SAMCORP
+          </p>
           <h1
             className="text-4xl font-black tracking-tight"
             style={{ color: "var(--text-primary)" }}

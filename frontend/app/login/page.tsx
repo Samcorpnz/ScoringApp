@@ -52,6 +52,9 @@ function LoginForm() {
 
         {/* Wordmark */}
         <div className="text-center mb-10">
+          <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: "var(--accent)" }}>
+            SAMCORP
+          </p>
           <h1 className="text-3xl font-black tracking-tight">
             Score<span style={{ color: "var(--accent)" }}>board</span>
           </h1>
