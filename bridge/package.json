@@ -1,0 +1,20 @@
+{
+  "name": "scoreboard-bridge",
+  "version": "1.0.0",
+  "description": "Venue-side serial bridge — reads Saturn console, pushes to cloud relay",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "serialport": "^12.0.0",
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.2"
+  }
+}

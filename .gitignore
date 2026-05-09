@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+build/
+
+# Environment files — never commit these
+.env
+.env.local
+.env.*.local
+
+# Uploaded logos (user content, not source)
+relay/uploads/
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel

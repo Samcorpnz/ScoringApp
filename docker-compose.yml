@@ -1,0 +1,57 @@
+version: "3.9"
+
+# ─── Scoreboard — local or cloud deployment ────────────────────────────────────
+#
+# Usage:
+#   1. cp relay/.env.example relay/.env        # set BRIDGE_SECRET, CONTROL_SECRET
+#   2. cp frontend/.env.example frontend/.env  # set relay URL (already defaults to http://relay:4000)
+#   3. docker compose up --build
+#
+# Then open:
+#   http://localhost:3000          — frontend (all display views + control panel)
+#   http://localhost:4000          — relay API
+#   http://localhost:4000/state    — live state JSON
+#
+# Bridge (serial reader) runs NATIVELY — serial ports are difficult to pass into
+# Docker on Windows and Mac. Run it separately:
+#   cd bridge && npm install && npm run dev
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  relay:
+    build:
+      context: ./relay
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      BRIDGE_SECRET: ${BRIDGE_SECRET:-changeme}
+      CONTROL_SECRET: ${CONTROL_SECRET:-changeme}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Logos persist across container restarts
+      - logos:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_RELAY_URL: ${NEXT_PUBLIC_RELAY_URL:-http://localhost:4000}
+        NEXT_PUBLIC_CONTROL_SECRET: ${NEXT_PUBLIC_CONTROL_SECRET:-changeme}
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      relay:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  logos:
