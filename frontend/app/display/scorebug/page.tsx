@@ -12,6 +12,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
 import { formatClock } from "../../types";
 
@@ -158,7 +159,7 @@ function TeamBlock({ name, score, color, hasPossession, logoSrc, side }: {
         width: 36, height: 36, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         {logoSrc ? (
-          <img src={logoSrc} alt={name} style={{ width: 34, height: 34, objectFit: "contain" }} />
+          <Image src={logoSrc} alt={name} width={34} height={34} style={{ objectFit: "contain" }} />
         ) : (
           <div style={{
             width: 34, height: 34, borderRadius: 4,

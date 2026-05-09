@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
@@ -149,8 +150,8 @@ function TeamSide({ team, side, possession, relayUrl }: { team: TeamState; side:
       }} />
 
       {logoSrc && (
-        <img src={logoSrc} alt={team.name}
-          style={{ width: 120, height: 120, objectFit: "contain", filter: "drop-shadow(0 0 20px rgba(0,0,0,0.6))" }} />
+        <Image src={logoSrc} alt={team.name} width={120} height={120}
+          style={{ objectFit: "contain", filter: "drop-shadow(0 0 20px rgba(0,0,0,0.6))" }} />
       )}
       <p className="uppercase font-bold tracking-widest" style={{ fontSize: "1.2rem", color: "var(--text-secondary)", letterSpacing: "0.2em" }}>
         {team.name}

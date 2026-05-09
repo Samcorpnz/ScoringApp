@@ -12,10 +12,12 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const socketRef = useRef<Socket | null>(null);
+  const secret = auth?.secret;
+  const role = auth?.role;
 
   useEffect(() => {
     const socket = io(RELAY_URL, {
-      auth: auth ?? {},
+      auth: secret !== undefined ? { secret, role } : {},
       reconnection: true,
       reconnectionDelay: 2000,
     });
@@ -32,7 +34,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     });
 
     return () => { socket.disconnect(); };
-  }, []);
+  }, [secret, role]);
 
   const sendManualUpdate = (patch: Partial<MatchState>) => {
     socketRef.current?.emit("manualUpdate", patch);

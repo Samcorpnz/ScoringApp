@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
 import { ConnectionBadge } from "../components/ConnectionBadge";
@@ -431,7 +432,9 @@ function LogoUploader({ team, teamState, push, state }: {
         onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
       >
         {logoSrc ? (
-          <img src={logoSrc} alt={teamState.name} style={{ maxHeight: 110, maxWidth: "80%", objectFit: "contain" }} />
+          <div style={{ position: "relative", height: 110, width: "80%" }}>
+            <Image src={logoSrc} alt={teamState.name} fill style={{ objectFit: "contain" }} />
+          </div>
         ) : (
           <div className="text-center">
             <p className="text-2xl mb-1">⬆</p>

@@ -31,7 +31,7 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
         )}
         <div className="flex flex-col items-center" style={{ minWidth: 60 }}>
           {logoSrc ? (
-            <img src={logoSrc} alt={team.name} style={{ width: 28, height: 28, objectFit: "contain" }} />
+            <Image src={logoSrc} alt={team.name} width={28} height={28} style={{ objectFit: "contain" }} />
           ) : (
             <div
               className="rounded-sm flex items-center justify-center text-xs font-black"
@@ -62,10 +62,12 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
       {/* Logo */}
       {logoSrc && !isCompact && (
         <div className="mb-3" style={{ width: 64, height: 64, position: "relative" }}>
-          <img
+          <Image
             src={logoSrc}
             alt={team.name}
-            style={{ width: 64, height: 64, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(0,0,0,0.5))" }}
+            width={64}
+            height={64}
+            style={{ objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(0,0,0,0.5))" }}
           />
         </div>
       )}
