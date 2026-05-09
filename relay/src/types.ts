@@ -18,7 +18,9 @@ export interface TeamState {
 
 export type Possession = "home" | "visitor" | "both" | "none";
 export type SportType =
-  | "basketball_netball" | "volleyball" | "football"
+  | "netball" | "basketball"
+  | "rugby_union" | "rugby_league"
+  | "volleyball" | "football"
   | "handball" | "hockey" | "waterpolo" | "tennis" | "custom";
 
 export interface MatchState {
@@ -43,7 +45,7 @@ export const DEFAULT_MATCH_STATE: MatchState = {
   isRunning: false,
   possession: "none",
   hornActive: false,
-  sport: "basketball_netball",
+  sport: "netball",
   inputSource: "none",
   home:    { name: "Home",    score: 0, faults: 0, timeouts: 0, players: [], color: "#F59E0B", logoUrl: "" },
   visitor: { name: "Visitor", score: 0, faults: 0, timeouts: 0, players: [], color: "#818CF8", logoUrl: "" },

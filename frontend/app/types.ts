@@ -18,7 +18,9 @@ export interface TeamState {
 
 export type Possession = "home" | "visitor" | "both" | "none";
 export type SportType =
-  | "basketball_netball" | "volleyball" | "football"
+  | "netball" | "basketball"
+  | "rugby_union" | "rugby_league"
+  | "volleyball" | "football"
   | "handball" | "hockey" | "waterpolo" | "tennis" | "custom";
 
 export interface MatchState {
@@ -43,7 +45,7 @@ export const DEFAULT_MATCH_STATE: MatchState = {
   isRunning: false,
   possession: "none",
   hornActive: false,
-  sport: "basketball_netball",
+  sport: "netball",
   inputSource: "none",
   home:    { name: "Home",    score: 0, faults: 0, timeouts: 0, players: [], color: "#F59E0B", logoUrl: "" },
   visitor: { name: "Visitor", score: 0, faults: 0, timeouts: 0, players: [], color: "#818CF8", logoUrl: "" },
@@ -59,14 +61,17 @@ export function formatClock(totalSeconds: number): string {
 
 export function sportLabel(sport: SportType): string {
   const map: Record<SportType, string> = {
-    basketball_netball: "Netball / Basketball",
-    volleyball: "Volleyball",
-    football: "Football",
-    handball: "Handball",
-    hockey: "Hockey",
-    waterpolo: "Water Polo",
-    tennis: "Tennis",
-    custom: "Custom",
+    netball:      "Netball",
+    basketball:   "Basketball",
+    rugby_union:  "Rugby Union",
+    rugby_league: "Rugby League",
+    volleyball:   "Volleyball",
+    football:     "Football",
+    handball:     "Handball",
+    hockey:       "Hockey",
+    waterpolo:    "Water Polo",
+    tennis:       "Tennis",
+    custom:       "Custom",
   };
   return map[sport] ?? sport;
 }

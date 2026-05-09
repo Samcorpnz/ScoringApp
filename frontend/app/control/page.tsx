@@ -5,6 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
 import { ConnectionBadge } from "../components/ConnectionBadge";
 import { MatchState, TeamState, formatClock } from "../types";
+import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 
 const RELAY_URL      = process.env.NEXT_PUBLIC_RELAY_URL     ?? "http://localhost:4000";
 const CONTROL_SECRET = process.env.NEXT_PUBLIC_CONTROL_SECRET ?? "";
@@ -459,18 +460,9 @@ function LogoUploader({ team, teamState, push, state }: {
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
-const SPORTS = [
-  { value: "basketball_netball", label: "Netball / Basketball" },
-  { value: "volleyball",         label: "Volleyball"           },
-  { value: "football",           label: "Football"             },
-  { value: "handball",           label: "Handball"             },
-  { value: "hockey",             label: "Hockey"               },
-  { value: "waterpolo",          label: "Water Polo"           },
-  { value: "tennis",             label: "Tennis"               },
-  { value: "custom",             label: "Custom"               },
-];
 
 function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<MatchState>) => void }) {
+  const template = getTemplate(state.sport);
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
       {/* Team colours */}
@@ -514,24 +506,55 @@ function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<Mat
         </div>
       </Card>
 
-      {/* Sport */}
+      {/* Sport selector */}
       <Card title="Sport">
-        <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>Affects terminology on display views.</p>
+        <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>Select sport to update display labels and preview match defaults.</p>
         <div className="grid grid-cols-2 gap-2">
-          {SPORTS.map(s => (
-            <button key={s.value}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-left"
+          {SPORT_TEMPLATES.map(t => (
+            <button key={t.sport}
+              className="rounded-lg px-3 py-2 text-left"
               style={{
-                background: state.sport === s.value ? "var(--accent-dim)" : "var(--bg-elevated)",
-                border: `1px solid ${state.sport === s.value ? "var(--border-accent)" : "var(--border)"}`,
-                color: state.sport === s.value ? "var(--accent)" : "var(--text-secondary)",
+                background: state.sport === t.sport ? "var(--accent-dim)" : "var(--bg-elevated)",
+                border: `1px solid ${state.sport === t.sport ? "var(--border-accent)" : "var(--border)"}`,
+                color: state.sport === t.sport ? "var(--accent)" : "var(--text-secondary)",
               }}
-              onClick={() => push({ sport: s.value as MatchState["sport"] })}
+              onClick={() => push({ sport: t.sport })}
             >
-              {s.label}
+              <div className="text-sm font-semibold">{t.label}</div>
+              <div className="text-xs mt-0.5" style={{ color: state.sport === t.sport ? "var(--accent)" : "var(--text-dim)", opacity: 0.85 }}>{t.structure}</div>
             </button>
           ))}
         </div>
+      </Card>
+
+      {/* Template defaults preview */}
+      <Card title={`Template Defaults — ${template.label}`}>
+        <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>
+          Applies match structure without resetting scores, team names, or colours.
+        </p>
+        <div className="space-y-1.5 mb-4">
+          <TemplateRow label="Structure" value={template.structure} />
+          <TemplateRow label="Clock" value={template.clockSeconds === 0
+            ? (template.countDown ? "0:00 (no clock)" : "Counts up from 0:00")
+            : `${template.countDown ? "Counts down from" : "Counts up from"} ${Math.floor(template.clockSeconds / 60)}:${String(template.clockSeconds % 60).padStart(2, "0")}`} />
+          <TemplateRow label="Timeouts" value={template.timeoutsPerTeam === 0 ? "None" : `${template.timeoutsPerTeam} per team`} />
+          <TemplateRow label="Possession" value={template.defaultPossession === "none" ? "Off" : "On"} />
+        </div>
+        <button
+          className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+          onClick={() => push({
+            sport: template.sport,
+            clockSeconds: template.clockSeconds,
+            period: "1",
+            isRunning: false,
+            possession: template.defaultPossession,
+            home: { ...state.home, timeouts: template.timeoutsPerTeam, faults: 0 },
+            visitor: { ...state.visitor, timeouts: template.timeoutsPerTeam, faults: 0 },
+          })}
+        >
+          Apply Template Defaults
+        </button>
       </Card>
 
       {/* Connection info */}
@@ -549,6 +572,15 @@ function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<Mat
 }
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
+
+function TemplateRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-xs">
+      <span style={{ color: "var(--text-secondary)" }}>{label}</span>
+      <span style={{ color: "var(--text-primary)" }}>{value}</span>
+    </div>
+  );
+}
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
