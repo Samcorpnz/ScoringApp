@@ -33,6 +33,16 @@ export function createServer(options: ServerOptions = {}) {
   let currentState: MatchState = { ...DEFAULT_MATCH_STATE };
   let bridgeSocket: Socket | null = null;
 
+  // Tick the clock every second when running and no bridge is driving it
+  setInterval(() => {
+    if (!currentState.isRunning || bridgeSocket?.connected) return;
+    const next = currentState.countDown
+      ? currentState.clockSeconds - 1
+      : currentState.clockSeconds + 1;
+    currentState = { ...currentState, clockSeconds: next, sequenceId: currentState.sequenceId + 1 };
+    io.emit("matchStateChange", currentState);
+  }, 1000);
+
   // ─── Logo upload ─────────────────────────────────────────────────────────────
 
   const storage = multer.diskStorage({

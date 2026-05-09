@@ -1,9 +1,11 @@
 "use client";
 
-import { formatClock } from "../types";
+import { formatClockDisplay } from "../types";
+import { useInterpolatedClock } from "../hooks/useInterpolatedClock";
 
 interface Props {
   clockSeconds: number;
+  countDown: boolean;
   period: string;
   isRunning: boolean;
   hornActive: boolean;
@@ -11,8 +13,9 @@ interface Props {
   size?: "full" | "compact";
 }
 
-export function ClockPanel({ clockSeconds, period, isRunning, hornActive, matchName, size = "full" }: Props) {
+export function ClockPanel({ clockSeconds, countDown, period, isRunning, hornActive, matchName, size = "full" }: Props) {
   const isCompact = size === "compact";
+  const display = useInterpolatedClock({ clockSeconds, isRunning, countDown });
 
   return (
     <div className="flex flex-col items-center justify-center gap-2">
@@ -39,7 +42,7 @@ export function ClockPanel({ clockSeconds, period, isRunning, hornActive, matchN
               : "none",
         }}
       >
-        {formatClock(clockSeconds)}
+        {formatClockDisplay(display)}
       </div>
 
       {/* Period */}

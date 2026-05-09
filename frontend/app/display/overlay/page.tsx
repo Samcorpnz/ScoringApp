@@ -6,13 +6,15 @@
  */
 
 import { useMatchState } from "../../hooks/useMatchState";
+import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
-import { formatClock } from "../../types";
+import { formatClockDisplay } from "../../types";
 
 export default function OverlayDisplay() {
   const { state } = useMatchState();
-  const { home, visitor, clockSeconds, period, isRunning, hornActive, possession } = state;
+  const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
 
   return (
     <div
@@ -71,7 +73,7 @@ export default function OverlayDisplay() {
               lineHeight: 1,
             }}
           >
-            {formatClock(clockSeconds)}
+            {formatClockDisplay(displayClock)}
           </span>
           <span
             style={{

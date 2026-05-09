@@ -26,6 +26,7 @@ export type SportType =
 export interface MatchState {
   sequenceId: number;
   clockSeconds: number;
+  countDown: boolean;
   period: string;
   matchName: string;
   isRunning: boolean;
@@ -40,6 +41,7 @@ export interface MatchState {
 export const DEFAULT_MATCH_STATE: MatchState = {
   sequenceId: 0,
   clockSeconds: 0,
+  countDown: false,
   period: "1",
   matchName: "",
   isRunning: false,

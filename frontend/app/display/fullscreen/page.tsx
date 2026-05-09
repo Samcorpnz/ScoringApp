@@ -11,10 +11,11 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
+import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { TeamState, Possession } from "../../types";
+import { TeamState, Possession, formatClockDisplay } from "../../types";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -120,7 +121,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
         className="flex flex-col items-center justify-center px-12"
         style={{ flexShrink: 0, borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
       >
-        <ClockPanel clockSeconds={clockSeconds} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
 
       {/* Visitor side */}
@@ -179,7 +180,7 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
         <TeamSide team={home} side="home" possession={state.possession} relayUrl={relayUrl} />
       </div>
       <div className="flex items-center justify-center py-6" style={{ borderBottom: "1px solid var(--border)" }}>
-        <ClockPanel clockSeconds={clockSeconds} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
       <div className="flex-1 flex items-center justify-center">
         <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} />
@@ -191,9 +192,10 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
 // ─── Layout: Minimal ─────────────────────────────────────────────────────────
 
 function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["state"] }) {
-  const { home, visitor, clockSeconds, period, isRunning } = state;
+  const { home, visitor, clockSeconds, countDown, period, isRunning } = state;
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
       {state.matchName && (
@@ -208,8 +210,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
         </div>
         <div className="flex flex-col items-center gap-3">
           <p className="clock-digit" style={{ fontSize: "5rem", color: isRunning ? "#fff" : "var(--text-secondary)" }}>
-            {Math.floor(Math.abs(clockSeconds) / 60).toString().padStart(2, "0")}:
-            {(Math.abs(clockSeconds) % 60).toString().padStart(2, "0")}
+            {formatClockDisplay(displayClock)}
           </p>
           <p className="font-black tracking-widest" style={{ fontSize: "2rem", color: "var(--accent)" }}>Q{period}</p>
         </div>

@@ -14,7 +14,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
-import { formatClock } from "../../types";
+import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
+import { formatClockDisplay } from "../../types";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -32,7 +33,8 @@ function Scorebug() {
   const size     = (params.get("size")     as string) || "md";
 
   const { state } = useMatchState();
-  const { home, visitor, clockSeconds, period, isRunning, hornActive, possession } = state;
+  const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
 
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
@@ -97,7 +99,7 @@ function Scorebug() {
               letterSpacing: "0.05em",
               lineHeight: 1,
             }}>
-              {formatClock(clockSeconds)}
+              {formatClockDisplay(displayClock)}
             </span>
             <span style={{
               fontSize: "0.6rem",

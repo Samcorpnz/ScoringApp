@@ -60,6 +60,7 @@ export default function BasicDisplay() {
         >
           <ClockPanel
             clockSeconds={state.clockSeconds}
+            countDown={state.countDown}
             period={state.period}
             isRunning={state.isRunning}
             hornActive={state.hornActive}

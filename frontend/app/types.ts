@@ -26,6 +26,7 @@ export type SportType =
 export interface MatchState {
   sequenceId: number;
   clockSeconds: number;
+  countDown: boolean;
   period: string;
   matchName: string;
   isRunning: boolean;
@@ -40,6 +41,7 @@ export interface MatchState {
 export const DEFAULT_MATCH_STATE: MatchState = {
   sequenceId: -1,
   clockSeconds: 0,
+  countDown: false,
   period: "1",
   matchName: "",
   isRunning: false,
@@ -57,6 +59,14 @@ export function formatClock(totalSeconds: number): string {
   const s = abs % 60;
   const sign = totalSeconds < 0 ? "-" : "";
   return `${sign}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+// Use for live display — shows MM:SS above 60s, SS.t below 60s
+export function formatClockDisplay(seconds: number): string {
+  if (seconds >= 60) return formatClock(Math.floor(seconds));
+  const s = Math.floor(seconds);
+  const tenths = Math.floor((seconds - s) * 10);
+  return `${String(s).padStart(2, "0")}.${tenths}`;
 }
 
 export function sportLabel(sport: SportType): string {

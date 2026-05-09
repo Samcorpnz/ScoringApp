@@ -48,6 +48,9 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
+      AUTH_USERS: ${AUTH_USERS:-admin:changeme}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-local-dev-secret}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
     depends_on:
       relay:
         condition: service_healthy

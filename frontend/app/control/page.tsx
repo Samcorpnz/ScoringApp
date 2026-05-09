@@ -5,7 +5,8 @@ import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
 import { ConnectionBadge } from "../components/ConnectionBadge";
-import { MatchState, TeamState, formatClock } from "../types";
+import { MatchState, TeamState, formatClockDisplay } from "../types";
+import { useInterpolatedClock } from "../hooks/useInterpolatedClock";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 
 const RELAY_URL      = process.env.NEXT_PUBLIC_RELAY_URL     ?? "http://localhost:4000";
@@ -120,10 +121,12 @@ function ScoreTab({ state, push, sendReset }: {
   push: (p: Partial<MatchState>) => void;
   sendReset: () => void;
 }) {
-  const [homeName,  setHomeName]  = useState("");
-  const [visName,   setVisName]   = useState("");
-  const [matchName, setMatchName] = useState("");
-  const [period,    setPeriod]    = useState("");
+  const [homeName,   setHomeName]   = useState("");
+  const [visName,    setVisName]    = useState("");
+  const [matchName,  setMatchName]  = useState("");
+  const [period,     setPeriod]     = useState("");
+  const [clockInput, setClockInput] = useState("");
+  const displayClock = useInterpolatedClock({ clockSeconds: state.clockSeconds, isRunning: state.isRunning, countDown: state.countDown });
 
   return (
     <div className="space-y-6">
@@ -141,7 +144,7 @@ function ScoreTab({ state, push, sendReset }: {
           </div>
           <div className="text-center">
             <p className="clock-digit text-3xl" style={{ color: state.isRunning ? "#fff" : "var(--text-secondary)" }}>
-              {formatClock(state.clockSeconds)}
+              {formatClockDisplay(displayClock)}
             </p>
             <p className="text-xs mt-1 font-black tracking-widest" style={{ color: "var(--accent)" }}>QTR {state.period}</p>
             <p className="text-xs mt-1 font-semibold" style={{ color: state.isRunning ? "var(--running)" : "var(--stopped)" }}>
@@ -187,6 +190,43 @@ function ScoreTab({ state, push, sendReset }: {
               onClick={() => push({ possession: state.possession === "home" ? "none" : "home" })} />
             <SmallBtn label="Visitor ball ▶" active={state.possession === "visitor"}
               onClick={() => push({ possession: state.possession === "visitor" ? "none" : "visitor" })} />
+          </div>
+          <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>Adjust clock</p>
+              <SmallBtn
+                label={state.countDown ? "↓ Count down" : "↑ Count up"}
+                active={state.countDown}
+                onClick={() => push({ countDown: !state.countDown })}
+              />
+            </div>
+            <ClockAdjustButtons
+              clockSeconds={state.clockSeconds}
+              onAdjust={d => push({ clockSeconds: Math.max(0, state.clockSeconds + d) })}
+            />
+            <div className="flex gap-2 mt-2">
+              <input
+                className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
+                placeholder="MM:SS"
+                value={clockInput}
+                onChange={e => setClockInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    const s = parseClock(clockInput);
+                    if (s !== null) { push({ clockSeconds: s }); setClockInput(""); }
+                  }
+                }}
+              />
+              <button
+                className="rounded-lg px-3 py-2 text-xs font-bold"
+                style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+                onClick={() => {
+                  const s = parseClock(clockInput);
+                  if (s !== null) { push({ clockSeconds: s }); setClockInput(""); }
+                }}
+              >Set</button>
+            </div>
           </div>
           <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
             <button className="w-full rounded-lg py-2 text-sm font-bold tracking-wide uppercase"
@@ -561,6 +601,7 @@ function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<Mat
           onClick={() => push({
             sport: template.sport,
             clockSeconds: template.clockSeconds,
+            countDown: template.countDown,
             period: "1",
             isRunning: false,
             possession: template.defaultPossession,
@@ -656,6 +697,38 @@ function NameField({ label, value, placeholder, onChange, onCommit }: {
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
           onClick={onCommit}>Set</button>
       </div>
+    </div>
+  );
+}
+
+function parseClock(input: string): number | null {
+  const trimmed = input.trim();
+  // Accept MM:SS or plain seconds
+  const colonMatch = trimmed.match(/^(\d{1,3}):(\d{2})$/);
+  if (colonMatch) return parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10);
+  const seconds = parseInt(trimmed, 10);
+  if (!isNaN(seconds) && seconds >= 0) return seconds;
+  return null;
+}
+
+function ClockAdjustButtons({ clockSeconds, onAdjust }: { clockSeconds: number; onAdjust: (d: number) => void }) {
+  const adjustments = [-60, -10, -1, 1, 10, 60];
+  return (
+    <div className="flex items-center gap-1">
+      {adjustments.map(d => (
+        <button
+          key={d}
+          className="rounded-lg py-1.5 text-xs font-black flex-1"
+          style={{
+            background: d < 0 ? "var(--bg-elevated)" : "var(--accent-dim)",
+            border: `1px solid ${d < 0 ? "var(--border)" : "var(--border-accent)"}`,
+            color: d < 0 ? "var(--text-secondary)" : "var(--accent)",
+          }}
+          onClick={() => onAdjust(d)}
+        >
+          {d > 0 ? "+" : ""}{d < -59 || d > 59 ? `${d / 60}m` : `${d}s`}
+        </button>
+      ))}
     </div>
   );
 }

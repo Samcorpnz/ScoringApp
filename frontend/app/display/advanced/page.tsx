@@ -49,6 +49,7 @@ export default function AdvancedDisplay() {
           >
             <ClockPanel
               clockSeconds={state.clockSeconds}
+              countDown={state.countDown}
               period={state.period}
               isRunning={state.isRunning}
               hornActive={state.hornActive}
