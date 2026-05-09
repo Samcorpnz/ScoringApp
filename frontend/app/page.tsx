@@ -1,3 +1,5 @@
+"use client";
+
 const links = [
   { href: "/control",               title: "Control Panel",        desc: "Operator view — scores, names, logos, colours, outputs.", highlight: true },
   { href: "/display/fullscreen",    title: "Fullscreen Display",   desc: "Second screen / projector / capture card. Press F for fullscreen." },
