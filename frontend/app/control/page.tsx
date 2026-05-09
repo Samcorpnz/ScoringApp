@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
 import { ConnectionBadge } from "../components/ConnectionBadge";
 import { MatchState, TeamState, formatClock } from "../types";
@@ -12,6 +13,7 @@ type Tab = "score" | "outputs" | "logos" | "settings";
 
 export default function ControlPanel() {
   const { state, status, sendManualUpdate, sendReset } = useMatchState({ secret: CONTROL_SECRET, role: "control" });
+  const { data: session } = useSession();
   const [tab, setTab] = useState<Tab>("score");
 
   const push = (patch: Partial<MatchState>) => sendManualUpdate(patch);
@@ -31,7 +33,25 @@ export default function ControlPanel() {
             Control
           </span>
         </div>
-        <ConnectionBadge status={status} />
+        <div className="flex items-center gap-4">
+          <ConnectionBadge status={status} />
+          {session?.user?.name && (
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+              {session.user.name}
+            </span>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       {/* Tab nav */}
