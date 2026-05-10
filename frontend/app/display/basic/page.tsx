@@ -1,17 +1,19 @@
 "use client";
 
 import { useMatchState } from "../../hooks/useMatchState";
+import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 
 export default function BasicDisplay() {
   const { state, status } = useMatchState();
+  const { textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-8"
-      style={{ background: "var(--bg-base)" }}
+      style={themeStyle}
     >
       {/* Connection badge — top right */}
       <div className="fixed top-4 right-4 z-10">

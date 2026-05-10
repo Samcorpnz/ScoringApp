@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
+import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { formatClockDisplay } from "../../types";
 
@@ -35,6 +36,7 @@ function Scorebug() {
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
@@ -55,6 +57,7 @@ function Scorebug() {
       alignItems: vAlign,
       justifyContent: align,
       padding: 16,
+      ...themeVars,
     }}>
       <div style={{ transform: `scale(${scale})`, transformOrigin: `${position.includes("l") ? "left" : "right"} ${position.includes("b") ? "bottom" : "top"}` }}>
         <div style={{
@@ -105,7 +108,7 @@ function Scorebug() {
               fontSize: "0.6rem",
               fontWeight: 800,
               letterSpacing: "0.2em",
-              color: "#00C8FF",
+              color: "var(--accent)",
               textTransform: "uppercase",
             }}>
               {period === "E" ? "EXTRA" : `QTR ${period}`}

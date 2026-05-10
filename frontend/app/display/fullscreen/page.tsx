@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
+import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
@@ -26,6 +27,7 @@ export default function FullscreenDisplay() {
   const [layout, setLayout] = useState<Layout>("wide");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHud, setShowHud] = useState(true);
+  const { textScale: _ts, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -69,8 +71,9 @@ export default function FullscreenDisplay() {
     <div
       style={{
         width: "100vw", height: "100vh", overflow: "hidden",
-        background: "var(--bg-base)", position: "relative",
+        position: "relative",
         cursor: showHud ? "default" : "none",
+        ...themeStyle,
       }}
     >
       {/* HUD overlay — fades out after inactivity */}
@@ -157,7 +160,7 @@ function TeamSide({ team, side, possession, relayUrl }: { team: TeamState; side:
       <p className="uppercase font-bold tracking-widest" style={{ fontSize: "1.2rem", color: "var(--text-secondary)", letterSpacing: "0.2em" }}>
         {team.name}
       </p>
-      <p className="score-digit" style={{ fontSize: "12rem", color, textShadow: `0 0 80px ${color}33`, lineHeight: 0.9 }}>
+      <p className="score-digit" style={{ fontSize: "calc(12rem * var(--text-scale, 1))", color, textShadow: `0 0 80px ${color}33`, lineHeight: 0.9 }}>
         {team.score}
       </p>
       {(team.faults > 0 || team.timeouts > 0) && (
@@ -206,17 +209,17 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
       <div className="flex items-center gap-16">
         <div className="text-center">
           <p className="uppercase font-bold tracking-widest mb-2" style={{ fontSize: "1rem", color: "var(--text-secondary)" }}>{home.name}</p>
-          <p className="score-digit" style={{ fontSize: "14rem", color: homeColor, lineHeight: 0.85 }}>{home.score}</p>
+          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: homeColor, lineHeight: 0.85 }}>{home.score}</p>
         </div>
         <div className="flex flex-col items-center gap-3">
-          <p className="clock-digit" style={{ fontSize: "5rem", color: isRunning ? "#fff" : "var(--text-secondary)" }}>
+          <p className="clock-digit" style={{ fontSize: "calc(5rem * var(--text-scale, 1))", color: isRunning ? "#fff" : "var(--text-secondary)" }}>
             {formatClockDisplay(displayClock)}
           </p>
-          <p className="font-black tracking-widest" style={{ fontSize: "2rem", color: "var(--accent)" }}>Q{period}</p>
+          <p className="font-black tracking-widest" style={{ fontSize: "calc(2rem * var(--text-scale, 1))", color: "var(--accent)" }}>Q{period}</p>
         </div>
         <div className="text-center">
           <p className="uppercase font-bold tracking-widest mb-2" style={{ fontSize: "1rem", color: "var(--text-secondary)" }}>{visitor.name}</p>
-          <p className="score-digit" style={{ fontSize: "14rem", color: visitorColor, lineHeight: 0.85 }}>{visitor.score}</p>
+          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: visitorColor, lineHeight: 0.85 }}>{visitor.score}</p>
         </div>
       </div>
     </div>

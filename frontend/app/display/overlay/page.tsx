@@ -6,6 +6,7 @@
  */
 
 import { useMatchState } from "../../hooks/useMatchState";
+import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
@@ -15,11 +16,13 @@ export default function OverlayDisplay() {
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 
   return (
     <div
       style={{
         background: "transparent",
+        ...themeVars,
         width: "100vw",
         display: "flex",
         alignItems: "flex-end",

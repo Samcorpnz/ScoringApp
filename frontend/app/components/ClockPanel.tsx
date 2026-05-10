@@ -33,7 +33,7 @@ export function ClockPanel({ clockSeconds, countDown, period, isRunning, hornAct
       <div
         className={`clock-digit ${hornActive ? "horn-active" : ""}`}
         style={{
-          fontSize: isCompact ? "2rem" : "4.5rem",
+          fontSize: isCompact ? "2rem" : "calc(4.5rem * var(--text-scale, 1))",
           color: hornActive ? "var(--danger)" : isRunning ? "var(--text-primary)" : "var(--text-secondary)",
           textShadow: isRunning && !hornActive
             ? "0 0 30px rgba(255,255,255,0.15)"
@@ -49,7 +49,7 @@ export function ClockPanel({ clockSeconds, countDown, period, isRunning, hornAct
       <div className="flex flex-col items-center gap-1">
         <p
           className="uppercase font-black tracking-widest"
-          style={{ fontSize: isCompact ? "1.2rem" : "2rem", color: "var(--accent)" }}
+          style={{ fontSize: isCompact ? "1.2rem" : "calc(2rem * var(--text-scale, 1))", color: "var(--accent)" }}
         >
           {period}
         </p>

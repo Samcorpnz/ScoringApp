@@ -5,7 +5,7 @@ import fs from "fs";
 import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
-import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { MatchState, DEFAULT_MATCH_STATE, DEFAULT_DISPLAY_THEME } from "./types";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -113,6 +113,40 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ status: "removed" });
   });
 
+  // ─── Competition logo upload ──────────────────────────────────────────────────
+
+  const compStorage = multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".png";
+      cb(null, `competition${ext}`);
+    },
+  });
+
+  const compUpload = multer({
+    storage: compStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+
+  app.post("/api/competition-logo", logoUploadAuth, compUpload.single("logo"), (req, res) => {
+    if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+    const ext = path.extname(req.file.filename).toLowerCase();
+    const competitionLogoUrl = `/logos/competition${ext}?t=${Date.now()}`;
+    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl } });
+    res.json({ competitionLogoUrl });
+  });
+
+  app.delete("/api/competition-logo", logoUploadAuth, (req, res) => {
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
+    files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
+    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl: "" } });
+    res.json({ status: "removed" });
+  });
+
   // ─── Sound upload ────────────────────────────────────────────────────────────
 
   const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
@@ -191,8 +225,9 @@ export function createServer(options: ServerOptions = {}) {
         if (state.sequenceId >= currentState.sequenceId) {
           currentState = {
             ...state,
-            home:    { ...state.home,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
-            visitor: { ...state.visitor, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+            home:         { ...state.home,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
+            visitor:      { ...state.visitor, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+            displayTheme: { ...currentState.displayTheme },
           };
           io.emit("matchStateChange", currentState);
         }
@@ -211,6 +246,7 @@ export function createServer(options: ServerOptions = {}) {
           sequenceId: currentState.sequenceId + 1,
           home:    { ...DEFAULT_MATCH_STATE.home,    name: currentState.home.name,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
           visitor: { ...DEFAULT_MATCH_STATE.visitor, name: currentState.visitor.name, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+          displayTheme: { ...currentState.displayTheme },
         };
         io.emit("matchStateChange", currentState);
         if (bridgeSocket?.connected) bridgeSocket.emit("manualUpdate", currentState);
