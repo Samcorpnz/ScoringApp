@@ -12,6 +12,13 @@
     "dev:frontend": "npm run dev --workspace=frontend",
     "build:relay": "npm run build --workspace=relay",
     "build:frontend": "npm run build --workspace=frontend",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "postinstall": "node scripts/patch-postcss-cve-2026-41305.js"
+  },
+  "overrides": {
+    "postcss": "^8.5.10",
+    "next": {
+      "postcss": "^8.5.10"
+    }
   }
 }
