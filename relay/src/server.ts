@@ -113,6 +113,41 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ status: "removed" });
   });
 
+  // ─── Sound upload ────────────────────────────────────────────────────────────
+
+  const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
+  fs.mkdirSync(SOUNDS_DIR, { recursive: true });
+  app.use("/sounds", express.static(SOUNDS_DIR));
+
+  const soundStorage = multer.diskStorage({
+    destination: SOUNDS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      cb(null, `${id}${ext}`);
+    },
+  });
+
+  const soundUpload = multer({
+    storage: soundStorage,
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      cb(null, file.mimetype.startsWith("audio/"));
+    },
+  });
+
+  app.post("/api/sound", logoUploadAuth, soundUpload.single("sound"), (req, res) => {
+    if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+    res.json({ filename: req.file.filename, originalName: req.file.originalname });
+  });
+
+  app.delete("/api/sound/:filename", logoUploadAuth, (req, res) => {
+    const filename = path.basename(req.params.filename);
+    const filePath = path.join(SOUNDS_DIR, filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    res.json({ status: "removed" });
+  });
+
   // ─── REST ────────────────────────────────────────────────────────────────────
 
   app.get("/", (_req, res) => res.json({ status: "ok", version: "1.0.0" }));
