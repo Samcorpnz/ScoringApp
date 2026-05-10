@@ -83,7 +83,11 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
       {/* Score */}
       <p
         className="score-digit"
-        style={{ fontSize: isCompact ? "3.5rem" : "7rem", color, textShadow: `0 0 40px ${color}44` }}
+        style={{
+          fontSize: isCompact ? "3.5rem" : "calc(7rem * var(--text-scale, 1))",
+          color,
+          textShadow: `0 0 40px ${color}44`,
+        }}
       >
         {team.score}
       </p>

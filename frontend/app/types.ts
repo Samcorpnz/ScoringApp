@@ -23,6 +23,92 @@ export type SportType =
   | "volleyball" | "football"
   | "handball" | "hockey" | "waterpolo" | "tennis" | "custom";
 
+export interface NetballPlayerStats {
+  playerId: number;
+  playerName: string;
+  playerFirstname: string;
+  playerSurname: string;
+  currentPosition: string;
+  startingPositionCode: string;
+  goals: number;
+  goalAttempts: number;
+  goalMisses: number;
+  shootingPercentage: number;
+  goalAssists: number;
+  feeds: number;
+  centrePassReceives: number;
+  secondPhaseReceives: number;
+  penalties: number;
+  obstructionPenalties: number;
+  contactPenalties: number;
+  intercepts: number;
+  deflections: number;
+  pickups: number;
+  rebounds: number;
+  offensiveRebounds: number;
+  defensiveRebounds: number;
+  turnovers: number;
+  gain: number;
+  blocked: number;
+  blocks: number;
+  badPasses: number;
+  badHands: number;
+  offsides: number;
+  breaks: number;
+}
+
+export interface NetballTeamStats {
+  squadId: number;
+  squadName: string;
+  goals: number;
+  goalAttempts: number;
+  shootingPercentage: number;
+  goalsFromCentrePass: number;
+  goalsFromTurnovers: number;
+  goalsFromGains: number;
+  centrePassReceives: number;
+  secondPhaseReceives: number;
+  feeds: number;
+  penalties: number;
+  turnovers: number;
+  gain: number;
+  rebounds: number;
+  offensiveRebounds: number;
+  defensiveRebounds: number;
+  intercepts: number;
+  deflections: number;
+  pickups: number;
+  blocks: number;
+  timeInPossession: number;
+  players: NetballPlayerStats[];
+}
+
+export interface NetballMatchStats {
+  matchId: number;
+  matchStatus: string;
+  period: number;
+  periodCompleted: number;
+  roundNumber: number;
+  home: NetballTeamStats;
+  visitor: NetballTeamStats;
+}
+
+export interface DisplayTheme {
+  primaryColor: string;
+  backgroundColor: string;
+  font: string;
+  textScale: number;
+  competitionLogoUrl: string;
+}
+
+export const DEFAULT_DISPLAY_THEME: DisplayTheme = {
+  primaryColor: "#00C8FF",
+  backgroundColor: "#07090F",
+  font: "",
+  textScale: 1,
+  competitionLogoUrl: "",
+};
+
 export interface MatchState {
   sequenceId: number;
   clockSeconds: number;
@@ -36,6 +122,8 @@ export interface MatchState {
   inputSource: string;
   home: TeamState;
   visitor: TeamState;
+  netballStats?: NetballMatchStats;
+  displayTheme: DisplayTheme;
 }
 
 export const DEFAULT_MATCH_STATE: MatchState = {
@@ -51,6 +139,7 @@ export const DEFAULT_MATCH_STATE: MatchState = {
   inputSource: "none",
   home:    { name: "Home",    score: 0, faults: 0, timeouts: 0, players: [], color: "#F59E0B", logoUrl: "" },
   visitor: { name: "Visitor", score: 0, faults: 0, timeouts: 0, players: [], color: "#818CF8", logoUrl: "" },
+  displayTheme: { ...DEFAULT_DISPLAY_THEME },
 };
 
 export function formatClock(totalSeconds: number): string {

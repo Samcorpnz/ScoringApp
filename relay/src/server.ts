@@ -5,7 +5,7 @@ import fs from "fs";
 import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
-import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { MatchState, DEFAULT_MATCH_STATE, DEFAULT_DISPLAY_THEME } from "./types";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -75,9 +75,33 @@ export function createServer(options: ServerOptions = {}) {
     next();
   }
 
+  // Simple sliding-window rate limiter — no extra dependency needed.
+  // 20 requests per IP per minute is generous for an operator panel but
+  // prevents filesystem exhaustion from a compromised or leaked secret.
+  const fsRateHits = new Map<string, number[]>();
+  function fsRateLimit(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ): void {
+    const key = req.ip ?? "unknown";
+    const now = Date.now();
+    const window = 60_000;
+    const max = 20;
+    const timestamps = (fsRateHits.get(key) ?? []).filter(t => now - t < window);
+    if (timestamps.length >= max) {
+      res.status(429).json({ error: "too many requests" });
+      return;
+    }
+    timestamps.push(now);
+    fsRateHits.set(key, timestamps);
+    next();
+  }
+
   app.post(
     "/api/logo/:team",
     logoUploadAuth,
+    fsRateLimit,
     upload.single("logo"),
     (req, res) => {
       const team = req.params.team as "home" | "visitor";
@@ -101,7 +125,7 @@ export function createServer(options: ServerOptions = {}) {
     }
   );
 
-  app.delete("/api/logo/:team", logoUploadAuth, (req, res) => {
+  app.delete("/api/logo/:team", logoUploadAuth, fsRateLimit, (req, res) => {
     const team = req.params.team as "home" | "visitor";
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith(`${team}.`));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
@@ -110,6 +134,75 @@ export function createServer(options: ServerOptions = {}) {
       [team]: { ...currentState[team], logoUrl: "" },
     } as Partial<MatchState>);
 
+    res.json({ status: "removed" });
+  });
+
+  // ─── Competition logo upload ──────────────────────────────────────────────────
+
+  const compStorage = multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".png";
+      cb(null, `competition${ext}`);
+    },
+  });
+
+  const compUpload = multer({
+    storage: compStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+
+  app.post("/api/competition-logo", logoUploadAuth, fsRateLimit, compUpload.single("logo"), (req, res) => {
+    if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+    const ext = path.extname(req.file.filename).toLowerCase();
+    const competitionLogoUrl = `/logos/competition${ext}?t=${Date.now()}`;
+    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl } });
+    res.json({ competitionLogoUrl });
+  });
+
+  app.delete("/api/competition-logo", logoUploadAuth, fsRateLimit, (req, res) => {
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
+    files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
+    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl: "" } });
+    res.json({ status: "removed" });
+  });
+
+  // ─── Sound upload ────────────────────────────────────────────────────────────
+
+  const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
+  fs.mkdirSync(SOUNDS_DIR, { recursive: true });
+  app.use("/sounds", express.static(SOUNDS_DIR));
+
+  const soundStorage = multer.diskStorage({
+    destination: SOUNDS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      cb(null, `${id}${ext}`);
+    },
+  });
+
+  const soundUpload = multer({
+    storage: soundStorage,
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      cb(null, file.mimetype.startsWith("audio/"));
+    },
+  });
+
+  app.post("/api/sound", logoUploadAuth, fsRateLimit, soundUpload.single("sound"), (req, res) => {
+    if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+    res.json({ filename: req.file.filename, originalName: req.file.originalname });
+  });
+
+  app.delete("/api/sound/:filename", logoUploadAuth, fsRateLimit, (req, res) => {
+    const filename = path.basename(req.params.filename);
+    const filePath = path.join(SOUNDS_DIR, filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     res.json({ status: "removed" });
   });
 
@@ -156,8 +249,9 @@ export function createServer(options: ServerOptions = {}) {
         if (state.sequenceId >= currentState.sequenceId) {
           currentState = {
             ...state,
-            home:    { ...state.home,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
-            visitor: { ...state.visitor, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+            home:         { ...state.home,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
+            visitor:      { ...state.visitor, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+            displayTheme: { ...currentState.displayTheme },
           };
           io.emit("matchStateChange", currentState);
         }
@@ -176,6 +270,7 @@ export function createServer(options: ServerOptions = {}) {
           sequenceId: currentState.sequenceId + 1,
           home:    { ...DEFAULT_MATCH_STATE.home,    name: currentState.home.name,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
           visitor: { ...DEFAULT_MATCH_STATE.visitor, name: currentState.visitor.name, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
+          displayTheme: { ...currentState.displayTheme },
         };
         io.emit("matchStateChange", currentState);
         if (bridgeSocket?.connected) bridgeSocket.emit("manualUpdate", currentState);

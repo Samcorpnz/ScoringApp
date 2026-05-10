@@ -2,7 +2,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
+
+ARG NEXT_PUBLIC_RELAY_URL
+ARG NEXT_PUBLIC_CONTROL_SECRET
+ENV NEXT_PUBLIC_RELAY_URL=$NEXT_PUBLIC_RELAY_URL
+ENV NEXT_PUBLIC_CONTROL_SECRET=$NEXT_PUBLIC_CONTROL_SECRET
 
 COPY . .
 RUN npm run build
@@ -14,7 +19,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
