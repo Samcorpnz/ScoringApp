@@ -1,0 +1,13 @@
+{
+  "relayUrl": "http://localhost:4000",
+  "bridgeSecret": "changeme",
+  "source": "cd-json",
+  "serialPort": "",
+  "baudRate": 9600,
+  "cdUrl": "http://stats.championdata.com/monstavision/netball/12428/matchstats-124280201.json",
+  "cdUsername": "monstavision",
+  "cdPassword": "uoShei8OSicei1ah",
+  "cdPollMs": 2000,
+  "cdScrapeUrl": "",
+  "cdScrapePollMs": 500
+}

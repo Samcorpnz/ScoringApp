@@ -1,113 +1,33 @@
 /**
- * Scoreboard Bridge — runs at the venue.
- * Reads the Saturn serial port and pushes MatchState to the cloud relay.
+ * Scoreboard Bridge — entry point.
  *
- * Usage:
- *   npm start                           # uses .env
- *   SERIAL_PORT=COM3 npm start          # override port
+ * Starts the admin UI (http://localhost:4002) and optionally auto-starts
+ * the configured data source if CD_AUTOSTART=true.
+ *
+ * All configuration is managed through the UI or via env vars / bridge-config.json.
  */
 
-import { io, Socket } from "socket.io-client";
-import { SerialPort } from "serialport";
-import { SaturnFramer, applySaturnMessage } from "./protocol/saturnParser";
-import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { BridgeController } from "./controller";
+import { createUiServer } from "./ui/server";
+import { log } from "./logger";
 
-const RELAY_URL    = process.env.RELAY_URL    ?? "http://localhost:4000";
-const BRIDGE_SECRET = process.env.BRIDGE_SECRET ?? "changeme";
-const SERIAL_PORT  = process.env.SERIAL_PORT  ?? "";
-const BAUD_RATE    = parseInt(process.env.BAUD_RATE ?? "9600", 10);
-
-let state: MatchState = { ...DEFAULT_MATCH_STATE };
-let socket: Socket;
-let broadcastTimer: NodeJS.Timeout;
-
-function connectRelay(): void {
-  socket = io(RELAY_URL, {
-    auth: { secret: BRIDGE_SECRET, role: "bridge" },
-    reconnection: true,
-    reconnectionDelay: 2000,
-  });
-
-  socket.on("connect", () => {
-    console.log(`[relay] Connected to ${RELAY_URL}`);
-    // Send current state immediately on (re)connect
-    socket.emit("stateUpdate", state);
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.warn(`[relay] Disconnected: ${reason}`);
-  });
-
-  socket.on("manualUpdate", (patch: Partial<MatchState>) => {
-    state = { ...state, ...patch, sequenceId: state.sequenceId + 1 };
-    console.log("[manual] State patched from control panel");
-  });
-
-  // Broadcast at most 5×/sec to avoid flooding the relay
-  broadcastTimer = setInterval(() => {
-    if (socket.connected) socket.emit("stateUpdate", state);
-  }, 200);
-}
-
-async function connectSerial(portName: string): Promise<void> {
-  const framer = new SaturnFramer();
-
-  const port = new SerialPort({
-    path: portName,
-    baudRate: BAUD_RATE,
-    dataBits: 8,
-    parity: "none",
-    stopBits: 1,
-    autoOpen: false,
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    port.open(err => (err ? reject(err) : resolve()));
-  });
-
-  port.on("data", (data: Buffer) => {
-    const messages = framer.feed(data);
-    for (const msg of messages) {
-      const next = applySaturnMessage(msg, state);
-      if (next !== state) {
-        state = { ...next, inputSource: portName };
-      }
-    }
-  });
-
-  port.on("error", err => console.error(`[serial] Error: ${err.message}`));
-  port.on("close", () => console.warn("[serial] Port closed"));
-
-  console.log(`[serial] Listening on ${portName} @ ${BAUD_RATE} baud`);
-}
-
-async function listPorts(): Promise<void> {
-  const ports = await SerialPort.list();
-  if (ports.length === 0) {
-    console.log("[serial] No serial ports found");
-  } else {
-    console.log("[serial] Available ports:");
-    ports.forEach(p => console.log(`  ${p.path}  ${p.manufacturer ?? ""}`));
-  }
-}
+const UI_PORT    = parseInt(process.env.UI_PORT ?? "4002", 10);
+const AUTOSTART  = process.env.CD_AUTOSTART === "true";
 
 async function main(): Promise<void> {
-  console.log("=== Scoreboard Bridge ===");
-  console.log(`Relay: ${RELAY_URL}`);
+  const controller = new BridgeController();
+  createUiServer(controller, UI_PORT);
 
-  await listPorts();
-  connectRelay();
+  log.info("=== Scoreboard Bridge ===");
+  log.info(`Admin UI → http://localhost:${UI_PORT}`);
+  log.info(`Source: ${controller.getConfig().source}`);
+  log.info(`Relay:  ${controller.getConfig().relayUrl}`);
 
-  if (SERIAL_PORT) {
-    try {
-      await connectSerial(SERIAL_PORT);
-    } catch (err) {
-      console.error(`[serial] Failed to open ${SERIAL_PORT}:`, err);
-      console.log("[bridge] Running without serial input — manual/relay control only");
-    }
+  if (AUTOSTART) {
+    log.info("CD_AUTOSTART=true — starting source automatically");
+    await controller.start();
   } else {
-    console.log("[bridge] No SERIAL_PORT set — manual/relay control only");
-    console.log("  Set SERIAL_PORT=COM3 (or /dev/ttyUSB0) in .env to enable");
+    log.info('Set CD_AUTOSTART=true to start automatically, or use the UI');
   }
 }
 
