@@ -75,9 +75,33 @@ export function createServer(options: ServerOptions = {}) {
     next();
   }
 
+  // Simple sliding-window rate limiter — no extra dependency needed.
+  // 20 requests per IP per minute is generous for an operator panel but
+  // prevents filesystem exhaustion from a compromised or leaked secret.
+  const fsRateHits = new Map<string, number[]>();
+  function fsRateLimit(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ): void {
+    const key = req.ip ?? "unknown";
+    const now = Date.now();
+    const window = 60_000;
+    const max = 20;
+    const timestamps = (fsRateHits.get(key) ?? []).filter(t => now - t < window);
+    if (timestamps.length >= max) {
+      res.status(429).json({ error: "too many requests" });
+      return;
+    }
+    timestamps.push(now);
+    fsRateHits.set(key, timestamps);
+    next();
+  }
+
   app.post(
     "/api/logo/:team",
     logoUploadAuth,
+    fsRateLimit,
     upload.single("logo"),
     (req, res) => {
       const team = req.params.team as "home" | "visitor";
@@ -101,7 +125,7 @@ export function createServer(options: ServerOptions = {}) {
     }
   );
 
-  app.delete("/api/logo/:team", logoUploadAuth, (req, res) => {
+  app.delete("/api/logo/:team", logoUploadAuth, fsRateLimit, (req, res) => {
     const team = req.params.team as "home" | "visitor";
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith(`${team}.`));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
@@ -132,7 +156,7 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/competition-logo", logoUploadAuth, compUpload.single("logo"), (req, res) => {
+  app.post("/api/competition-logo", logoUploadAuth, fsRateLimit, compUpload.single("logo"), (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     const ext = path.extname(req.file.filename).toLowerCase();
     const competitionLogoUrl = `/logos/competition${ext}?t=${Date.now()}`;
@@ -140,7 +164,7 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ competitionLogoUrl });
   });
 
-  app.delete("/api/competition-logo", logoUploadAuth, (req, res) => {
+  app.delete("/api/competition-logo", logoUploadAuth, fsRateLimit, (req, res) => {
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
     applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl: "" } });
@@ -170,12 +194,12 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/sound", logoUploadAuth, soundUpload.single("sound"), (req, res) => {
+  app.post("/api/sound", logoUploadAuth, fsRateLimit, soundUpload.single("sound"), (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
   });
 
-  app.delete("/api/sound/:filename", logoUploadAuth, (req, res) => {
+  app.delete("/api/sound/:filename", logoUploadAuth, fsRateLimit, (req, res) => {
     const filename = path.basename(req.params.filename);
     const filePath = path.join(SOUNDS_DIR, filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
