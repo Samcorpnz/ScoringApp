@@ -12,12 +12,13 @@ const CONTROL_SECRET = "test-control-secret";
 
 let app: ReturnType<typeof createServer>["app"];
 let httpServer: ReturnType<typeof createServer>["httpServer"];
+let closeServer: ReturnType<typeof createServer>["close"];
 let serverUrl: string;
 let uploadDir: string;
 
 beforeAll(done => {
   uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-test-"));
-  ({ app, httpServer } = createServer({ bridgeSecret: BRIDGE_SECRET, controlSecret: CONTROL_SECRET, uploadDir }));
+  ({ app, httpServer, close: closeServer } = createServer({ bridgeSecret: BRIDGE_SECRET, controlSecret: CONTROL_SECRET, uploadDir }));
   httpServer.listen(0, () => {
     const port = (httpServer.address() as AddressInfo).port;
     serverUrl = `http://localhost:${port}`;
@@ -27,7 +28,7 @@ beforeAll(done => {
 
 afterAll(done => {
   fs.rmSync(uploadDir, { recursive: true, force: true });
-  httpServer.close(done);
+  closeServer(done);
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

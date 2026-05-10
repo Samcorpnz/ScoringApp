@@ -34,7 +34,7 @@ export function createServer(options: ServerOptions = {}) {
   let bridgeSocket: Socket | null = null;
 
   // Tick the clock every second when running and no bridge is driving it
-  setInterval(() => {
+  const clockInterval = setInterval(() => {
     if (!currentState.isRunning || bridgeSocket?.connected) return;
     const next = currentState.countDown
       ? currentState.clockSeconds - 1
@@ -200,5 +200,10 @@ export function createServer(options: ServerOptions = {}) {
     io.emit("matchStateChange", currentState);
   }
 
-  return { app, io, httpServer };
+  function close(cb?: (err?: Error) => void) {
+    clearInterval(clockInterval);
+    io.close(cb);
+  }
+
+  return { app, io, httpServer, close };
 }
