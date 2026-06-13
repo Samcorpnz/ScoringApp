@@ -22,10 +22,10 @@ function emit(level: LogLevel, msg: string): void {
     try { res.write(line); } catch { sseClients.delete(res); }
   }
 
-  const prefix = `[${level.toUpperCase().padEnd(5)}]`;
-  if (level === "error") console.error(prefix, msg);
-  else if (level === "warn") console.warn(prefix, msg);
-  else console.log(prefix, msg);
+  const line2 = `[${level.toUpperCase().padEnd(5)}] ${msg}`;
+  if (level === "error") console.error(line2);
+  else if (level === "warn") console.warn(line2);
+  else console.log(line2);
 }
 
 export const log = {

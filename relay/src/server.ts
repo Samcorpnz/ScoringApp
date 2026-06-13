@@ -11,23 +11,27 @@ export interface ServerOptions {
   bridgeSecret?: string;
   controlSecret?: string;
   uploadDir?: string;
+  allowedOrigins?: string | string[];
 }
 
 export function createServer(options: ServerOptions = {}) {
   const BRIDGE_SECRET  = options.bridgeSecret  ?? process.env.BRIDGE_SECRET  ?? "changeme";
   const CONTROL_SECRET = options.controlSecret ?? process.env.CONTROL_SECRET ?? "changeme";
   const UPLOAD_DIR     = options.uploadDir     ?? process.env.UPLOAD_DIR     ?? path.join(process.cwd(), "uploads");
+  const ALLOWED_ORIGINS: string | string[] =
+    options.allowedOrigins ??
+    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) : "*");
 
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: ALLOWED_ORIGINS }));
   app.use(express.json());
   app.use("/logos", express.static(UPLOAD_DIR));
 
   const httpServer = createHttpServer(app);
   const io = new Server(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"] },
   });
 
   let currentState: MatchState = { ...DEFAULT_MATCH_STATE };
@@ -127,6 +131,10 @@ export function createServer(options: ServerOptions = {}) {
 
   app.delete("/api/logo/:team", logoUploadAuth, fsRateLimit, (req, res) => {
     const team = req.params.team as "home" | "visitor";
+    if (team !== "home" && team !== "visitor") {
+      res.status(400).json({ error: "team must be 'home' or 'visitor'" });
+      return;
+    }
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith(`${team}.`));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
 
@@ -199,8 +207,13 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
   });
 
+  const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
   app.delete("/api/sound/:filename", logoUploadAuth, fsRateLimit, (req, res) => {
     const filename = path.basename(req.params.filename);
+    if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
+      res.status(400).json({ error: "invalid file type" });
+      return;
+    }
     const filePath = path.join(SOUNDS_DIR, filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     res.json({ status: "removed" });
