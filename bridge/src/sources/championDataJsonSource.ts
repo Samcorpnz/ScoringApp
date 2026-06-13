@@ -20,13 +20,40 @@ export interface JsonSourceOptions {
   pollMs?: number;
 }
 
+// Restricts outgoing requests to http/https and rejects private-network targets
+// to prevent SSRF via a user-supplied URL.
+function validateRemoteUrl(raw: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`CD_URL is not a valid URL: ${raw}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`CD_URL must use http or https scheme, got: ${parsed.protocol}`);
+  }
+  const h = parsed.hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h.startsWith("192.168.") ||
+    h.startsWith("10.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+  ) {
+    throw new Error(`CD_URL must not target a private or loopback address: ${h}`);
+  }
+}
+
 export function startJsonSource(
   socket: Socket,
   getState: () => MatchState,
   setState: (s: MatchState) => void,
   options: JsonSourceOptions
 ): () => void {
-  const { url, username, password, pollMs = 2000 } = options;
+  const { url, username, password } = options;
+  const pollMs = Math.max(100, Math.min(60_000, options.pollMs ?? 2000));
+  validateRemoteUrl(url);
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (username && password) {

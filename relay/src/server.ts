@@ -5,6 +5,7 @@ import fs from "fs";
 import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
+import { rateLimit } from "express-rate-limit";
 import { MatchState, DEFAULT_MATCH_STATE, DEFAULT_DISPLAY_THEME } from "./types";
 
 export interface ServerOptions {
@@ -79,28 +80,15 @@ export function createServer(options: ServerOptions = {}) {
     next();
   }
 
-  // Simple sliding-window rate limiter — no extra dependency needed.
-  // 20 requests per IP per minute is generous for an operator panel but
-  // prevents filesystem exhaustion from a compromised or leaked secret.
-  const fsRateHits = new Map<string, number[]>();
-  function fsRateLimit(
-    req: express.Request,
-    res: express.Response,
-    next: express.NextFunction
-  ): void {
-    const key = req.ip ?? "unknown";
-    const now = Date.now();
-    const window = 60_000;
-    const max = 20;
-    const timestamps = (fsRateHits.get(key) ?? []).filter(t => now - t < window);
-    if (timestamps.length >= max) {
-      res.status(429).json({ error: "too many requests" });
-      return;
-    }
-    timestamps.push(now);
-    fsRateHits.set(key, timestamps);
-    next();
-  }
+  // 20 file-system operations per IP per minute — prevents filesystem exhaustion
+  // from a compromised or leaked secret.
+  const fsRateLimit = rateLimit({
+    windowMs: 60_000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "too many requests" },
+  });
 
   app.post(
     "/api/logo/:team",
