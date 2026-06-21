@@ -30,12 +30,14 @@ export function getMatchStore(orgId: string): MatchStore | null {
     if (matchId) return matchId;
     const live = await prisma.match.findFirst({ where: { orgId, status: "LIVE" }, orderBy: { createdAt: "desc" } });
     if (live) {
-      matchId = live.id;
-      return matchId;
+      const id: string = live.id;
+      matchId = id;
+      return id;
     }
     const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object } });
-    matchId = created.id;
-    return matchId;
+    const id: string = created.id;
+    matchId = id;
+    return id;
   }
 
   async function writeThrough(state: MatchState): Promise<void> {

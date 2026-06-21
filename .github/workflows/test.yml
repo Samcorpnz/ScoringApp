@@ -23,6 +23,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci --prefix ..
+      - run: npm run build --workspace=@scorehub/db --prefix ..
       - run: npm test -- --ci
 
   test-bridge:
