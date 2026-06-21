@@ -197,7 +197,7 @@ export function createServer(options: ServerOptions = {}) {
 
   const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
   app.delete("/api/sound/:filename", logoUploadAuth, fsRateLimit, (req, res) => {
-    const filename = path.basename(req.params.filename);
+    const filename = path.basename(req.params.filename as string);
     if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
       res.status(400).json({ error: "invalid file type" });
       return;
