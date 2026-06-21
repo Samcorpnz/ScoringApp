@@ -61,7 +61,7 @@ export function getMatchStore(orgId: string): MatchStore | null {
         timer = null;
         const toWrite = pending;
         pending = null;
-        if (toWrite) writeThrough(toWrite).catch(err => console.error(`[relay] failed to persist match state for org ${orgId}`, err));
+        if (toWrite) writeThrough(toWrite).catch(err => console.error("[relay] failed to persist match state for org:", orgId, err));
       }, SAVE_DEBOUNCE_MS);
     },
 

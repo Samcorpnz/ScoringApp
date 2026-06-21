@@ -134,9 +134,10 @@ export function createServer(options: ServerOptions = {}) {
     next();
   }
 
-  // 20 file-system operations per IP per minute — prevents filesystem exhaustion
-  // from a compromised or leaked secret.
-  const fsRateLimit = rateLimit({
+  // 20 requests per IP per minute on control-secret-gated endpoints — must run
+  // before controlAuth, or failed auth attempts (brute force) bypass the limit
+  // entirely since the limiter would only see requests that already passed auth.
+  const controlRateLimit = rateLimit({
     windowMs: 60_000,
     limit: 20,
     standardHeaders: true,
@@ -146,8 +147,8 @@ export function createServer(options: ServerOptions = {}) {
 
   app.post(
     "/api/logo/:team",
+    controlRateLimit,
     controlAuth,
-    fsRateLimit,
     upload.single("logo"),
     async (req, res) => {
       const team = req.params.team as "home" | "visitor";
@@ -173,7 +174,7 @@ export function createServer(options: ServerOptions = {}) {
     }
   );
 
-  app.delete("/api/logo/:team", controlAuth, fsRateLimit, async (req, res) => {
+  app.delete("/api/logo/:team", controlRateLimit, controlAuth, async (req, res) => {
     const team = req.params.team as "home" | "visitor";
     if (team !== "home" && team !== "visitor") {
       res.status(400).json({ error: "team must be 'home' or 'visitor'" });
@@ -210,7 +211,7 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/competition-logo", controlAuth, fsRateLimit, compUpload.single("logo"), async (req, res) => {
+  app.post("/api/competition-logo", controlRateLimit, controlAuth, compUpload.single("logo"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     const orgId = (req as any).orgId as string;
     const ext = path.extname(req.file.filename).toLowerCase();
@@ -220,7 +221,7 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ competitionLogoUrl });
   });
 
-  app.delete("/api/competition-logo", controlAuth, fsRateLimit, async (req, res) => {
+  app.delete("/api/competition-logo", controlRateLimit, controlAuth, async (req, res) => {
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
     const orgId = (req as any).orgId as string;
@@ -252,13 +253,13 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/sound", controlAuth, fsRateLimit, soundUpload.single("sound"), (req, res) => {
+  app.post("/api/sound", controlRateLimit, controlAuth, soundUpload.single("sound"), (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
   });
 
   const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
-  app.delete("/api/sound/:filename", controlAuth, fsRateLimit, (req, res) => {
+  app.delete("/api/sound/:filename", controlRateLimit, controlAuth, (req, res) => {
     const filename = path.basename(String(req.params.filename));
     if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
       res.status(400).json({ error: "invalid file type" });
@@ -278,7 +279,7 @@ export function createServer(options: ServerOptions = {}) {
     res.json(await getState(orgId));
   });
 
-  app.post("/manual", async (req, res) => {
+  app.post("/manual", controlRateLimit, async (req, res) => {
     const secret = req.headers["x-control-secret"];
     const result = await verifyControlSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
     if (!result) {
