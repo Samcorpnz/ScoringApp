@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma, Role } from "@scoringapp/db";
+import { prisma, Role } from "@scorehub/db";
 
 declare module "next-auth" {
   interface Session {

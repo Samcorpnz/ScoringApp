@@ -1,6 +1,6 @@
 import { jwtVerify } from "jose";
 import crypto from "crypto";
-import { prisma } from "@scoringapp/db";
+import { prisma } from "@scorehub/db";
 
 // Used when DATABASE_URL is unset (local dev / Jest) — every connection
 // shares one room, matching the relay's original single-tenant behaviour.

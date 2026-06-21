@@ -1,5 +1,5 @@
 {
-  "name": "@scoringapp/db",
+  "name": "@scorehub/db",
   "version": "1.0.0",
   "description": "Shared Prisma schema and client for multi-tenant account/org/match persistence",
   "main": "dist/index.js",

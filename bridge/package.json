@@ -1,5 +1,5 @@
 {
-  "name": "scoreboard-bridge",
+  "name": "scorehub-bridge",
   "version": "1.0.0",
   "description": "Venue-side serial bridge — reads Saturn console, pushes to cloud relay",
   "main": "dist/index.js",

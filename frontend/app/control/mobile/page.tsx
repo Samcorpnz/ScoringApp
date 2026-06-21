@@ -129,7 +129,7 @@ export default function MobileControl() {
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 900, fontSize: 15, letterSpacing: -0.5 }}>
-          Score<span style={{ color: "var(--accent)" }}>board</span>
+          Score<span style={{ color: "var(--accent)" }}>Hub</span>
           <span style={{
             marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
             textTransform: "uppercase", color: "var(--text-dim)",

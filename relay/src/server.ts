@@ -300,7 +300,7 @@ export function createServer(options: ServerOptions = {}) {
     next();
   });
 
-  io.on("connection", async (socket) => {
+  io.on("connection", (socket) => {
     const orgId = (socket as any).orgId as string;
     const isBridge  = (socket as any).isBridge  === true;
     const isControl = (socket as any).isControl === true;
@@ -309,8 +309,9 @@ export function createServer(options: ServerOptions = {}) {
     socket.join(orgId);
     console.log(`[+] ${role} connected to org ${orgId} (${socket.id})`);
 
-    socket.emit("matchStateChange", await getState(orgId));
-
+    // Register listeners synchronously, before the async state load below —
+    // otherwise a client emitting an update immediately on connect can race
+    // ahead of `await getState(orgId)` and have its event silently dropped.
     if (isBridge) {
       const existingBridge = bridgeSockets.get(orgId);
       if (existingBridge) {
@@ -358,6 +359,10 @@ export function createServer(options: ServerOptions = {}) {
       if (isBridge && bridgeSockets.get(orgId) === socket) bridgeSockets.delete(orgId);
       console.log(`[-] ${role} disconnected from org ${orgId} (${socket.id})`);
     });
+
+    getState(orgId)
+      .then(state => socket.emit("matchStateChange", state))
+      .catch(err => console.error(`[relay] failed to load initial state for org ${orgId}`, err));
   });
 
   function close(cb?: (err?: Error) => void) {

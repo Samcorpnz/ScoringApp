@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { prisma } from "@scoringapp/db";
+import { prisma } from "@scorehub/db";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

@@ -1,4 +1,4 @@
-# Scoreboard System
+# ScoreHub System
 
 Live sport scoring display. Reads Saturn/Vega serial console, broadcasts via cloud relay to any browser.
 
@@ -55,7 +55,7 @@ Then open http://localhost:3000
 1. Create new project on railway.app
 2. Deploy the `relay/` folder
 3. Set environment variables: `BRIDGE_SECRET`, `CONTROL_SECRET`
-4. Note the public URL (e.g. `https://scoreboard-relay.railway.app`)
+4. Note the public URL (e.g. `https://scorehub-relay.railway.app`)
 
 ### Frontend → Vercel
 1. Push to GitHub

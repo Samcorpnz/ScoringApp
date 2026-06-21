@@ -56,7 +56,7 @@ function LoginForm() {
             SAMCORP
           </p>
           <h1 className="text-3xl font-black tracking-tight">
-            Score<span style={{ color: "var(--accent)" }}>board</span>
+            Score<span style={{ color: "var(--accent)" }}>Hub</span>
           </h1>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             Sign in to access the control panel

@@ -1,4 +1,4 @@
-import { prisma } from "@scoringapp/db";
+import { prisma } from "@scorehub/db";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 
 const SAVE_DEBOUNCE_MS = 2000;

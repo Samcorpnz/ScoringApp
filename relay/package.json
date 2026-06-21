@@ -1,5 +1,5 @@
 {
-  "name": "scoreboard-relay",
+  "name": "scorehub-relay",
   "version": "1.0.0",
   "description": "Cloud relay — receives from bridge, broadcasts to viewers",
   "main": "dist/index.js",
@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@scoringapp/db": "*",
+    "@scorehub/db": "*",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

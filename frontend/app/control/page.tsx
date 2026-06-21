@@ -59,7 +59,7 @@ export default function ControlPanel() {
       >
         <div className="flex items-center gap-4">
           <span className="font-black text-lg tracking-tight">
-            Score<span style={{ color: "var(--accent)" }}>board</span>
+            Score<span style={{ color: "var(--accent)" }}>Hub</span>
           </span>
           <span className="text-xs px-2 py-1 rounded font-bold tracking-widest uppercase" style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}>
             Control

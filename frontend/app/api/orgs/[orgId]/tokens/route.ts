@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@scoringapp/db";
+import { prisma } from "@scorehub/db";
 import { auth } from "@/auth";
 
 function hashToken(token: string): string {
