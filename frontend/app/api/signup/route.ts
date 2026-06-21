@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { prisma } from "@scorehub/db";
+import { prisma, Prisma } from "@scorehub/db";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.$transaction(async tx => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const account = await tx.account.create({ data: { name: orgName } });
     const org = await tx.org.create({ data: { accountId: account.id, name: orgName } });
     const user = await tx.user.create({ data: { email, passwordHash, name } });
