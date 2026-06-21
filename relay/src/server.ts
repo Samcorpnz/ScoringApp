@@ -6,9 +6,11 @@ import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
 import { rateLimit } from "express-rate-limit";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores } from "./persistence";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
+import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -36,6 +38,14 @@ export function createServer(options: ServerOptions = {}) {
   const io = new Server(httpServer, {
     cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"] },
   });
+
+  // When REDIS_URL is set, broadcasts reach sockets connected to other relay
+  // instances too — required so multiple relay processes can sit behind a
+  // load balancer (SA-19). Absent REDIS_URL this is a no-op single instance.
+  const redisClients = getRedisClients();
+  if (redisClients) {
+    io.adapter(createAdapter(redisClients.pub, redisClients.sub));
+  }
 
   // Per-org in-memory state and the active bridge connection for that org.
   // This is what makes match state genuinely tenant-scoped: one relay process
@@ -73,12 +83,20 @@ export function createServer(options: ServerOptions = {}) {
   }
 
   // Tick the clock every second for every loaded org that's running and
-  // not currently being driven by a connected bridge.
+  // not currently being driven by a connected bridge. acquireTickLock
+  // ensures only one relay instance advances a given org's clock when
+  // multiple instances share Redis (SA-19) — it's a no-op true when Redis
+  // is unset, so single-instance behavior is unchanged.
   const clockInterval = setInterval(() => {
     for (const [orgId, state] of matchStates) {
       if (!state.isRunning || bridgeSockets.get(orgId)?.connected) continue;
-      const next = state.countDown ? state.clockSeconds - 1 : state.clockSeconds + 1;
-      setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 });
+      acquireTickLock(orgId)
+        .then(acquired => {
+          if (!acquired) return;
+          const next = state.countDown ? state.clockSeconds - 1 : state.clockSeconds + 1;
+          setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 });
+        })
+        .catch(err => console.error(`[relay] failed to acquire tick lock for org ${orgId}`, err));
     }
   }, 1000);
 
@@ -370,7 +388,11 @@ export function createServer(options: ServerOptions = {}) {
     const flushes = allActiveStores().map(store =>
       store.flush().catch(err => console.error(`[relay] failed to flush match state for org ${store.orgId} on close`, err))
     );
-    Promise.allSettled(flushes).finally(() => io.close(cb));
+    Promise.allSettled(flushes).finally(() =>
+      closeRedis()
+        .catch(err => console.error("[relay] failed to close redis clients on close", err))
+        .finally(() => io.close(cb))
+    );
   }
 
   return { app, io, httpServer, close };
