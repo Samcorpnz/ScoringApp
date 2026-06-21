@@ -3,10 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useMatchState } from "../../hooks/useMatchState";
+import { useControlToken } from "../../hooks/useControlToken";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { MatchState, SportType, formatClock } from "../../types";
-
-const CONTROL_SECRET = process.env.NEXT_PUBLIC_CONTROL_SECRET ?? "";
 
 // Sport-aware scoring increments
 const SCORE_INCREMENTS: Record<SportType, number[]> = {
@@ -29,8 +28,9 @@ const CLOCK_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 45].map(m => ({
 }));
 
 export default function MobileControl() {
+  const controlToken = useControlToken();
   const { state, status, sendManualUpdate, sendReset } = useMatchState({
-    secret: CONTROL_SECRET,
+    secret: controlToken,
     role: "control",
   });
 
@@ -129,7 +129,7 @@ export default function MobileControl() {
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 900, fontSize: 15, letterSpacing: -0.5 }}>
-          Score<span style={{ color: "var(--accent)" }}>board</span>
+          Score<span style={{ color: "var(--accent)" }}>Hub</span>
           <span style={{
             marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
             textTransform: "uppercase", color: "var(--text-dim)",

@@ -25,7 +25,7 @@ export default function Home() {
             className="text-4xl font-black tracking-tight"
             style={{ color: "var(--text-primary)" }}
           >
-            Score<span style={{ color: "var(--accent)" }}>board</span>
+            Score<span style={{ color: "var(--accent)" }}>Hub</span>
           </h1>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             Live sport display system

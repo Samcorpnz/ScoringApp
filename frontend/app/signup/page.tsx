@@ -2,22 +2,13 @@
 
 import { useState, FormEvent } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
-  );
-}
+export default function SignupPage() {
+  const router = useRouter();
 
-function LoginForm() {
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl  = searchParams.get("callbackUrl") ?? "/control";
-
+  const [name,     setName]     = useState("");
+  const [orgName,  setOrgName]  = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -28,20 +19,28 @@ function LoginForm() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const res = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, orgName, email, password }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Signup failed");
+      }
 
-    setLoading(false);
-
-    if (result?.error) {
-      setError("Invalid email or password.");
-    } else {
-      router.push(callbackUrl);
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) throw new Error("Account created — please sign in.");
+      router.push("/control");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
   }
+
+  const canSubmit = name && orgName && email && password.length >= 8 && !loading;
 
   return (
     <div
@@ -49,8 +48,6 @@ function LoginForm() {
       style={{ background: "var(--bg-base)" }}
     >
       <div className="w-full max-w-sm">
-
-        {/* Wordmark */}
         <div className="text-center mb-10">
           <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: "var(--accent)" }}>
             SAMCORP
@@ -59,52 +56,28 @@ function LoginForm() {
             Score<span style={{ color: "var(--accent)" }}>Hub</span>
           </h1>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Sign in to access the control panel
+            Create your account and organization
           </p>
           <div
             className="mx-auto mt-4"
-            style={{
-              width: 32, height: 2,
-              background: "var(--accent)",
-              boxShadow: "0 0 10px var(--accent-glow)",
-            }}
+            style={{ width: 32, height: 2, background: "var(--accent)", boxShadow: "0 0 10px var(--accent-glow)" }}
           />
         </div>
 
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className="rounded-2xl p-8 space-y-5"
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            boxShadow: "0 0 40px rgba(0,0,0,0.4)",
-          }}
+          style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", boxShadow: "0 0 40px rgba(0,0,0,0.4)" }}
         >
-          <Field
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
-            autoFocus
-            autoComplete="email"
-          />
-          <Field
-            label="Password"
-            type="password"
-            value={password}
-            onChange={setPassword}
-            autoComplete="current-password"
-          />
+          <Field label="Your name" type="text" value={name} onChange={setName} autoFocus autoComplete="name" />
+          <Field label="Organization name" type="text" value={orgName} onChange={setOrgName} autoComplete="organization" />
+          <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
+          <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
 
           {error && (
             <p
               className="text-sm rounded-lg px-3 py-2 font-semibold"
-              style={{
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                color: "var(--danger)",
-              }}
+              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
             >
               {error}
             </p>
@@ -112,25 +85,22 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || !email || !password}
+            disabled={!canSubmit}
             className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase transition-opacity"
             style={{
               background: "var(--accent-dim)",
               border: "1px solid var(--border-accent)",
               color: "var(--accent)",
-              opacity: loading || !email || !password ? 0.5 : 1,
-              cursor: loading || !email || !password ? "not-allowed" : "pointer",
+              opacity: canSubmit ? 1 : 0.5,
+              cursor: canSubmit ? "pointer" : "not-allowed",
             }}
           >
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? "Creating account…" : "Create Account"}
           </button>
         </form>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--text-dim)" }}>
-          Display views are public — only the control panel requires login.
-        </p>
-        <p className="text-center text-xs mt-2" style={{ color: "var(--text-dim)" }}>
-          No account yet? <a href="/signup" style={{ color: "var(--accent)" }}>Sign up</a>
+          Already have an account? <a href="/login" style={{ color: "var(--accent)" }}>Sign in</a>
         </p>
       </div>
     </div>

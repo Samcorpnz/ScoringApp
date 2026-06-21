@@ -6,13 +6,13 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Samcorp Scoreboard',
+  title: 'Samcorp ScoreHub',
   description: 'Live sports scoreboard — powered by Samcorp',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Samcorp Scoreboard',
+    title: 'Samcorp ScoreHub',
   },
   other: {
     'mobile-web-app-capable': 'yes',

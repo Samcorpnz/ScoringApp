@@ -16,8 +16,14 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const role = auth?.role;
 
   useEffect(() => {
+    // Viewers/displays have no secret — scope them to an org via the page's
+    // ?org= query param so multiple tenants on one relay stay isolated.
+    const orgId = secret === undefined && typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("org") ?? undefined
+      : undefined;
+
     const socket = io(RELAY_URL, {
-      auth: secret !== undefined ? { secret, role } : {},
+      auth: secret !== undefined ? { secret, role } : orgId ? { orgId } : {},
       reconnection: true,
       reconnectionDelay: 2000,
     });

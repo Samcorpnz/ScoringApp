@@ -16,6 +16,12 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   relay:
     build:
       context: ./relay
@@ -26,6 +32,11 @@ services:
       BRIDGE_SECRET: ${BRIDGE_SECRET:-changeme}
       CONTROL_SECRET: ${CONTROL_SECRET:-changeme}
       UPLOAD_DIR: /app/uploads
+      # Defaults to the local redis service above; override to point at
+      # real Upstash for production (SA-62).
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      - redis
     volumes:
       # Logos persist across container restarts
       - logos:/app/uploads

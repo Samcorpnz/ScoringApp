@@ -1,6 +1,6 @@
 {
-  "name": "Scoreboard Control",
-  "short_name": "Scoreboard",
+  "name": "ScoreHub Control",
+  "short_name": "ScoreHub",
   "description": "Live sports scoreboard control",
   "start_url": "/control/mobile",
   "display": "standalone",

@@ -4,19 +4,20 @@ import { useState, useRef } from "react";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
+import { useControlToken } from "../hooks/useControlToken";
 import { ConnectionBadge } from "../components/ConnectionBadge";
 import { MatchState, TeamState, DisplayTheme, DEFAULT_DISPLAY_THEME, formatClockDisplay } from "../types";
 import { useInterpolatedClock } from "../hooks/useInterpolatedClock";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 import { useSoundCues, useSoundPlayback, SoundCue } from "../hooks/useSoundCues";
 
-const RELAY_URL      = process.env.NEXT_PUBLIC_RELAY_URL     ?? "http://localhost:4000";
-const CONTROL_SECRET = process.env.NEXT_PUBLIC_CONTROL_SECRET ?? "";
+const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
 type Tab = "score" | "outputs" | "logos" | "theme" | "audio" | "settings";
 
 export default function ControlPanel() {
-  const { state, status, sendManualUpdate, sendReset } = useMatchState({ secret: CONTROL_SECRET, role: "control" });
+  const controlToken = useControlToken();
+  const { state, status, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -39,6 +40,16 @@ export default function ControlPanel() {
     );
   }
 
+  if (session?.user?.role === "VIEWER") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
+        <div className="text-sm" style={{ color: "var(--text-dim)" }}>
+          Your account doesn&apos;t have control access for this organization.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
       {/* Top bar */}
@@ -48,7 +59,7 @@ export default function ControlPanel() {
       >
         <div className="flex items-center gap-4">
           <span className="font-black text-lg tracking-tight">
-            Score<span style={{ color: "var(--accent)" }}>board</span>
+            Score<span style={{ color: "var(--accent)" }}>Hub</span>
           </span>
           <span className="text-xs px-2 py-1 rounded font-bold tracking-widest uppercase" style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}>
             Control
@@ -110,9 +121,9 @@ export default function ControlPanel() {
       <div className="p-6 max-w-5xl">
         {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} />}
         {tab === "outputs"  && <OutputsTab  />}
-        {tab === "logos"    && <LogosTab    state={state} push={push} />}
-        {tab === "theme"    && <ThemeTab    state={state} push={push} />}
-        {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} />}
+        {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
+        {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}
+        {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} controlToken={controlToken} />}
         {tab === "settings" && <SettingsTab state={state} push={push} />}
       </div>
     </div>
@@ -397,20 +408,21 @@ function DataFeedRow({ label, value, desc }: { label: string; value: string; des
 
 // ─── Logos Tab ────────────────────────────────────────────────────────────────
 
-function LogosTab({ state, push }: { state: MatchState; push: (p: Partial<MatchState>) => void }) {
+function LogosTab({ state, push, controlToken }: { state: MatchState; push: (p: Partial<MatchState>) => void; controlToken: string }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-      <LogoUploader team="home" teamState={state.home} push={push} state={state} />
-      <LogoUploader team="visitor" teamState={state.visitor} push={push} state={state} />
+      <LogoUploader team="home" teamState={state.home} push={push} state={state} controlToken={controlToken} />
+      <LogoUploader team="visitor" teamState={state.visitor} push={push} state={state} controlToken={controlToken} />
     </div>
   );
 }
 
-function LogoUploader({ team, teamState, push, state }: {
+function LogoUploader({ team, teamState, push, state, controlToken }: {
   team: "home" | "visitor";
   teamState: TeamState;
   push: (p: Partial<MatchState>) => void;
   state: MatchState;
+  controlToken: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error,     setError]     = useState("");
@@ -429,7 +441,7 @@ function LogoUploader({ team, teamState, push, state }: {
       fd.append("logo", file);
       const res = await fetch(`${RELAY_URL}/api/logo/${team}`, {
         method: "POST",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
@@ -447,7 +459,7 @@ function LogoUploader({ team, teamState, push, state }: {
     try {
       await fetch(`${RELAY_URL}/api/logo/${team}`, {
         method: "DELETE",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
       });
       push({ [team]: { ...teamState, logoUrl: "" } } as Partial<MatchState>);
     } finally {
@@ -525,7 +537,7 @@ const FONT_SUGGESTIONS = [
   "Anton", "Rajdhani", "Teko", "Exo 2", "Montserrat",
 ];
 
-function ThemeTab({ state, push }: { state: MatchState; push: (p: Partial<MatchState>) => void }) {
+function ThemeTab({ state, push, controlToken }: { state: MatchState; push: (p: Partial<MatchState>) => void; controlToken: string }) {
   const theme: DisplayTheme = state.displayTheme ?? { ...DEFAULT_DISPLAY_THEME };
   const [showFontSuggestions, setShowFontSuggestions] = useState(false);
 
@@ -716,7 +728,7 @@ function ThemeTab({ state, push }: { state: MatchState; push: (p: Partial<MatchS
       </div>
 
       {/* Competition logo */}
-      <CompetitionLogoUploader theme={theme} updateTheme={updateTheme} />
+      <CompetitionLogoUploader theme={theme} updateTheme={updateTheme} controlToken={controlToken} />
 
       {/* Reset */}
       <div className="flex justify-end">
@@ -732,9 +744,10 @@ function ThemeTab({ state, push }: { state: MatchState; push: (p: Partial<MatchS
   );
 }
 
-function CompetitionLogoUploader({ theme, updateTheme }: {
+function CompetitionLogoUploader({ theme, updateTheme, controlToken }: {
   theme: DisplayTheme;
   updateTheme: (p: Partial<DisplayTheme>) => void;
+  controlToken: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -752,7 +765,7 @@ function CompetitionLogoUploader({ theme, updateTheme }: {
       fd.append("logo", file);
       const res = await fetch(`${RELAY_URL}/api/competition-logo`, {
         method: "POST",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
@@ -770,7 +783,7 @@ function CompetitionLogoUploader({ theme, updateTheme }: {
     try {
       await fetch(`${RELAY_URL}/api/competition-logo`, {
         method: "DELETE",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
       });
       updateTheme({ competitionLogoUrl: "" });
     } finally {
@@ -849,10 +862,11 @@ const PERIOD_OPTIONS = [
   { label: "Extra time",  value: "E" },
 ];
 
-function AudioTab({ cues, addCue, removeCue }: {
+function AudioTab({ cues, addCue, removeCue, controlToken }: {
   cues: SoundCue[];
   addCue: (cue: SoundCue) => void;
   removeCue: (id: string) => void;
+  controlToken: string;
 }) {
   const [label,       setLabel]       = useState("");
   const [period,      setPeriod]      = useState("*");
@@ -874,7 +888,7 @@ function AudioTab({ cues, addCue, removeCue }: {
       fd.append("sound", file);
       const res = await fetch(`${RELAY_URL}/api/sound`, {
         method: "POST",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
@@ -906,7 +920,7 @@ function AudioTab({ cues, addCue, removeCue }: {
     if (filename) {
       await fetch(`${RELAY_URL}/api/sound/${encodeURIComponent(filename)}`, {
         method: "DELETE",
-        headers: { "x-control-secret": CONTROL_SECRET },
+        headers: { "x-control-secret": controlToken },
       }).catch(() => {});
     }
     removeCue(cue.id);

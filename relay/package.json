@@ -1,5 +1,5 @@
 {
-  "name": "scoreboard-relay",
+  "name": "scorehub-relay",
   "version": "1.0.0",
   "description": "Cloud relay — receives from bridge, broadcasts to viewers",
   "main": "dist/index.js",
@@ -10,10 +10,14 @@
     "test": "jest"
   },
   "dependencies": {
+    "@scorehub/db": "*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
+    "ioredis": "^5.4.1",
+    "jose": "^5.9.6",
     "multer": "^2.2.0",
     "socket.io": "^4.8.3"
   },
