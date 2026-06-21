@@ -6,7 +6,9 @@ import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
 import { rateLimit } from "express-rate-limit";
-import { MatchState, DEFAULT_MATCH_STATE, DEFAULT_DISPLAY_THEME } from "./types";
+import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { getMatchStore, allActiveStores } from "./persistence";
+import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -35,17 +37,49 @@ export function createServer(options: ServerOptions = {}) {
     cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"] },
   });
 
-  let currentState: MatchState = { ...DEFAULT_MATCH_STATE };
-  let bridgeSocket: Socket | null = null;
+  // Per-org in-memory state and the active bridge connection for that org.
+  // This is what makes match state genuinely tenant-scoped: one relay process
+  // can serve many orgs, each isolated to its own Socket.io room.
+  const matchStates = new Map<string, MatchState>();
+  const bridgeSockets = new Map<string, Socket>();
 
-  // Tick the clock every second when running and no bridge is driving it
+  async function getState(orgId: string): Promise<MatchState> {
+    const cached = matchStates.get(orgId);
+    if (cached) return cached;
+    const store = getMatchStore(orgId);
+    const state = store ? await store.load() : { ...DEFAULT_MATCH_STATE };
+    matchStates.set(orgId, state);
+    return state;
+  }
+
+  function setState(orgId: string, next: MatchState): void {
+    matchStates.set(orgId, next);
+    io.to(orgId).emit("matchStateChange", next);
+    getMatchStore(orgId)?.save(next);
+  }
+
+  async function applyManualUpdate(orgId: string, patch: Partial<MatchState>): Promise<MatchState> {
+    const current = await getState(orgId);
+    const next: MatchState = {
+      ...current,
+      ...patch,
+      sequenceId: current.sequenceId + 1,
+      inputSource: patch.inputSource ?? "manual",
+      home:    { ...current.home,    ...(patch.home    ?? {}) },
+      visitor: { ...current.visitor, ...(patch.visitor ?? {}) },
+    };
+    setState(orgId, next);
+    return next;
+  }
+
+  // Tick the clock every second for every loaded org that's running and
+  // not currently being driven by a connected bridge.
   const clockInterval = setInterval(() => {
-    if (!currentState.isRunning || bridgeSocket?.connected) return;
-    const next = currentState.countDown
-      ? currentState.clockSeconds - 1
-      : currentState.clockSeconds + 1;
-    currentState = { ...currentState, clockSeconds: next, sequenceId: currentState.sequenceId + 1 };
-    io.emit("matchStateChange", currentState);
+    for (const [orgId, state] of matchStates) {
+      if (!state.isRunning || bridgeSockets.get(orgId)?.connected) continue;
+      const next = state.countDown ? state.clockSeconds - 1 : state.clockSeconds + 1;
+      setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 });
+    }
   }, 1000);
 
   // ─── Logo upload ─────────────────────────────────────────────────────────────
@@ -67,16 +101,18 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  function logoUploadAuth(
+  async function controlAuth(
     req: express.Request,
     res: express.Response,
     next: express.NextFunction
-  ): void {
+  ): Promise<void> {
     const secret = req.headers["x-control-secret"];
-    if (secret !== CONTROL_SECRET) {
+    const result = await verifyControlSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
+    if (!result) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
+    (req as any).orgId = result.orgId;
     next();
   }
 
@@ -92,10 +128,10 @@ export function createServer(options: ServerOptions = {}) {
 
   app.post(
     "/api/logo/:team",
-    logoUploadAuth,
+    controlAuth,
     fsRateLimit,
     upload.single("logo"),
-    (req, res) => {
+    async (req, res) => {
       const team = req.params.team as "home" | "visitor";
       if (team !== "home" && team !== "visitor") {
         res.status(400).json({ error: "team must be 'home' or 'visitor'" });
@@ -106,18 +142,20 @@ export function createServer(options: ServerOptions = {}) {
         return;
       }
 
+      const orgId = (req as any).orgId as string;
       const ext = path.extname(req.file.filename).toLowerCase();
       const logoUrl = `/logos/${team}${ext}?t=${Date.now()}`;
+      const state = await getState(orgId);
 
-      applyManualUpdate({
-        [team]: { ...currentState[team], logoUrl },
+      await applyManualUpdate(orgId, {
+        [team]: { ...state[team], logoUrl },
       } as Partial<MatchState>);
 
       res.json({ logoUrl });
     }
   );
 
-  app.delete("/api/logo/:team", logoUploadAuth, fsRateLimit, (req, res) => {
+  app.delete("/api/logo/:team", controlAuth, fsRateLimit, async (req, res) => {
     const team = req.params.team as "home" | "visitor";
     if (team !== "home" && team !== "visitor") {
       res.status(400).json({ error: "team must be 'home' or 'visitor'" });
@@ -126,8 +164,10 @@ export function createServer(options: ServerOptions = {}) {
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith(`${team}.`));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
 
-    applyManualUpdate({
-      [team]: { ...currentState[team], logoUrl: "" },
+    const orgId = (req as any).orgId as string;
+    const state = await getState(orgId);
+    await applyManualUpdate(orgId, {
+      [team]: { ...state[team], logoUrl: "" },
     } as Partial<MatchState>);
 
     res.json({ status: "removed" });
@@ -152,18 +192,22 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/competition-logo", logoUploadAuth, fsRateLimit, compUpload.single("logo"), (req, res) => {
+  app.post("/api/competition-logo", controlAuth, fsRateLimit, compUpload.single("logo"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+    const orgId = (req as any).orgId as string;
     const ext = path.extname(req.file.filename).toLowerCase();
     const competitionLogoUrl = `/logos/competition${ext}?t=${Date.now()}`;
-    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl } });
+    const state = await getState(orgId);
+    await applyManualUpdate(orgId, { displayTheme: { ...state.displayTheme, competitionLogoUrl } });
     res.json({ competitionLogoUrl });
   });
 
-  app.delete("/api/competition-logo", logoUploadAuth, fsRateLimit, (req, res) => {
+  app.delete("/api/competition-logo", controlAuth, fsRateLimit, async (req, res) => {
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
-    applyManualUpdate({ displayTheme: { ...currentState.displayTheme, competitionLogoUrl: "" } });
+    const orgId = (req as any).orgId as string;
+    const state = await getState(orgId);
+    await applyManualUpdate(orgId, { displayTheme: { ...state.displayTheme, competitionLogoUrl: "" } });
     res.json({ status: "removed" });
   });
 
@@ -190,14 +234,14 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/sound", logoUploadAuth, fsRateLimit, soundUpload.single("sound"), (req, res) => {
+  app.post("/api/sound", controlAuth, fsRateLimit, soundUpload.single("sound"), (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
   });
 
   const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
-  app.delete("/api/sound/:filename", logoUploadAuth, fsRateLimit, (req, res) => {
-    const filename = path.basename(req.params.filename);
+  app.delete("/api/sound/:filename", controlAuth, fsRateLimit, (req, res) => {
+    const filename = path.basename(String(req.params.filename));
     if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
       res.status(400).json({ error: "invalid file type" });
       return;
@@ -210,95 +254,118 @@ export function createServer(options: ServerOptions = {}) {
   // ─── REST ────────────────────────────────────────────────────────────────────
 
   app.get("/", (_req, res) => res.json({ status: "ok", version: "1.0.0" }));
-  app.get("/state", (_req, res) => res.json(currentState));
 
-  app.post("/manual", (req, res) => {
-    if (req.headers["x-control-secret"] !== CONTROL_SECRET) {
+  app.get("/state", async (req, res) => {
+    const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    res.json(await getState(orgId));
+  });
+
+  app.post("/manual", async (req, res) => {
+    const secret = req.headers["x-control-secret"];
+    const result = await verifyControlSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
+    if (!result) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
-    applyManualUpdate(req.body as Partial<MatchState>);
-    res.json(currentState);
+    const next = await applyManualUpdate(result.orgId, req.body as Partial<MatchState>);
+    res.json(next);
   });
 
   // ─── Socket.io ───────────────────────────────────────────────────────────────
 
-  io.use((socket, next) => {
-    const { secret, role } = socket.handshake.auth as { secret?: string; role?: string };
-    if (role === "bridge"  && secret === BRIDGE_SECRET)  (socket as any).isBridge  = true;
-    if (role === "control" && secret === CONTROL_SECRET) (socket as any).isControl = true;
+  io.use(async (socket, next) => {
+    const { secret, role, orgId: requestedOrgId } = socket.handshake.auth as {
+      secret?: string;
+      role?: string;
+      orgId?: string;
+    };
+
+    let orgId: string | null = null;
+
+    if (role === "bridge") {
+      const result = await verifyBridgeSecret(secret, BRIDGE_SECRET);
+      if (result) {
+        orgId = result.orgId;
+        (socket as any).isBridge = true;
+      }
+    } else if (role === "control") {
+      const result = await verifyControlSecret(secret, CONTROL_SECRET);
+      if (result) {
+        orgId = result.orgId;
+        (socket as any).isControl = true;
+      }
+    }
+
+    (socket as any).orgId = orgId ?? requestedOrgId ?? LEGACY_ROOM_ID;
     next();
   });
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
+    const orgId = (socket as any).orgId as string;
     const isBridge  = (socket as any).isBridge  === true;
     const isControl = (socket as any).isControl === true;
     const role = isBridge ? "bridge" : isControl ? "control" : "viewer";
 
-    console.log(`[+] ${role} connected (${socket.id})`);
+    socket.join(orgId);
+    console.log(`[+] ${role} connected to org ${orgId} (${socket.id})`);
 
-    socket.emit("matchStateChange", currentState);
+    socket.emit("matchStateChange", await getState(orgId));
 
     if (isBridge) {
-      if (bridgeSocket) {
-        console.warn("[relay] Replacing existing bridge connection");
-        bridgeSocket.disconnect(true);
+      const existingBridge = bridgeSockets.get(orgId);
+      if (existingBridge) {
+        console.warn(`[relay] Replacing existing bridge connection for org ${orgId}`);
+        existingBridge.disconnect(true);
       }
-      bridgeSocket = socket;
+      bridgeSockets.set(orgId, socket);
 
-      socket.on("stateUpdate", (state: MatchState) => {
-        if (state.sequenceId >= currentState.sequenceId) {
-          currentState = {
+      socket.on("stateUpdate", async (state: MatchState) => {
+        const current = await getState(orgId);
+        if (state.sequenceId >= current.sequenceId) {
+          setState(orgId, {
             ...state,
-            home:         { ...state.home,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
-            visitor:      { ...state.visitor, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
-            displayTheme: { ...currentState.displayTheme },
-          };
-          io.emit("matchStateChange", currentState);
+            home:         { ...state.home,    color: current.home.color,    logoUrl: current.home.logoUrl    },
+            visitor:      { ...state.visitor, color: current.visitor.color, logoUrl: current.visitor.logoUrl },
+            displayTheme: { ...current.displayTheme },
+          });
         }
       });
     }
 
     if (isControl) {
-      socket.on("manualUpdate", (patch: Partial<MatchState>) => {
-        applyManualUpdate(patch);
-        if (bridgeSocket?.connected) bridgeSocket.emit("manualUpdate", patch);
+      socket.on("manualUpdate", async (patch: Partial<MatchState>) => {
+        await applyManualUpdate(orgId, patch);
+        const bridge = bridgeSockets.get(orgId);
+        if (bridge?.connected) bridge.emit("manualUpdate", patch);
       });
 
-      socket.on("resetMatch", () => {
-        currentState = {
+      socket.on("resetMatch", async () => {
+        const current = await getState(orgId);
+        const next: MatchState = {
           ...DEFAULT_MATCH_STATE,
-          sequenceId: currentState.sequenceId + 1,
-          home:    { ...DEFAULT_MATCH_STATE.home,    name: currentState.home.name,    color: currentState.home.color,    logoUrl: currentState.home.logoUrl    },
-          visitor: { ...DEFAULT_MATCH_STATE.visitor, name: currentState.visitor.name, color: currentState.visitor.color, logoUrl: currentState.visitor.logoUrl },
-          displayTheme: { ...currentState.displayTheme },
+          sequenceId: current.sequenceId + 1,
+          home:    { ...DEFAULT_MATCH_STATE.home,    name: current.home.name,    color: current.home.color,    logoUrl: current.home.logoUrl    },
+          visitor: { ...DEFAULT_MATCH_STATE.visitor, name: current.visitor.name, color: current.visitor.color, logoUrl: current.visitor.logoUrl },
+          displayTheme: { ...current.displayTheme },
         };
-        io.emit("matchStateChange", currentState);
-        if (bridgeSocket?.connected) bridgeSocket.emit("manualUpdate", currentState);
+        setState(orgId, next);
+        const bridge = bridgeSockets.get(orgId);
+        if (bridge?.connected) bridge.emit("manualUpdate", next);
       });
     }
 
     socket.on("disconnect", () => {
-      if (isBridge && bridgeSocket?.id === socket.id) bridgeSocket = null;
-      console.log(`[-] ${role} disconnected (${socket.id})`);
+      if (isBridge && bridgeSockets.get(orgId) === socket) bridgeSockets.delete(orgId);
+      console.log(`[-] ${role} disconnected from org ${orgId} (${socket.id})`);
     });
   });
 
-  function applyManualUpdate(patch: Partial<MatchState>): void {
-    currentState = {
-      ...currentState,
-      ...patch,
-      sequenceId: currentState.sequenceId + 1,
-      inputSource: patch.inputSource ?? "manual",
-      home:    { ...currentState.home,    ...(patch.home    ?? {}) },
-      visitor: { ...currentState.visitor, ...(patch.visitor ?? {}) },
-    };
-    io.emit("matchStateChange", currentState);
-  }
-
   function close(cb?: (err?: Error) => void) {
     clearInterval(clockInterval);
-    io.close(cb);
+    const flushes = allActiveStores().map(store =>
+      store.flush().catch(err => console.error(`[relay] failed to flush match state for org ${store.orgId} on close`, err))
+    );
+    Promise.allSettled(flushes).finally(() => io.close(cb));
   }
 
   return { app, io, httpServer, close };
