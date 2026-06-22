@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { getAccountForOrg } from "@/lib/account";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { priceIdForPlan, PaidPlan } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }
 
+  const stripe = getStripe();
   let customerId = account.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@scorehub/db";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { planForPriceId } from "@/lib/plans";
 
 // Stripe retries webhooks on any non-2xx response, so on a real processing
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (err) {
     console.error("[billing] webhook signature verification failed:", err);
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
@@ -51,7 +51,7 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       const accountId = session.client_reference_id;
       if (!accountId || typeof session.customer !== "string" || typeof session.subscription !== "string") break;
 
-      const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      const subscription = await getStripe().subscriptions.retrieve(session.subscription);
       const priceId = subscription.items.data[0]?.price.id;
       const plan = priceId ? planForPriceId(priceId) : null;
 
