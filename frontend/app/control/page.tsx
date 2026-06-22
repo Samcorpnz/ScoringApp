@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
@@ -13,7 +13,7 @@ import { useSoundCues, useSoundPlayback, SoundCue } from "../hooks/useSoundCues"
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
-type Tab = "score" | "outputs" | "logos" | "theme" | "audio" | "settings";
+type Tab = "score" | "outputs" | "logos" | "theme" | "audio" | "settings" | "billing";
 
 export default function ControlPanel() {
   const controlToken = useControlToken();
@@ -100,7 +100,7 @@ export default function ControlPanel() {
 
       {/* Tab nav */}
       <div className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
-        {(["score", "outputs", "logos", "theme", "audio", "settings"] as Tab[]).map(t => (
+        {(["score", "outputs", "logos", "theme", "audio", "settings", "billing"] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -125,6 +125,7 @@ export default function ControlPanel() {
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} controlToken={controlToken} />}
         {tab === "settings" && <SettingsTab state={state} push={push} />}
+        {tab === "billing"  && <BillingTab />}
       </div>
     </div>
   );
@@ -1180,6 +1181,74 @@ function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<Mat
           Change via <code>NEXT_PUBLIC_RELAY_URL</code> in <code>.env.local</code> (frontend) or environment variable on Vercel.
         </p>
       </Card>
+    </div>
+  );
+}
+
+function BillingTab() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const [status, setStatus] = useState<{ plan: string; hasStripeCustomer: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/billing/status").then(r => r.json()).then(setStatus).catch(() => {});
+  }, []);
+
+  async function upgrade(plan: "pro" | "venue") {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function manageBilling() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <Card title="Current Plan">
+        <p className="text-2xl font-black capitalize" style={{ color: "var(--accent)" }}>
+          {status?.plan ?? "…"}
+        </p>
+        <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
+          Free allows one live match at a time and no custom branding. Pro and Venue unlock custom logos/theme and
+          concurrent matches across your account.
+        </p>
+        {!isAdmin && (
+          <p className="text-xs mt-3" style={{ color: "var(--text-dim)" }}>
+            Only an account ADMIN can change billing.
+          </p>
+        )}
+      </Card>
+
+      {isAdmin && (
+        <Card title="Manage">
+          <div className="flex flex-col gap-2">
+            <SmallBtn label={busy ? "Loading…" : "Upgrade to Pro"} onClick={() => upgrade("pro")} primary />
+            <SmallBtn label={busy ? "Loading…" : "Upgrade to Venue"} onClick={() => upgrade("venue")} />
+            {status?.hasStripeCustomer && (
+              <SmallBtn label={busy ? "Loading…" : "Manage billing"} onClick={manageBilling} />
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

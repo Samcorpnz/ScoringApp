@@ -11,6 +11,7 @@ import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores } from "./persistence";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
+import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -149,6 +150,7 @@ export function createServer(options: ServerOptions = {}) {
     "/api/logo/:team",
     controlRateLimit,
     controlAuth,
+    requirePlan(["pro", "venue"]),
     upload.single("logo"),
     async (req, res) => {
       const team = req.params.team as "home" | "visitor";
@@ -174,7 +176,7 @@ export function createServer(options: ServerOptions = {}) {
     }
   );
 
-  app.delete("/api/logo/:team", controlRateLimit, controlAuth, async (req, res) => {
+  app.delete("/api/logo/:team", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), async (req, res) => {
     const team = req.params.team as "home" | "visitor";
     if (team !== "home" && team !== "visitor") {
       res.status(400).json({ error: "team must be 'home' or 'visitor'" });
@@ -211,7 +213,7 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/competition-logo", controlRateLimit, controlAuth, compUpload.single("logo"), async (req, res) => {
+  app.post("/api/competition-logo", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), compUpload.single("logo"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     const orgId = (req as any).orgId as string;
     const ext = path.extname(req.file.filename).toLowerCase();
@@ -221,7 +223,7 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ competitionLogoUrl });
   });
 
-  app.delete("/api/competition-logo", controlRateLimit, controlAuth, async (req, res) => {
+  app.delete("/api/competition-logo", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), async (req, res) => {
     const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
     files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
     const orgId = (req as any).orgId as string;
@@ -253,13 +255,13 @@ export function createServer(options: ServerOptions = {}) {
     },
   });
 
-  app.post("/api/sound", controlRateLimit, controlAuth, soundUpload.single("sound"), (req, res) => {
+  app.post("/api/sound", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), soundUpload.single("sound"), (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
   });
 
   const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
-  app.delete("/api/sound/:filename", controlRateLimit, controlAuth, (req, res) => {
+  app.delete("/api/sound/:filename", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), (req, res) => {
     const filename = path.basename(String(req.params.filename));
     if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
       res.status(400).json({ error: "invalid file type" });
@@ -274,9 +276,25 @@ export function createServer(options: ServerOptions = {}) {
 
   app.get("/", (_req, res) => res.json({ status: "ok", version: "1.0.0" }));
 
+  // Shared by every route that can trigger match creation (getState/
+  // applyManualUpdate), since that's the one place a Free-tier account can
+  // be blocked from bringing up a second concurrent live match.
+  function respondToStateError(res: express.Response, err: unknown): void {
+    if (err instanceof ConcurrentMatchLimitError) {
+      res.status(402).json({ error: err.message });
+      return;
+    }
+    console.error("[relay] failed to load/update match state:", err);
+    res.status(500).json({ error: "internal error" });
+  }
+
   app.get("/state", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
-    res.json(await getState(orgId));
+    try {
+      res.json(await getState(orgId));
+    } catch (err) {
+      respondToStateError(res, err);
+    }
   });
 
   app.post("/manual", controlRateLimit, async (req, res) => {
@@ -286,8 +304,12 @@ export function createServer(options: ServerOptions = {}) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
-    const next = await applyManualUpdate(result.orgId, req.body as Partial<MatchState>);
-    res.json(next);
+    try {
+      const next = await applyManualUpdate(result.orgId, req.body as Partial<MatchState>);
+      res.json(next);
+    } catch (err) {
+      respondToStateError(res, err);
+    }
   });
 
   // ─── Socket.io ───────────────────────────────────────────────────────────────
@@ -381,7 +403,13 @@ export function createServer(options: ServerOptions = {}) {
 
     getState(orgId)
       .then(state => socket.emit("matchStateChange", state))
-      .catch(err => console.error(`[relay] failed to load initial state for org ${orgId}`, err));
+      .catch(err => {
+        if (err instanceof ConcurrentMatchLimitError) {
+          socket.emit("error", { message: err.message });
+          return;
+        }
+        console.error("[relay] failed to load initial state for org:", orgId, err);
+      });
   });
 
   function close(cb?: (err?: Error) => void) {
