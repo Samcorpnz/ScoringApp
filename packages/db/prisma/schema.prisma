@@ -9,13 +9,21 @@ datasource db {
 
 // Tenant / billing boundary. One paying customer.
 model Account {
-  id               String   @id @default(uuid())
-  name             String
-  stripeCustomerId String?
-  plan             String   @default("free")
-  createdAt        DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  plan                 String   @default("free")
+  createdAt            DateTime @default(now())
 
   orgs Org[]
+}
+
+// Tracks processed Stripe webhook event IDs so a Stripe-initiated retry of an
+// already-handled event can't double-apply a plan change.
+model StripeEvent {
+  id          String   @id
+  processedAt DateTime @default(now())
 }
 
 enum OrgType {

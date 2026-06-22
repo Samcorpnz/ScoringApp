@@ -1,5 +1,6 @@
 import { prisma } from "@scorehub/db";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { getOrgAccount, ConcurrentMatchLimitError } from "./entitlements";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
@@ -34,6 +35,14 @@ export function getMatchStore(orgId: string): MatchStore | null {
       matchId = id;
       return id;
     }
+    const account = await getOrgAccount(orgId);
+    if (account && account.plan === "free") {
+      const liveElsewhere = await prisma.match.count({
+        where: { status: "LIVE", org: { accountId: account.accountId } },
+      });
+      if (liveElsewhere > 0) throw new ConcurrentMatchLimitError();
+    }
+
     const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object } });
     const id: string = created.id;
     matchId = id;
