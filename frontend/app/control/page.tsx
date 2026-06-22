@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { getStripeClient } from "@/lib/stripe-client";
 import { useMatchState } from "../hooks/useMatchState";
 import { useControlToken } from "../hooks/useControlToken";
 import { ConnectionBadge } from "../components/ConnectionBadge";
@@ -1190,9 +1192,12 @@ function BillingTab() {
   const isAdmin = session?.user?.role === "ADMIN";
   const [status, setStatus] = useState<{ plan: string; hasStripeCustomer: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [checkoutSecret, setCheckoutSecret] = useState<string | null>(null);
+
+  const refreshStatus = () => fetch("/api/billing/status").then(r => r.json()).then(setStatus).catch(() => {});
 
   useEffect(() => {
-    fetch("/api/billing/status").then(r => r.json()).then(setStatus).catch(() => {});
+    refreshStatus();
   }, []);
 
   async function upgrade(plan: "pro" | "venue") {
@@ -1204,7 +1209,7 @@ function BillingTab() {
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.clientSecret) setCheckoutSecret(data.clientSecret);
     } finally {
       setBusy(false);
     }
@@ -1219,6 +1224,19 @@ function BillingTab() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (checkoutSecret) {
+    return (
+      <EmbeddedCheckoutCard
+        clientSecret={checkoutSecret}
+        onComplete={() => {
+          setCheckoutSecret(null);
+          refreshStatus();
+        }}
+        onClose={() => setCheckoutSecret(null)}
+      />
+    );
   }
 
   return (
@@ -1250,6 +1268,28 @@ function BillingTab() {
         </Card>
       )}
     </div>
+  );
+}
+
+function EmbeddedCheckoutCard({ clientSecret, onComplete, onClose }: {
+  clientSecret: string; onComplete: () => void; onClose: () => void;
+}) {
+  return (
+    <Card title="Upgrade">
+      <button
+        className="text-xs font-bold mb-3"
+        style={{ color: "var(--text-secondary)" }}
+        onClick={onClose}
+      >
+        ← Back
+      </button>
+      <EmbeddedCheckoutProvider
+        stripe={getStripeClient()}
+        options={{ clientSecret, onComplete }}
+      >
+        <EmbeddedCheckout />
+      </EmbeddedCheckoutProvider>
+    </Card>
   );
 }
 
