@@ -54,7 +54,7 @@ body {
   flex-shrink: 0;
 }
 .status-dot.connected    { background: var(--running); box-shadow: 0 0 8px var(--running); }
-.status-dot.disconnected { background: var(--stopped); }
+.status-dot.disconnected { background: var(--danger); animation: blink 0.8s ease-in-out infinite; }
 .status-dot.connecting   { background: var(--accent); animation: blink 1.2s ease-in-out infinite; }
 
 @keyframes blink {
