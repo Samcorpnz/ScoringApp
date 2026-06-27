@@ -94,12 +94,15 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
 
       {/* Possession indicator */}
       {!isCompact && (
-        <div className="mt-1" style={{ opacity: hasPossession ? 1 : 0, transition: "opacity 200ms" }}>
+        <div className="mt-1" style={{ opacity: hasPossession ? 1 : 0, transition: "opacity 200ms" }} aria-live="polite">
           <div
             className="rounded-full px-3 py-0.5 text-xs font-bold tracking-widest uppercase"
             style={{ background: `${color}22`, border: `1px solid ${color}55`, color }}
           >
-            {possession === "both" ? "●" : side === "home" ? "▶ BALL" : "BALL ◀"}
+            <span aria-hidden="true">{possession === "both" ? "●" : side === "home" ? "▶ BALL" : "BALL ◀"}</span>
+            <span className="sr-only">
+              {hasPossession ? `${team.name} has possession` : `${team.name} does not have possession`}
+            </span>
           </div>
         </div>
       )}

@@ -225,19 +225,28 @@ function applyPoints(
  * home players @ 26, visitor players @ 218.
  */
 function applyNames(raw: Buffer, state: MatchState): MatchState {
-  const name = (offset: number) =>
-    raw.slice(offset, offset + 12).toString("ascii").trim();
+  // Bounds-checked: returns null (caller falls back to the existing name)
+  // unless the full 12-byte field is present. Also strips non-printable
+  // bytes — a truncated/misaligned frame can otherwise read into the
+  // trailing ETX/CRC bytes and produce a garbage "name" from control
+  // characters that .trim() alone wouldn't catch (SA-9).
+  const name = (offset: number): string | null => {
+    if (offset + 12 > raw.length) return null;
+    // eslint-disable-next-line no-control-regex
+    const cleaned = raw.slice(offset, offset + 12).toString("ascii").replace(/[^\x20-\x7e]/g, "").trim();
+    return cleaned || null;
+  };
 
-  const homeName    = name(2)  || state.home.name;
-  const visitorName = name(14) || state.visitor.name;
+  const homeName    = name(2)  ?? state.home.name;
+  const visitorName = name(14) ?? state.visitor.name;
 
   const homePlayers    = state.home.players.map((p, i) => {
-    const offset = 26 + i * 12;
-    return offset + 12 < raw.length ? { ...p, name: name(offset) } : p;
+    const playerName = name(26 + i * 12);
+    return playerName !== null ? { ...p, name: playerName } : p;
   });
   const visitorPlayers = state.visitor.players.map((p, i) => {
-    const offset = 218 + i * 12;
-    return offset + 12 < raw.length ? { ...p, name: name(offset) } : p;
+    const playerName = name(218 + i * 12);
+    return playerName !== null ? { ...p, name: playerName } : p;
   });
 
   return {

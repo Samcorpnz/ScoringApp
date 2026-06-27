@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma, Prisma } from "@scorehub/db";
+import { isRateLimited, clientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  if (isRateLimited(`signup:${clientIp(req)}`, 5, 60_000)) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
+
   const body = await req.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";

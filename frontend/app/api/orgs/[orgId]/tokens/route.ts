@@ -31,3 +31,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
   return NextResponse.json({ token: plaintext }, { status: 201 });
 }
+
+// Lists this org's bridge tokens (metadata only — the plaintext/hash is
+// never returned after creation) so the control panel can show which
+// tokens exist and let an admin revoke one (see [tokenId]/route.ts).
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
+  const { orgId } = await params;
+  const session = await auth();
+  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const tokens = await prisma.scopedToken.findMany({
+    where: { orgId, type: "BRIDGE" },
+    select: { id: true, label: true, createdAt: true, revokedAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({ tokens });
+}

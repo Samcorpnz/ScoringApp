@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma, Role } from "@scorehub/db";
+import { isRateLimited, clientIp } from "@/lib/rateLimit";
 
 declare module "next-auth" {
   interface Session {
@@ -37,8 +38,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        // Throttle by IP+email so credential stuffing against one account
+        // from one source can't run unbounded (SA-81).
+        const key = `login:${clientIp(request)}:${String(credentials.email).toLowerCase()}`;
+        if (isRateLimited(key, 10, 60_000)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: String(credentials.email) },

@@ -182,6 +182,22 @@ describe("applySaturnMessage 'F1' / 'F2'", () => {
     const next = applySaturnMessage({ type: "F1", raw: buildFrame("F1", data) }, state);
     expect(next.home.players[0].name).toBe("Jordan");
   });
+
+  it("does not crash on a frame truncated before the first player's bytes (SA-9)", () => {
+    const state = freshState();
+    // STX + 'F' + '1' only — no data bytes at all, raw.length === 3
+    const raw = Buffer.from([STX, "F".charCodeAt(0), "1".charCodeAt(0)]);
+    const next = applySaturnMessage({ type: "F1", raw }, state);
+    expect(next.home.players).toEqual([]);
+  });
+
+  it("does not crash when raw ends exactly one byte short of a full player entry (SA-9)", () => {
+    const state = freshState();
+    // base=3 needs raw[3..5]; give only raw[3..4] (2 of 3 bytes) — one short
+    const raw = Buffer.from([STX, "F".charCodeAt(0), "1".charCodeAt(0), 0x80, 0x07]);
+    const next = applySaturnMessage({ type: "F1", raw }, state);
+    expect(next.home.players).toEqual([]);
+  });
 });
 
 // ─── applySaturnMessage — 'F3'/'F4' individual points ────────────────────────
@@ -213,6 +229,19 @@ describe("applySaturnMessage 'F3' / 'F4'", () => {
     const next = applySaturnMessage({ type: "F4", raw: buildFrame("F4", data) }, stateWithPlayer);
     expect(next.visitor.players[0].points).toBe(8);
   });
+
+  it("does not crash and leaves points unchanged when raw is truncated before any player's bytes (SA-9)", () => {
+    const stateWithPlayer: MatchState = {
+      ...freshState(),
+      home: {
+        ...DEFAULT_MATCH_STATE.home,
+        players: [{ number: 7, name: "", onCourt: true, faults: 0, points: 3 }],
+      },
+    };
+    const raw = Buffer.from([STX, "F".charCodeAt(0), "3".charCodeAt(0)]); // no data bytes
+    const next = applySaturnMessage({ type: "F3", raw }, stateWithPlayer);
+    expect(next.home.players[0].points).toBe(3);
+  });
 });
 
 // ─── applySaturnMessage — 'N' names ──────────────────────────────────────────
@@ -235,6 +264,21 @@ describe("applySaturnMessage 'N'", () => {
     const state = freshState();
     const next = applySaturnMessage({ type: "N", raw: buildFrame("N", data) }, state);
     expect(next.home.name).toBe("Home"); // preserved from default
+  });
+
+  it("does not crash and keeps existing names when raw is far shorter than the name table (SA-9)", () => {
+    const state: MatchState = {
+      ...freshState(),
+      home: {
+        ...DEFAULT_MATCH_STATE.home,
+        players: [{ number: 7, name: "Jordan", onCourt: true, faults: 0, points: 0 }],
+      },
+    };
+    const raw = Buffer.from([STX, "N".charCodeAt(0), ETX, 0]); // no name bytes at all
+    const next = applySaturnMessage({ type: "N", raw }, state);
+    expect(next.home.name).toBe("Home");
+    expect(next.visitor.name).toBe("Visitor");
+    expect(next.home.players[0].name).toBe("Jordan"); // out-of-range player offset left untouched
   });
 });
 

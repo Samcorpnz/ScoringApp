@@ -279,7 +279,11 @@ export class BridgeController {
 
   private async teardownSource(): Promise<void> {
     if (this.stopSource) {
-      try { await this.stopSource(); } catch { /* best effort */ }
+      try {
+        await this.stopSource();
+      } catch (err) {
+        log.warn(`teardownSource: stopSource() failed, continuing teardown: ${(err as Error).message}`);
+      }
       this.stopSource = null;
     }
     this.serialPort = null;
@@ -293,8 +297,8 @@ export class BridgeController {
         const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
         return { ...DEFAULT_CONFIG, ...saved };
       }
-    } catch {
-      // fall through to defaults
+    } catch (err) {
+      log.warn(`loadConfig: failed to read/parse ${CONFIG_PATH}, falling back to defaults: ${(err as Error).message}`);
     }
     return { ...DEFAULT_CONFIG };
   }

@@ -13,21 +13,45 @@ import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth"
 import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
+import { matchStatePatchSchema, matchStateSchema } from "./schemas";
 
 export interface ServerOptions {
   bridgeSecret?: string;
   controlSecret?: string;
   uploadDir?: string;
   allowedOrigins?: string | string[];
+  controlRateLimit?: number;
+}
+
+function requireSecret(name: "BRIDGE_SECRET" | "CONTROL_SECRET", value: string | undefined): string {
+  if (!value) {
+    throw new Error(
+      `${name} must be set — refusing to start with a default/missing secret. See relay/.env.example.`
+    );
+  }
+  return value;
+}
+
+// No wildcard fallback — an unset/empty value denies all cross-origin
+// requests rather than defaulting to "*", which would let any site read
+// control-panel/control-secret-gated responses (SA code-scanning #14).
+function requireAllowedOrigins(value: string | string[] | undefined): string[] {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  if (list.length === 0 || list.includes("*")) {
+    throw new Error(
+      "ALLOWED_ORIGINS must be set to one or more explicit origins (comma-separated) — refusing to start with a wildcard/missing CORS origin. See relay/.env.example."
+    );
+  }
+  return list;
 }
 
 export function createServer(options: ServerOptions = {}) {
-  const BRIDGE_SECRET  = options.bridgeSecret  ?? process.env.BRIDGE_SECRET  ?? "changeme";
-  const CONTROL_SECRET = options.controlSecret ?? process.env.CONTROL_SECRET ?? "changeme";
+  const BRIDGE_SECRET  = requireSecret("BRIDGE_SECRET", options.bridgeSecret || process.env.BRIDGE_SECRET);
+  const CONTROL_SECRET = requireSecret("CONTROL_SECRET", options.controlSecret || process.env.CONTROL_SECRET);
   const UPLOAD_DIR     = options.uploadDir     ?? process.env.UPLOAD_DIR     ?? path.join(process.cwd(), "uploads");
-  const ALLOWED_ORIGINS: string | string[] =
-    options.allowedOrigins ??
-    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) : "*");
+  const ALLOWED_ORIGINS: string[] = requireAllowedOrigins(
+    options.allowedOrigins ?? process.env.ALLOWED_ORIGINS?.split(",").map(o => o.trim())
+  );
 
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -155,7 +179,7 @@ export function createServer(options: ServerOptions = {}) {
   // entirely since the limiter would only see requests that already passed auth.
   const controlRateLimit = rateLimit({
     windowMs: 60_000,
-    limit: 20,
+    limit: options.controlRateLimit ?? 20,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "too many requests" },
@@ -368,8 +392,13 @@ export function createServer(options: ServerOptions = {}) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
+    const parsed = matchStatePatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid match state patch", details: parsed.error.issues });
+      return;
+    }
     try {
-      const next = await applyManualUpdate(result.orgId, req.body as Partial<MatchState>);
+      const next = await applyManualUpdate(result.orgId, parsed.data as Partial<MatchState>);
       res.json(next);
     } catch (err) {
       respondToStateError(res, err);
@@ -425,7 +454,13 @@ export function createServer(options: ServerOptions = {}) {
       }
       bridgeSockets.set(orgId, socket);
 
-      socket.on("stateUpdate", async (state: MatchState) => {
+      socket.on("stateUpdate", async (rawState: unknown) => {
+        const parsed = matchStateSchema.safeParse(rawState);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed stateUpdate from org ${orgId}:`, parsed.error.issues);
+          return;
+        }
+        const state = parsed.data as MatchState;
         const current = await getState(orgId);
         if (state.sequenceId >= current.sequenceId) {
           setState(orgId, {
@@ -439,7 +474,13 @@ export function createServer(options: ServerOptions = {}) {
     }
 
     if (isControl) {
-      socket.on("manualUpdate", async (patch: Partial<MatchState>) => {
+      socket.on("manualUpdate", async (rawPatch: unknown) => {
+        const parsed = matchStatePatchSchema.safeParse(rawPatch);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed manualUpdate from org ${orgId}:`, parsed.error.issues);
+          return;
+        }
+        const patch = parsed.data as Partial<MatchState>;
         await applyManualUpdate(orgId, patch);
         const bridge = bridgeSockets.get(orgId);
         if (bridge?.connected) bridge.emit("manualUpdate", patch);
@@ -487,6 +528,16 @@ export function createServer(options: ServerOptions = {}) {
         .finally(() => io.close(cb))
     );
   }
+
+  // Catches errors thrown before a route handler runs — chiefly multer
+  // (file-too-large, fileFilter rejection) — which otherwise bubble up as a
+  // bare unlogged 500 with no context on what failed or why (SA-10).
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("[relay] unhandled error:", req.method, req.path, err);
+    if (res.headersSent) return;
+    const message = err instanceof multer.MulterError ? err.message : "internal server error";
+    res.status(err instanceof multer.MulterError ? 400 : 500).json({ error: message });
+  });
 
   return { app, io, httpServer, close };
 }
