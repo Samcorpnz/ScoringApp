@@ -24,11 +24,20 @@ export interface ServerOptions {
   controlRateLimit?: number;
 }
 
+// BRIDGE_SECRET/CONTROL_SECRET are the legacy plain-secret auth path, only
+// ever consulted by verifyBridgeSecret/verifyControlSecret (auth.ts) when
+// DATABASE_URL is unset — once it's set, those functions branch to
+// ScopedToken/JWT verification and never read these values. Requiring them
+// unconditionally would refuse to start any real (DATABASE_URL-backed)
+// deployment that hasn't also set these otherwise-unused legacy secrets.
 function requireSecret(name: "BRIDGE_SECRET" | "CONTROL_SECRET", value: string | undefined): string {
   if (!value) {
-    throw new Error(
-      `${name} must be set — refusing to start with a default/missing secret. See relay/.env.example.`
-    );
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        `${name} must be set — refusing to start with a default/missing secret. See relay/.env.example.`
+      );
+    }
+    return "";
   }
   return value;
 }
