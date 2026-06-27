@@ -24,6 +24,11 @@ COPY relay/tsconfig.json ./relay/
 COPY relay/src ./relay/src
 RUN npm run build --workspace=scorehub-relay
 
+# npm's hoisting decides per-install whether a workspace gets its own nested
+# node_modules; when it doesn't, the COPY below would fail with "not found"
+# instead of copying nothing, so guarantee the dir exists either way.
+RUN mkdir -p packages/db/node_modules relay/node_modules
+
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 # Reuses the builder's node_modules wholesale rather than a fresh
 # `npm install --omit=dev` — @scorehub/db's generated Prisma client (from
