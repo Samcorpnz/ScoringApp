@@ -533,7 +533,7 @@ export function createServer(options: ServerOptions = {}) {
   // (file-too-large, fileFilter rejection) — which otherwise bubble up as a
   // bare unlogged 500 with no context on what failed or why (SA-10).
   app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(`[relay] unhandled error on ${req.method} ${req.path}:`, err);
+    console.error("[relay] unhandled error:", req.method, req.path, err);
     if (res.headersSent) return;
     const message = err instanceof multer.MulterError ? err.message : "internal server error";
     res.status(err instanceof multer.MulterError ? 400 : 500).json({ error: message });
