@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { captureMessage } from "./sentry";
 
 export type LogLevel = "info" | "warn" | "error" | "data" | "relay";
 
@@ -23,8 +24,10 @@ function emit(level: LogLevel, msg: string): void {
   }
 
   const line2 = `[${level.toUpperCase().padEnd(5)}] ${msg}`;
-  if (level === "error") console.error(line2);
-  else if (level === "warn") console.warn(line2);
+  if (level === "error") {
+    console.error(line2);
+    captureMessage(msg);
+  } else if (level === "warn") console.warn(line2);
   else console.log(line2);
 }
 

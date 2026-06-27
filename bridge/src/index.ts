@@ -10,6 +10,18 @@
 import { BridgeController } from "./controller";
 import { createUiServer } from "./ui/server";
 import { log } from "./logger";
+import { initSentry, captureException } from "./sentry";
+
+initSentry();
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  captureException(err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+  captureException(reason);
+});
 
 const UI_PORT    = parseInt(process.env.UI_PORT ?? "4002", 10);
 const AUTOSTART  = process.env.CD_AUTOSTART === "true";
@@ -33,5 +45,6 @@ async function main(): Promise<void> {
 
 main().catch(err => {
   console.error("Fatal:", err);
+  captureException(err);
   process.exit(1);
 });
