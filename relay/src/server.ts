@@ -32,6 +32,12 @@ export function createServer(options: ServerOptions = {}) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   const app = express();
+  // Railway (and most PaaS hosts) sit in front as a reverse proxy and set
+  // X-Forwarded-For — without this, express-rate-limit can't trust that
+  // header and falls back to misidentifying every request as coming from
+  // the same IP, defeating the per-IP brute-force limits on controlAuth
+  // routes. `1` trusts exactly one hop (the platform's own proxy).
+  app.set("trust proxy", 1);
   app.use(cors({ origin: ALLOWED_ORIGINS }));
   app.use(express.json());
   app.use("/logos", express.static(UPLOAD_DIR));
