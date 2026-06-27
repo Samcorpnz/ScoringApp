@@ -31,7 +31,7 @@ export async function getOrgAccount(orgId: string): Promise<OrgAccount | null> {
 
 function upgradeMessage(allowed: string[]): string {
   const names = allowed.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" or ");
-  return `This feature requires the ${names} plan — upgrade at /control?tab=billing`;
+  return `This feature requires the ${names} plan — upgrade at /account/billing`;
 }
 
 // Express middleware factory gating a route behind one or more plans. Must

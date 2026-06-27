@@ -1,0 +1,64 @@
+"use client";
+
+import { signOut, useSession } from "next-auth/react";
+
+export default function AccountLayout({ children }: { children: React.ReactNode }) {
+  const { data: session, status: authStatus } = useSession({
+    required: true,
+    onUnauthenticated() {
+      window.location.href = "/login?callbackUrl=/account";
+    },
+  });
+
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
+        <div className="text-sm" style={{ color: "var(--text-dim)" }}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+      <div
+        className="flex items-center justify-between px-6 py-4"
+        style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--border)" }}
+      >
+        <div className="flex items-center gap-4">
+          <span className="font-black text-lg tracking-tight">
+            Score<span style={{ color: "var(--accent)" }}>Hub</span>
+          </span>
+          <span className="text-xs px-2 py-1 rounded font-bold tracking-widest uppercase" style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}>
+            Account
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          {session?.user?.name && (
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
+          )}
+          <a
+            href="/control"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Control Panel
+          </a>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      <div className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
+        <a href="/account" className="px-4 py-2 text-sm font-bold tracking-wide" style={{ color: "var(--text-secondary)", textDecoration: "none" }}>Account</a>
+        <a href="/account/billing" className="px-4 py-2 text-sm font-bold tracking-wide" style={{ color: "var(--text-secondary)", textDecoration: "none" }}>Billing</a>
+      </div>
+
+      {children}
+    </div>
+  );
+}

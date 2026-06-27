@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") ?? process.env.NEXTAUTH_URL ?? "";
   const portalSession = await getStripe().billingPortal.sessions.create({
     customer: account.stripeCustomerId,
-    return_url: `${origin}/control?tab=billing`,
+    return_url: `${origin}/account/billing`,
   });
 
   return NextResponse.json({ url: portalSession.url });

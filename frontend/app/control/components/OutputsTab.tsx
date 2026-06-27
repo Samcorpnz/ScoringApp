@@ -1,0 +1,135 @@
+import { RELAY_URL } from "../lib/relay";
+import { SectionLabel } from "./primitives";
+
+const DISPLAYS = [
+  {
+    href: "/display/fullscreen",
+    label: "Fullscreen",
+    desc: "Second screen / projector / capture card. Press F to go fullscreen. Layouts: Wide, Stacked, Minimal.",
+    tags: ["HDMI", "Capture Card", "Projector"],
+    windowSize: "1920,1080",
+  },
+  {
+    href: "/display/basic",
+    label: "Basic",
+    desc: "Clean scoreboard panel. Good for venue screens and preview monitors.",
+    tags: ["Venue Screen", "Preview"],
+    windowSize: "1200,400",
+  },
+  {
+    href: "/display/advanced",
+    label: "Advanced",
+    desc: "Full display with team logos, timeout pips, and on-court player roster.",
+    tags: ["Full Stats", "Broadcast Monitor"],
+    windowSize: "1400,600",
+  },
+  {
+    href: "/display/overlay",
+    label: "Lower-Third Overlay",
+    desc: "Transparent background. Add as Browser Source (1920×120) in OBS/vMix/Wirecast.",
+    tags: ["OBS", "vMix", "Wirecast", "Transparent"],
+    windowSize: "1920,120",
+  },
+  {
+    href: "/display/scorebug",
+    label: "Scorebug",
+    desc: "Compact corner widget with transparent background. URL params: ?position=tr|tl|br|bl&size=sm|md|lg",
+    tags: ["OBS", "vMix", "Corner Widget", "Transparent"],
+    windowSize: "480,100",
+  },
+];
+
+export function OutputsTab() {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4">
+        {DISPLAYS.map(d => (
+          <div key={d.href} className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-bold text-base" style={{ color: "var(--text-primary)" }}>{d.label}</span>
+                  {d.tags.map(t => (
+                    <span key={t} className="text-xs px-2 py-0.5 rounded font-semibold tracking-wide"
+                      style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}>
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{d.desc}</p>
+                <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-dim)" }}>{origin}{d.href}</p>
+              </div>
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                <button
+                  className="rounded-lg px-4 py-2 text-xs font-bold tracking-wide whitespace-nowrap"
+                  style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+                  onClick={() => window.open(d.href, `scoreboard-${d.label}`, `width=${d.windowSize.split(",")[0]},height=${d.windowSize.split(",")[1]},menubar=no,toolbar=no,location=no,status=no`)}
+                >
+                  ↗ Pop Out
+                </button>
+                <button
+                  className="rounded-lg px-4 py-2 text-xs font-bold tracking-wide whitespace-nowrap"
+                  style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  onClick={() => navigator.clipboard.writeText(`${origin}${d.href}`)}
+                >
+                  Copy URL
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Graphics software section */}
+      <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+        <SectionLabel>Graphics Software — Data Feed</SectionLabel>
+        <p className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>
+          For software that drives its own graphics templates (Singular.live, Chyron, Ross Xpression, VIZRT), connect to the live data feed:
+        </p>
+        <div className="mt-4 space-y-3">
+          <DataFeedRow label="REST snapshot" value={`${RELAY_URL}/state`} desc="GET — JSON snapshot of current state, poll at 1–5 Hz" />
+          <DataFeedRow label="WebSocket (Socket.io)" value={`${RELAY_URL}`} desc={`Connect with socket.io-client, listen to "matchStateChange" event`} />
+          <DataFeedRow
+            label="Event name"
+            value="matchStateChange"
+            desc="Fired on every state change — score, clock, period, possession, logos"
+          />
+        </div>
+        <div className="mt-4 rounded-lg p-3 text-xs font-mono overflow-x-auto"
+          style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", whiteSpace: "pre" }}>
+{`// Example: connect from any JS graphics template
+const socket = io("${RELAY_URL}");
+socket.on("matchStateChange", (state) => {
+  // state.home.name, state.home.score, state.home.color, state.home.logoUrl
+  // state.visitor.name, state.visitor.score
+  // state.clockSeconds, state.period, state.isRunning
+  updateGraphics(state);
+});`}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DataFeedRow({ label, value, desc }: { label: string; value: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-xs font-bold tracking-wide pt-0.5 flex-shrink-0" style={{ color: "var(--text-dim)", minWidth: 180 }}>{label}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <code className="text-xs font-mono flex-1 min-w-0 truncate" style={{ color: "var(--accent)" }}>{value}</code>
+          <button
+            className="text-xs rounded px-2 py-0.5 flex-shrink-0"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+            onClick={() => navigator.clipboard.writeText(value)}
+          >
+            Copy
+          </button>
+        </div>
+        <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>{desc}</p>
+      </div>
+    </div>
+  );
+}

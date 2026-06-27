@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { PlanBadge } from "../components/PlanBadge";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -83,9 +84,17 @@ export default function DashboardPage() {
           Score<span style={{ color: "var(--accent)" }}>Hub</span>
         </span>
         <div className="flex items-center gap-4">
+          <PlanBadge />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
           )}
+          <a
+            href="/account"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Account
+          </a>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="rounded-lg px-3 py-1.5 text-xs font-bold"
@@ -117,7 +126,7 @@ export default function DashboardPage() {
             style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
           >
             {message}{" "}
-            <a href="/control?tab=billing" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+            <a href="/account/billing" style={{ color: "var(--accent)", textDecoration: "underline" }}>
               Upgrade plan
             </a>
           </div>
@@ -136,10 +145,18 @@ export default function DashboardPage() {
           <>
             <a
               href="/control"
-              className="block w-full text-center rounded-xl py-3 mb-6 text-sm font-black tracking-widest uppercase"
+              className="block w-full text-center rounded-xl py-3 mb-3 text-sm font-black tracking-widest uppercase"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
             >
               Open Control Panel →
+            </a>
+
+            <a
+              href="/setup"
+              className="block w-full text-center rounded-xl py-2.5 mb-6 text-xs font-bold tracking-widest uppercase"
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+            >
+              Set Up a New Match
             </a>
 
             <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--text-dim)" }}>
