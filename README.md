@@ -54,7 +54,7 @@ Then open http://localhost:3000
 ### Relay → Railway (recommended)
 1. Create new project on railway.app
 2. Deploy the `relay/` folder
-3. Set environment variables: `BRIDGE_SECRET`, `CONTROL_SECRET`
+3. Set environment variables: `BRIDGE_SECRET`, `CONTROL_SECRET`, `ALLOWED_ORIGINS` (the frontend's deployed origin — production is `https://app.scorehub.co.nz`; `scorehub.co.nz` apex is reserved for the marketing site, not this app)
 4. Note the public URL (e.g. `https://scorehub-relay.railway.app`)
 
 ### Frontend → Vercel
@@ -66,6 +66,13 @@ Then open http://localhost:3000
 1. `npm run build` then `npm start` (or just `npm run dev`)
 2. Set `RELAY_URL` in `.env` to the Railway URL
 3. Set `SERIAL_PORT` to your COM port (Windows: `COM3`, Mac/Linux: `/dev/tty.usbserial-XXXX`)
+
+### Human-gated production deploys (SA-12)
+`.github/workflows/deploy.yml` runs the full test suite, then deploys relay (Railway) and frontend (Vercel) — but only after a manual approval, via a `production` GitHub Environment with required reviewers. This is the only deploy path that should be live; Railway's and Vercel's own GitHub-push auto-deploy must be turned off in their dashboards, or every push deploys immediately regardless of this gate. One-time setup (repo admin, in GitHub/Railway/Vercel dashboards — not done as part of this change):
+1. Repo Settings → Environments → create `production`, add required reviewers.
+2. Add repo secrets: `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+3. In Railway's project settings, disable "Deploy on push" for the relay service.
+4. In Vercel's project settings, disable the Git integration's auto-deploy (or set the production branch to something other than `main` so pushes don't auto-trigger).
 
 ---
 

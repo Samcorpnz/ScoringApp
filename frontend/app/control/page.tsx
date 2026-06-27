@@ -101,10 +101,14 @@ export default function ControlPanel() {
       </div>
 
       {/* Tab nav */}
-      <div className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
+      <div role="tablist" aria-label="Control panel sections" className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
         {(["score", "outputs", "logos", "theme", "audio", "settings", "billing"] as Tab[]).map(t => (
           <button
             key={t}
+            role="tab"
+            id={`tab-${t}`}
+            aria-selected={tab === t}
+            aria-controls={`tabpanel-${t}`}
             onClick={() => setTab(t)}
             className="px-4 py-2 text-sm font-bold tracking-wide capitalize rounded-t-lg transition-colors"
             style={{
@@ -120,7 +124,7 @@ export default function ControlPanel() {
       </div>
 
       {/* Tab content */}
-      <div className="p-6 max-w-5xl">
+      <div className="p-6 max-w-5xl" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} />}
         {tab === "outputs"  && <OutputsTab  />}
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}

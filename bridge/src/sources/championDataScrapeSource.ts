@@ -33,16 +33,40 @@ function validateRemoteUrl(raw: string): void {
     throw new Error(`CD_SCRAPE_URL must use http or https scheme, got: ${parsed.protocol}`);
   }
   const h = parsed.hostname.toLowerCase();
-  if (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h === "::1" ||
-    h.startsWith("192.168.") ||
-    h.startsWith("10.") ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h)
-  ) {
+  if (isPrivateOrReservedHost(h)) {
     throw new Error(`CD_SCRAPE_URL must not target a private or loopback address: ${h}`);
   }
+}
+
+// Covers loopback, RFC1918 private ranges, link-local (incl. the
+// 169.254.169.254 cloud metadata endpoint), CGNAT, and the IPv6
+// equivalents — not just the handful of ranges checked previously.
+function isPrivateOrReservedHost(h: string): boolean {
+  if (h === "localhost" || h === "0.0.0.0" || h === "::" || h === "::1") return true;
+  if (
+    h.startsWith("127.") ||
+    h.startsWith("10.") ||
+    h.startsWith("169.254.") ||
+    h.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)
+  ) {
+    return true;
+  }
+  if (h.startsWith("::ffff:")) return isPrivateOrReservedHost(h.slice(7));
+  if (/^(fe80|fc[0-9a-f]{2}|fd[0-9a-f]{2}):/.test(h)) return true;
+  return false;
+}
+
+// Bounds the poll interval to [100ms, 60s]. Math.min/max alone aren't safe
+// here: a malformed CD_POLL_MS produces NaN, and NaN poisons both Math.min
+// and Math.max, so the "clamp" silently lets an unbounded value (and the
+// resulting CPU/browser-reload busy-loop) through.
+function clampPollMs(value: number | undefined, fallback: number): number {
+  const v = Number.isFinite(value) ? (value as number) : fallback;
+  if (v < 100) return 100;
+  if (v > 60_000) return 60_000;
+  return v;
 }
 
 export async function startScrapeSource(
@@ -52,7 +76,7 @@ export async function startScrapeSource(
   options: ScrapeSourceOptions
 ): Promise<() => Promise<void>> {
   const { url } = options;
-  const pollMs = Math.max(100, Math.min(60_000, options.pollMs ?? 500));
+  const pollMs = clampPollMs(options.pollMs, 500);
   validateRemoteUrl(url);
 
   let browser: Browser | null = null;
@@ -92,8 +116,8 @@ export async function startScrapeSource(
         if (json?.sport?.netballMatchStats) {
           latestPayload = json;
         }
-      } catch {
-        // not JSON or parse failed — ignore
+      } catch (err) {
+        console.warn(`[cd-scrape] Failed to parse JSON response from ${responseUrl}: ${(err as Error).message}`);
       }
     });
 

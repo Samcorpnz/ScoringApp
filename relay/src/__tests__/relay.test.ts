@@ -18,7 +18,16 @@ let uploadDir: string;
 
 beforeAll(done => {
   uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-test-"));
-  ({ app, httpServer, close: closeServer } = createServer({ bridgeSecret: BRIDGE_SECRET, controlSecret: CONTROL_SECRET, uploadDir }));
+  // controlRateLimit is bumped well above the production default (20/min,
+  // tested separately and in isolation in relay-ratelimit.test.ts) so this
+  // file's growing number of route tests don't trip it incidentally.
+  ({ app, httpServer, close: closeServer } = createServer({
+    bridgeSecret: BRIDGE_SECRET,
+    controlSecret: CONTROL_SECRET,
+    uploadDir,
+    controlRateLimit: 1000,
+    allowedOrigins: ["http://localhost:3000"],
+  }));
   httpServer.listen(0, () => {
     const port = (httpServer.address() as AddressInfo).port;
     serverUrl = `http://localhost:${port}`;
@@ -113,9 +122,34 @@ describe("POST /manual", () => {
     expect(body.home).toHaveProperty("score");
     expect(body.home).toHaveProperty("color");
   });
+
+  it("rejects a patch with a field of the wrong type (SA-5)", async () => {
+    const res = await request(app)
+      .post("/manual")
+      .set("x-control-secret", CONTROL_SECRET)
+      .send({ home: { score: "not-a-number" } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid match state patch/);
+  });
+
+  it("rejects a patch with an out-of-range clockSeconds (SA-5)", async () => {
+    const res = await request(app)
+      .post("/manual")
+      .set("x-control-secret", CONTROL_SECRET)
+      .send({ clockSeconds: 999_999_999 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a patch with an unknown possession value (SA-5)", async () => {
+    const res = await request(app)
+      .post("/manual")
+      .set("x-control-secret", CONTROL_SECRET)
+      .send({ possession: "everyone" });
+    expect(res.status).toBe(400);
+  });
 });
 
-describe("POST /api/logo/:team auth", () => {
+describe("POST /api/logo/:team", () => {
   it("rejects logo upload without secret", async () => {
     const res = await request(app)
       .post("/api/logo/home")
@@ -125,6 +159,88 @@ describe("POST /api/logo/:team auth", () => {
 
   it("rejects logo delete without secret", async () => {
     const res = await request(app).delete("/api/logo/home");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an invalid team name", async () => {
+    const res = await request(app)
+      .post("/api/logo/referee")
+      .set("x-control-secret", CONTROL_SECRET)
+      .attach("logo", Buffer.from([0x89, 0x50, 0x4e, 0x47]), "test.png");
+    expect(res.status).toBe(400);
+  });
+
+  it("uploads a logo and reflects it in match state, then removes it", async () => {
+    const upload = await request(app)
+      .post("/api/logo/visitor")
+      .set("x-control-secret", CONTROL_SECRET)
+      .attach("logo", Buffer.from([0x89, 0x50, 0x4e, 0x47]), "logo.png");
+    expect(upload.status).toBe(200);
+    expect(upload.body.logoUrl).toMatch(/visitor/);
+
+    const { body: stateAfterUpload } = await request(app).get("/state");
+    expect(stateAfterUpload.visitor.logoUrl).toBe(upload.body.logoUrl);
+
+    const del = await request(app)
+      .delete("/api/logo/visitor")
+      .set("x-control-secret", CONTROL_SECRET);
+    expect(del.status).toBe(200);
+
+    const { body: stateAfterDelete } = await request(app).get("/state");
+    expect(stateAfterDelete.visitor.logoUrl).toBe("");
+  });
+});
+
+describe("POST /api/competition-logo", () => {
+  it("rejects upload without secret", async () => {
+    const res = await request(app)
+      .post("/api/competition-logo")
+      .attach("logo", Buffer.from([0x89, 0x50, 0x4e, 0x47]), "comp.png");
+    expect(res.status).toBe(401);
+  });
+
+  it("uploads and then removes the competition logo", async () => {
+    const upload = await request(app)
+      .post("/api/competition-logo")
+      .set("x-control-secret", CONTROL_SECRET)
+      .attach("logo", Buffer.from([0x89, 0x50, 0x4e, 0x47]), "comp.png");
+    expect(upload.status).toBe(200);
+    expect(upload.body.competitionLogoUrl).toMatch(/competition/);
+
+    const del = await request(app)
+      .delete("/api/competition-logo")
+      .set("x-control-secret", CONTROL_SECRET);
+    expect(del.status).toBe(200);
+
+    const { body } = await request(app).get("/state");
+    expect(body.displayTheme.competitionLogoUrl).toBe("");
+  });
+});
+
+describe("POST /api/sound", () => {
+  it("rejects upload without secret", async () => {
+    const res = await request(app)
+      .post("/api/sound")
+      .attach("sound", Buffer.from([0, 1, 2, 3]), "buzzer.mp3");
+    expect(res.status).toBe(401);
+  });
+
+  it("uploads a sound and then deletes it by filename", async () => {
+    const upload = await request(app)
+      .post("/api/sound")
+      .set("x-control-secret", CONTROL_SECRET)
+      .attach("sound", Buffer.from([0, 1, 2, 3]), "buzzer.mp3");
+    expect(upload.status).toBe(200);
+    expect(upload.body).toHaveProperty("filename");
+
+    const del = await request(app)
+      .delete(`/api/sound/${upload.body.filename}`)
+      .set("x-control-secret", CONTROL_SECRET);
+    expect(del.status).toBe(200);
+  });
+
+  it("rejects sound delete without secret", async () => {
+    const res = await request(app).delete("/api/sound/whatever.mp3");
     expect(res.status).toBe(401);
   });
 });

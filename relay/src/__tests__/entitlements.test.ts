@@ -77,7 +77,7 @@ beforeAll(done => {
   process.env.DATABASE_URL = "postgresql://fake-for-tests";
   process.env.AUTH_SECRET = AUTH_SECRET;
   uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-entitlements-test-"));
-  ({ app, httpServer, close: closeServer } = createServer({ bridgeSecret: BRIDGE_SECRET, controlSecret: CONTROL_SECRET, uploadDir }));
+  ({ app, httpServer, close: closeServer } = createServer({ bridgeSecret: BRIDGE_SECRET, controlSecret: CONTROL_SECRET, uploadDir, allowedOrigins: ["http://localhost:3000"] }));
   httpServer.listen(0, () => done());
 });
 

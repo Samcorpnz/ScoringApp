@@ -1,11 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { auth } from "@/auth";
+import { isRateLimited, clientIp } from "@/lib/rateLimit";
 
 // Mints a short-lived token the control panel presents to the relay instead
 // of a long-lived shared CONTROL_SECRET. The relay verifies it with the same
 // AUTH_SECRET (see relay/src/auth.ts verifyControlSecret).
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (isRateLimited(`control-token:${clientIp(req)}`, 30, 60_000)) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
+
   const session = await auth();
   if (!session?.user?.orgId || !session.user.role) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
