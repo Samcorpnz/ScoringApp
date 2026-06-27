@@ -22,5 +22,6 @@ httpServer.listen(PORT, () => {
   console.log(`=== ScoreHub Relay :${PORT} ===`);
   console.log(`  Logos:   POST /api/logo/:team  (x-control-secret header)`);
   console.log(`  State:   GET  /state`);
+  console.log(`  Health:  GET  /health`);
   console.log(`  Uploads: ${UPLOAD_DIR}`);
 });

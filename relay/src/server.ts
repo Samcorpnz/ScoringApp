@@ -378,6 +378,13 @@ export function createServer(options: ServerOptions = {}) {
     res.status(500).json({ error: "internal error" });
   }
 
+  // Unauthenticated liveness check for external uptime monitors (SA-29) —
+  // intentionally has no dependency on Postgres/Redis so it reflects whether
+  // this process is alive, not whether its backing stores are reachable.
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
   app.get("/state", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
     try {

@@ -37,6 +37,11 @@ export type BridgeStatus = "stopped" | "connecting" | "running" | "error";
 
 const CONFIG_PATH = path.join(process.cwd(), "bridge-config.json");
 
+// How long the relay socket can stay disconnected before we treat it as an
+// outage worth alerting on, rather than a normal brief reconnect blip (SA-29).
+const RELAY_OUTAGE_ALERT_MS = 60_000;
+const RELAY_HEARTBEAT_CHECK_MS = 5_000;
+
 const DEFAULT_CONFIG: BridgeConfig = {
   relayUrl: process.env.RELAY_URL ?? "http://localhost:4000",
   bridgeSecret: process.env.BRIDGE_SECRET ?? "changeme",
@@ -56,6 +61,9 @@ export class BridgeController {
   private state: MatchState = { ...DEFAULT_MATCH_STATE };
   private socket: Socket | null = null;
   private broadcastTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private disconnectedSince: number | null = null;
+  private alertedRelayOutage = false;
   private stopSource: (() => void | Promise<void>) | null = null;
   private serialPort: SerialPort | null = null;
   public status: BridgeStatus = "stopped";
@@ -138,12 +146,28 @@ export class BridgeController {
 
     this.socket.on("connect", () => {
       log.relay(`Connected to relay at ${relayUrl}`);
+      this.disconnectedSince = null;
+      this.alertedRelayOutage = false;
       this.socket!.emit("stateUpdate", this.state);
     });
 
     this.socket.on("disconnect", reason => {
       log.relay(`Disconnected from relay: ${reason}`);
+      this.disconnectedSince = Date.now();
     });
+
+    this.heartbeatTimer = setInterval(() => {
+      if (
+        this.disconnectedSince !== null &&
+        !this.alertedRelayOutage &&
+        Date.now() - this.disconnectedSince >= RELAY_OUTAGE_ALERT_MS
+      ) {
+        this.alertedRelayOutage = true;
+        log.error(
+          `Relay unreachable for over ${RELAY_OUTAGE_ALERT_MS / 1000}s — switch to manual control if the match is live`
+        );
+      }
+    }, RELAY_HEARTBEAT_CHECK_MS);
 
     this.socket.on("manualUpdate", (patch: Partial<MatchState>) => {
       this.state = { ...this.state, ...patch, sequenceId: this.state.sequenceId + 1 };
@@ -165,6 +189,12 @@ export class BridgeController {
       clearInterval(this.broadcastTimer);
       this.broadcastTimer = null;
     }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.disconnectedSince = null;
+    this.alertedRelayOutage = false;
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
