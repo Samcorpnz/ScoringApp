@@ -17,6 +17,7 @@
   --running:       #22C55E;
   --stopped:       #94A3B8;
   --danger:        #EF4444;
+  --warning:       #F59E0B;
   --home-color:    #F59E0B;
   --visitor-color: #818CF8;
 }
@@ -56,6 +57,7 @@ body {
 .status-dot.connected    { background: var(--running); box-shadow: 0 0 8px var(--running); }
 .status-dot.disconnected { background: var(--danger); animation: blink 0.8s ease-in-out infinite; }
 .status-dot.connecting   { background: var(--accent); animation: blink 1.2s ease-in-out infinite; }
+.status-dot.stale        { background: var(--warning); animation: blink 1s ease-in-out infinite; }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
