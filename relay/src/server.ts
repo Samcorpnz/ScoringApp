@@ -12,6 +12,7 @@ import { getMatchStore, allActiveStores } from "./persistence";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
+import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -102,17 +103,25 @@ export function createServer(options: ServerOptions = {}) {
   }, 1000);
 
   // ─── Logo upload ─────────────────────────────────────────────────────────────
-
-  const storage = multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".png";
-      cb(null, `${(_req as any).params.team}${ext}`);
-    },
-  });
+  // Local-disk paths and R2 object keys are both scoped under the requesting
+  // org's id (set by controlAuth, which runs before multer in the middleware
+  // chain) — logos/sounds are per-tenant, so a flat shared directory/bucket
+  // prefix would leak one org's branding into every other org's display.
 
   const upload = multer({
-    storage,
+    storage: r2Enabled
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: (req, _file, cb) => {
+            const dir = path.join(UPLOAD_DIR, (req as any).orgId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+          },
+          filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || ".png";
+            cb(null, `${(req as any).params.team}${ext}`);
+          },
+        }),
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
@@ -164,8 +173,15 @@ export function createServer(options: ServerOptions = {}) {
       }
 
       const orgId = (req as any).orgId as string;
-      const ext = path.extname(req.file.filename).toLowerCase();
-      const logoUrl = `/logos/${team}${ext}?t=${Date.now()}`;
+      let logoUrl: string;
+      if (r2Enabled) {
+        const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+        const cdnUrl = await putObject(`logos/${orgId}/${team}${ext}`, req.file.buffer, req.file.mimetype);
+        logoUrl = `${cdnUrl}?t=${Date.now()}`;
+      } else {
+        const ext = path.extname(req.file.filename).toLowerCase();
+        logoUrl = `/logos/${orgId}/${team}${ext}?t=${Date.now()}`;
+      }
       const state = await getState(orgId);
 
       await applyManualUpdate(orgId, {
@@ -182,10 +198,16 @@ export function createServer(options: ServerOptions = {}) {
       res.status(400).json({ error: "team must be 'home' or 'visitor'" });
       return;
     }
-    const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith(`${team}.`));
-    files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
-
     const orgId = (req as any).orgId as string;
+    if (r2Enabled) {
+      await deleteByPrefix(`logos/${orgId}/${team}.`);
+    } else {
+      const dir = path.join(UPLOAD_DIR, orgId);
+      if (fs.existsSync(dir)) {
+        fs.readdirSync(dir).filter(f => f.startsWith(`${team}.`)).forEach(f => fs.unlinkSync(path.join(dir, f)));
+      }
+    }
+
     const state = await getState(orgId);
     await applyManualUpdate(orgId, {
       [team]: { ...state[team], logoUrl: "" },
@@ -196,16 +218,20 @@ export function createServer(options: ServerOptions = {}) {
 
   // ─── Competition logo upload ──────────────────────────────────────────────────
 
-  const compStorage = multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".png";
-      cb(null, `competition${ext}`);
-    },
-  });
-
   const compUpload = multer({
-    storage: compStorage,
+    storage: r2Enabled
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: (req, _file, cb) => {
+            const dir = path.join(UPLOAD_DIR, (req as any).orgId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+          },
+          filename: (_req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || ".png";
+            cb(null, `competition${ext}`);
+          },
+        }),
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
@@ -216,17 +242,30 @@ export function createServer(options: ServerOptions = {}) {
   app.post("/api/competition-logo", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), compUpload.single("logo"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     const orgId = (req as any).orgId as string;
-    const ext = path.extname(req.file.filename).toLowerCase();
-    const competitionLogoUrl = `/logos/competition${ext}?t=${Date.now()}`;
+    let competitionLogoUrl: string;
+    if (r2Enabled) {
+      const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+      const cdnUrl = await putObject(`logos/${orgId}/competition${ext}`, req.file.buffer, req.file.mimetype);
+      competitionLogoUrl = `${cdnUrl}?t=${Date.now()}`;
+    } else {
+      const ext = path.extname(req.file.filename).toLowerCase();
+      competitionLogoUrl = `/logos/${orgId}/competition${ext}?t=${Date.now()}`;
+    }
     const state = await getState(orgId);
     await applyManualUpdate(orgId, { displayTheme: { ...state.displayTheme, competitionLogoUrl } });
     res.json({ competitionLogoUrl });
   });
 
   app.delete("/api/competition-logo", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), async (req, res) => {
-    const files = fs.readdirSync(UPLOAD_DIR).filter(f => f.startsWith("competition."));
-    files.forEach(f => fs.unlinkSync(path.join(UPLOAD_DIR, f)));
     const orgId = (req as any).orgId as string;
+    if (r2Enabled) {
+      await deleteByPrefix(`logos/${orgId}/competition.`);
+    } else {
+      const dir = path.join(UPLOAD_DIR, orgId);
+      if (fs.existsSync(dir)) {
+        fs.readdirSync(dir).filter(f => f.startsWith("competition.")).forEach(f => fs.unlinkSync(path.join(dir, f)));
+      }
+    }
     const state = await getState(orgId);
     await applyManualUpdate(orgId, { displayTheme: { ...state.displayTheme, competitionLogoUrl: "" } });
     res.json({ status: "removed" });
@@ -238,37 +277,56 @@ export function createServer(options: ServerOptions = {}) {
   fs.mkdirSync(SOUNDS_DIR, { recursive: true });
   app.use("/sounds", express.static(SOUNDS_DIR));
 
-  const soundStorage = multer.diskStorage({
-    destination: SOUNDS_DIR,
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      cb(null, `${id}${ext}`);
-    },
-  });
-
   const soundUpload = multer({
-    storage: soundStorage,
+    storage: r2Enabled
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: (req, _file, cb) => {
+            const dir = path.join(SOUNDS_DIR, (req as any).orgId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+          },
+          filename: (_req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
+            const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            cb(null, `${id}${ext}`);
+          },
+        }),
     limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       cb(null, file.mimetype.startsWith("audio/"));
     },
   });
 
-  app.post("/api/sound", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), soundUpload.single("sound"), (req, res) => {
+  app.post("/api/sound", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), soundUpload.single("sound"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
-    res.json({ filename: req.file.filename, originalName: req.file.originalname });
+    const orgId = (req as any).orgId as string;
+
+    if (r2Enabled) {
+      const ext = path.extname(req.file.originalname).toLowerCase() || ".mp3";
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const url = await putObject(`sounds/${orgId}/${filename}`, req.file.buffer, req.file.mimetype);
+      res.json({ filename, originalName: req.file.originalname, url });
+      return;
+    }
+
+    res.json({ filename: req.file.filename, originalName: req.file.originalname, url: `/sounds/${orgId}/${req.file.filename}` });
   });
 
   const ALLOWED_AUDIO_EXTS = new Set([".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".webm"]);
-  app.delete("/api/sound/:filename", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), (req, res) => {
+  app.delete("/api/sound/:filename", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), async (req, res) => {
     const filename = path.basename(String(req.params.filename));
     if (!ALLOWED_AUDIO_EXTS.has(path.extname(filename).toLowerCase())) {
       res.status(400).json({ error: "invalid file type" });
       return;
     }
-    const filePath = path.join(SOUNDS_DIR, filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const orgId = (req as any).orgId as string;
+    if (r2Enabled) {
+      await deleteByPrefix(`sounds/${orgId}/${filename}`);
+    } else {
+      const filePath = path.join(SOUNDS_DIR, orgId, filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
     res.json({ status: "removed" });
   });
 

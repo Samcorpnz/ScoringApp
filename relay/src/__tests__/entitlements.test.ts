@@ -120,7 +120,7 @@ describe("requirePlan — branding routes", () => {
       .set("x-control-secret", await controlToken("org-pro"))
       .attach("logo", Buffer.from("fake"), "logo.png");
     expect(res.status).toBe(200);
-    expect(res.body.competitionLogoUrl).toMatch(/^\/logos\/competition/);
+    expect(res.body.competitionLogoUrl).toMatch(/^\/logos\/org-pro\/competition/);
   });
 
   it("blocks a free-tier org from deleting a sound", async () => {

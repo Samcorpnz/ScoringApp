@@ -32,7 +32,7 @@ export default function SignupPage() {
 
       const result = await signIn("credentials", { email, password, redirect: false });
       if (result?.error) throw new Error("Account created — please sign in.");
-      router.push("/control");
+      router.push("/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

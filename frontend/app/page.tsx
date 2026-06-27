@@ -36,6 +36,24 @@ export default function Home() {
           />
         </div>
 
+        {/* Sign up / log in */}
+        <div className="flex gap-3 justify-center mb-12">
+          <a
+            href="/signup"
+            className="rounded-xl px-6 py-3 text-sm font-black tracking-widest uppercase"
+            style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
+          >
+            Get Started
+          </a>
+          <a
+            href="/login"
+            className="rounded-xl px-6 py-3 text-sm font-bold"
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Log In
+          </a>
+        </div>
+
         {/* Navigation cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {links.map(link => (

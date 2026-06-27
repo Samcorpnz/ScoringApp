@@ -895,14 +895,15 @@ function AudioTab({ cues, addCue, removeCue, controlToken }: {
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
-      const { filename, originalName } = await res.json();
+      const { filename, originalName, url } = await res.json();
       addCue({
-        id:           `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        label:        label.trim() || originalName,
+        id:             `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        label:          label.trim() || originalName,
         period,
-        clockSeconds: secs,
-        soundUrl:     `${RELAY_URL}/sounds/${filename}`,
-        filename:     originalName,
+        clockSeconds:   secs,
+        soundUrl:       url.startsWith("http") ? url : `${RELAY_URL}${url}`,
+        filename:       originalName,
+        serverFilename: filename,
       });
       setLabel(""); setClockInput(""); setFile(null);
       if (fileRef.current) fileRef.current.value = "";
@@ -919,7 +920,10 @@ function AudioTab({ cues, addCue, removeCue, controlToken }: {
   };
 
   const handleRemove = async (cue: SoundCue) => {
-    const filename = cue.soundUrl.split("/sounds/")[1];
+    // serverFilename is set for cues created after the R2 migration; older
+    // cues already in localStorage fall back to parsing the relay-relative
+    // URL they were created with (pre-migration, never an absolute CDN URL).
+    const filename = cue.serverFilename ?? cue.soundUrl.split("/sounds/")[1];
     if (filename) {
       await fetch(`${RELAY_URL}/api/sound/${encodeURIComponent(filename)}`, {
         method: "DELETE",

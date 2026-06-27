@@ -10,8 +10,9 @@ export interface SoundCue {
   label: string;
   period: string;       // "*" = all periods, or "1", "2", "E", etc.
   clockSeconds: number; // Trigger when clock crosses this value
-  soundUrl: string;     // Full URL to the audio file on the relay
+  soundUrl: string;     // Full URL to the audio file on the relay or CDN
   filename: string;     // Original filename for display
+  serverFilename?: string; // Storage-side filename, used to issue the DELETE — absent on cues created before the R2 migration
 }
 
 export function useSoundCues() {
