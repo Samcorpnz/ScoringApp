@@ -22,7 +22,7 @@ jobs:
     # on every push to main (SA-12).
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Railway CLI
         run: npm install -g @railway/cli
       - name: Deploy relay to Railway
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Vercel CLI
         run: npm install -g vercel
       - name: Deploy frontend to Vercel
