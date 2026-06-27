@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "cd .. && npm run build --workspace=packages/db && cd frontend && next build",
+    "vercel-build": "cd .. && npm run build --workspace=packages/db && npm run migrate:deploy --workspace=packages/db && cd frontend && next build",
     "start": "next start",
     "lint": "eslint .",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run"

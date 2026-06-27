@@ -36,3 +36,21 @@ export async function sendEmailChangeVerification({ to, token }: { to: string; t
     html: `<p>Click the link below to confirm this is your new email address for ScoreHub.</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>`,
   });
 }
+
+export async function sendPaymentFailedEmail({ to }: { to: string[] }): Promise<void> {
+  if (to.length === 0) return;
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = `${baseUrl}/account`;
+
+  await getResend().emails.send({
+    from,
+    to,
+    subject: "Your ScoreHub payment failed",
+    text: `We couldn't charge your card for your ScoreHub subscription. Stripe will retry automatically, but you may want to update your payment method to avoid losing access.\n\n${link}\n\nIf you've already resolved this, you can ignore this email.`,
+    html: `<p>We couldn't charge your card for your ScoreHub subscription. Stripe will retry automatically, but you may want to update your payment method to avoid losing access.</p><p><a href="${link}">Update payment method</a></p><p>If you've already resolved this, you can ignore this email.</p>`,
+  });
+}

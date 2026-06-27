@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { getAccountForOrg } from "@/lib/account";
 import { getStripe } from "@/lib/stripe";
-import { priceIdForPlan, PaidPlan } from "@/lib/plans";
+import { priceIdForPlan, PaidPlan, BillingInterval } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -16,8 +16,12 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const plan = body?.plan as PaidPlan | undefined;
+  const interval = (body?.interval as BillingInterval | undefined) ?? "month";
   if (plan !== "pro" && plan !== "venue") {
     return NextResponse.json({ error: "plan must be 'pro' or 'venue'" }, { status: 400 });
+  }
+  if (interval !== "month" && interval !== "year") {
+    return NextResponse.json({ error: "interval must be 'month' or 'year'" }, { status: 400 });
   }
 
   const account = await getAccountForOrg(session.user.orgId);
@@ -26,6 +30,30 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe();
+  const priceId = priceIdForPlan(plan, interval);
+
+  // Already has an active paid subscription — switch it in place (with
+  // proration) rather than starting a second Checkout Session, which would
+  // create a second subscription and double-bill the customer.
+  if (account.stripeSubscriptionId && (account.plan === "pro" || account.plan === "venue")) {
+    const subscription = await stripe.subscriptions.retrieve(account.stripeSubscriptionId);
+    const itemId = subscription.items.data[0]?.id;
+    if (!itemId) {
+      return NextResponse.json({ error: "existing subscription has no items" }, { status: 500 });
+    }
+
+    await stripe.subscriptions.update(account.stripeSubscriptionId, {
+      items: [{ id: itemId, price: priceId }],
+      proration_behavior: "create_prorations",
+      metadata: { accountId: account.id, plan },
+    });
+
+    // Reflect the switch immediately; the customer.subscription.updated
+    // webhook will also fire and confirm the same plan (idempotent).
+    await prisma.account.update({ where: { id: account.id }, data: { plan, billingInterval: interval } });
+    return NextResponse.json({ switched: true, plan, interval });
+  }
+
   let customerId = account.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -45,8 +73,13 @@ export async function POST(req: NextRequest) {
     mode: "subscription",
     customer: customerId,
     client_reference_id: account.id,
-    line_items: [{ price: priceIdForPlan(plan), quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     redirect_on_completion: "never",
+    allow_promotion_codes: true,
+    automatic_tax: { enabled: true },
+    customer_update: { address: "auto", name: "auto" },
+    metadata: { accountId: account.id, plan },
+    subscription_data: { metadata: { accountId: account.id, plan } },
   });
 
   if (!checkoutSession.client_secret) {

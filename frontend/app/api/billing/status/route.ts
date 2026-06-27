@@ -13,5 +13,9 @@ export async function GET() {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ plan: account.plan, hasStripeCustomer: Boolean(account.stripeCustomerId) });
+  return NextResponse.json({
+    plan: account.plan,
+    billingInterval: account.billingInterval,
+    hasStripeCustomer: Boolean(account.stripeCustomerId),
+  });
 }

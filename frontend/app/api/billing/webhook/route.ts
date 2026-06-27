@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { prisma } from "@scorehub/db";
 import { getStripe } from "@/lib/stripe";
 import { planForPriceId } from "@/lib/plans";
+import { sendPaymentFailedEmail } from "@/lib/email";
 
 // Stripe retries webhooks on any non-2xx response, so on a real processing
 // failure we return 500 deliberately to get that retry — full alerting on
@@ -48,12 +49,13 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const accountId = session.client_reference_id;
+      const accountId = session.client_reference_id ?? session.metadata?.accountId;
       if (!accountId || typeof session.customer !== "string" || typeof session.subscription !== "string") break;
 
       const subscription = await getStripe().subscriptions.retrieve(session.subscription);
       const priceId = subscription.items.data[0]?.price.id;
       const plan = priceId ? planForPriceId(priceId) : null;
+      const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
 
       await prisma.account.update({
         where: { id: accountId },
@@ -61,6 +63,7 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
           stripeCustomerId: session.customer,
           stripeSubscriptionId: subscription.id,
           plan: plan ?? "pro",
+          billingInterval: interval,
         },
       });
       break;
@@ -68,24 +71,50 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
 
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
-      const account = await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
+      const accountId = subscription.metadata?.accountId;
+      const account = accountId
+        ? await prisma.account.findUnique({ where: { id: accountId } })
+        : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
       if (!account) break;
 
       const priceId = subscription.items.data[0]?.price.id;
       const plan = priceId ? planForPriceId(priceId) : null;
+      const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
       await prisma.account.update({
         where: { id: account.id },
-        data: { plan: subscription.status === "active" ? (plan ?? account.plan) : "free" },
+        data: {
+          stripeSubscriptionId: subscription.id,
+          plan: subscription.status === "active" ? (plan ?? account.plan) : "free",
+          billingInterval: subscription.status === "active" ? interval : null,
+        },
       });
       break;
     }
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
+      const accountId = subscription.metadata?.accountId;
       await prisma.account.updateMany({
-        where: { stripeSubscriptionId: subscription.id },
-        data: { plan: "free", stripeSubscriptionId: null },
+        where: accountId ? { id: accountId } : { stripeSubscriptionId: subscription.id },
+        data: { plan: "free", stripeSubscriptionId: null, billingInterval: null },
       });
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      if (typeof invoice.customer !== "string") break;
+
+      const account = await prisma.account.findFirst({ where: { stripeCustomerId: invoice.customer } });
+      if (!account) break;
+
+      const admins = await prisma.membership.findMany({
+        where: { role: "ADMIN", org: { accountId: account.id } },
+        select: { user: { select: { email: true } } },
+        distinct: ["userId"],
+      });
+      const emails = [...new Set(admins.map(m => m.user.email))];
+      await sendPaymentFailedEmail({ to: emails });
       break;
     }
   }

@@ -53,11 +53,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
         </div>
       </div>
 
-      <div className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
-        <a href="/account" className="px-4 py-2 text-sm font-bold tracking-wide" style={{ color: "var(--text-secondary)", textDecoration: "none" }}>Account</a>
-        <a href="/account/billing" className="px-4 py-2 text-sm font-bold tracking-wide" style={{ color: "var(--text-secondary)", textDecoration: "none" }}>Billing</a>
-      </div>
-
       {children}
     </div>
   );
