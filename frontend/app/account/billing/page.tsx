@@ -47,7 +47,7 @@ export default function BillingPage() {
 
   if (checkoutSecret) {
     return (
-      <div className="p-6 max-w-2xl">
+      <div className="p-6 w-full max-w-4xl mx-auto">
         <EmbeddedCheckoutCard
           clientSecret={checkoutSecret}
           onComplete={() => {
@@ -61,7 +61,7 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-6">
+    <div className="p-6 w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6">
       <Card title="Current Plan">
         <p className="text-2xl font-black capitalize" style={{ color: "var(--accent)" }}>
           {status?.plan ?? "…"}

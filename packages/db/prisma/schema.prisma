@@ -81,7 +81,26 @@ model User {
   name         String
   createdAt    DateTime @default(now())
 
-  memberships Membership[]
+  memberships         Membership[]
+  emailChangeRequests EmailChangeRequest[]
+}
+
+// Single-use pending request for changing a User's email. Only the hashed
+// token is stored (the raw token only ever appears in the emailed link,
+// matching ScopedToken.tokenHash's approach). consumedAt (rather than
+// deleting on success) keeps "already used" distinguishable from "not
+// found"/expired.
+model EmailChangeRequest {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  newEmail   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 enum Role {
