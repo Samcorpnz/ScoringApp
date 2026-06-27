@@ -14,6 +14,7 @@ import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import { matchStatePatchSchema, matchStateSchema } from "./schemas";
+import { captureException } from "./sentry";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -373,8 +374,16 @@ export function createServer(options: ServerOptions = {}) {
       return;
     }
     console.error("[relay] failed to load/update match state:", err);
+    captureException(err);
     res.status(500).json({ error: "internal error" });
   }
+
+  // Unauthenticated liveness check for external uptime monitors (SA-29) —
+  // intentionally has no dependency on Postgres/Redis so it reflects whether
+  // this process is alive, not whether its backing stores are reachable.
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
 
   app.get("/state", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
@@ -534,6 +543,7 @@ export function createServer(options: ServerOptions = {}) {
   // bare unlogged 500 with no context on what failed or why (SA-10).
   app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("[relay] unhandled error:", req.method, req.path, err);
+    captureException(err, { method: req.method, path: req.path });
     if (res.headersSent) return;
     const message = err instanceof multer.MulterError ? err.message : "internal server error";
     res.status(err instanceof multer.MulterError ? 400 : 500).json({ error: message });
