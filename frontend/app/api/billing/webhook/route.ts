@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
 
   // Idempotency: Stripe will redeliver this same event on retry. The event
   // id's uniqueness constraint is the guard — a duplicate insert means we've
-  // already applied this event's effect, so just acknowledge and stop.
+  // already applied this event's effect, so just acknowledge and stop. The
+  // row is only kept once handleEvent actually succeeds; if it throws, we
+  // remove the row so a Stripe retry can genuinely reprocess instead of
+  // being silently swallowed as a "duplicate" of a failed attempt.
   try {
     await prisma.stripeEvent.create({ data: { id: event.id } });
   } catch {
@@ -39,6 +42,7 @@ export async function POST(req: NextRequest) {
     await handleEvent(event);
   } catch (err) {
     console.error("[billing] failed to process webhook event:", event.id, event.type, err);
+    await prisma.stripeEvent.delete({ where: { id: event.id } }).catch(() => {});
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
 
