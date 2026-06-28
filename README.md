@@ -9,7 +9,7 @@ Saturn Console (RS422/serial)
       ↓
   bridge/   ← runs on the operator laptop at the venue
       ↓  Socket.io push (authenticated)
-  relay/    ← cloud server (Railway / Render / fly.io)
+  relay/    ← cloud server (Fly.io, multi-region)
       ↓  Socket.io broadcast
   frontend/ ← Next.js app (Vercel)
       ├── /display/basic     — clean scoreboard
@@ -51,11 +51,12 @@ Then open http://localhost:3000
 
 ## Production Deployment
 
-### Relay → Railway (recommended)
-1. Create new project on railway.app
-2. Deploy the `relay/` folder
-3. Set environment variables: `BRIDGE_SECRET`, `CONTROL_SECRET`, `ALLOWED_ORIGINS` (the frontend's deployed origin — production is `https://app.scorehub.co.nz`; `scorehub.co.nz` apex is reserved for the marketing site, not this app)
-4. Note the public URL (e.g. `https://scorehub-relay.railway.app`)
+### Relay → Fly.io (recommended)
+1. `fly apps create <name>` (or reuse the existing `scorehub-relay` app)
+2. Deploy from repo root: `fly deploy` (uses `fly.toml`, builds `relay/Dockerfile`)
+3. Set secrets: `fly secrets set BRIDGE_SECRET=... CONTROL_SECRET=... ALLOWED_ORIGINS=...` (`ALLOWED_ORIGINS` is the frontend's deployed origin — production is `https://app.scorehub.co.nz`; `scorehub.co.nz` apex is reserved for the marketing site, not this app)
+4. Scale into additional regions for failover: `fly scale count 2 --region iad`
+5. Note the public anycast URL (e.g. `https://scorehub-relay.fly.dev`)
 
 ### Frontend → Vercel
 1. Push to GitHub
@@ -64,14 +65,14 @@ Then open http://localhost:3000
 
 ### Bridge → venue laptop
 1. `npm run build` then `npm start` (or just `npm run dev`)
-2. Set `RELAY_URL` in `.env` to the Railway URL
+2. Set `RELAY_URL` in `.env` to the Fly.io URL
 3. Set `SERIAL_PORT` to your COM port (Windows: `COM3`, Mac/Linux: `/dev/tty.usbserial-XXXX`)
 
 ### Human-gated production deploys (SA-12)
-`.github/workflows/deploy.yml` runs the full test suite, then deploys relay (Railway) and frontend (Vercel) — but only after a manual approval, via a `production` GitHub Environment with required reviewers. This is the only deploy path that should be live; Railway's and Vercel's own GitHub-push auto-deploy must be turned off in their dashboards, or every push deploys immediately regardless of this gate. One-time setup (repo admin, in GitHub/Railway/Vercel dashboards — not done as part of this change):
+`.github/workflows/deploy.yml` runs the full test suite, then deploys relay (Fly.io) and frontend (Vercel) — but only after a manual approval, via a `production` GitHub Environment with required reviewers. This is the only deploy path that should be live; Fly.io's and Vercel's own GitHub-push auto-deploy must be turned off in their dashboards, or every push deploys immediately regardless of this gate. One-time setup (repo admin, in GitHub/Fly.io/Vercel dashboards — not done as part of this change):
 1. Repo Settings → Environments → create `production`, add required reviewers.
-2. Add repo secrets: `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
-3. In Railway's project settings, disable "Deploy on push" for the relay service.
+2. Add repo secrets: `FLY_API_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+3. Fly.io only deploys via this CI workflow — there's no separate "deploy on push" dashboard toggle to disable.
 4. In Vercel's project settings, disable the Git integration's auto-deploy (or set the production branch to something other than `main` so pushes don't auto-trigger).
 
 ---
