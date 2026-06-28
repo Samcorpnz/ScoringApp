@@ -92,6 +92,10 @@ port and monitoring connection status — see `bridge/src/ui`. For manual setup:
 
 ---
 
+## Runbooks
+
+- [Database backups](docs/runbooks/database-backups.md) — current RPO/RTO on free-tier Neon/Upstash, and the daily DIY backup job (SA-57). Paid multi-AZ upgrade deliberately deferred until paying customers exist.
+
 ## Serial Protocol
 
 **Saturn/Vega (Swiss Timing)** — spec 0100.073.02 v2.0
