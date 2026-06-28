@@ -5,14 +5,14 @@ import { getStripe } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.orgId) {
+  if (!session?.user?.activeOrgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.activeRole !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const account = await getAccountForOrg(session.user.orgId);
+  const account = await getAccountForOrg(session.user.activeOrgId);
   if (!account?.stripeCustomerId) {
     return NextResponse.json({ error: "no billing account on file yet — upgrade first" }, { status: 404 });
   }

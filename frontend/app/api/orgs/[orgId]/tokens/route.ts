@@ -14,11 +14,11 @@ function hashToken(token: string): string {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden — admin role required" }, { status: 403 });
+  if (session.user.activeRole !== "ADMIN" && session.user.activeRole !== "MANAGER") {
+    return NextResponse.json({ error: "forbidden — admin or manager role required" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

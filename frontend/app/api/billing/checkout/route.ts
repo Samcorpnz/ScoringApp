@@ -7,10 +7,10 @@ import { priceIdForPlan, PaidPlan, BillingInterval } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.orgId) {
+  if (!session?.user?.activeOrgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.activeRole !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "interval must be 'month' or 'year'" }, { status: 400 });
   }
 
-  const account = await getAccountForOrg(session.user.orgId);
+  const account = await getAccountForOrg(session.user.activeOrgId);
   if (!account) {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }

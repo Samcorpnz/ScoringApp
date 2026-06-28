@@ -50,6 +50,7 @@ model Org {
   matches     Match[]
   memberships Membership[]
   tokens      ScopedToken[]
+  invitations Invitation[]
 
   @@index([accountId])
   @@index([parentOrgId])
@@ -84,6 +85,7 @@ model User {
 
   memberships         Membership[]
   emailChangeRequests EmailChangeRequest[]
+  invitationsSent     Invitation[]
 }
 
 // Single-use pending request for changing a User's email. Only the hashed
@@ -106,6 +108,7 @@ model EmailChangeRequest {
 
 enum Role {
   ADMIN
+  MANAGER
   OPERATOR
   VIEWER
 }
@@ -122,6 +125,28 @@ model Membership {
 
   @@unique([userId, orgId])
   @@index([orgId])
+}
+
+// Single-use pending invitation for a person to join an Org. Only the hashed
+// token is stored, mirroring EmailChangeRequest.tokenHash's approach. Expiry
+// is 7 days (longer than EmailChangeRequest's 1h) since invitees often don't
+// have an account yet and may not see the email immediately.
+model Invitation {
+  id          String    @id @default(uuid())
+  orgId       String
+  org         Org       @relation(fields: [orgId], references: [id])
+  email       String
+  role        Role
+  tokenHash   String    @unique
+  invitedById String
+  invitedBy   User      @relation(fields: [invitedById], references: [id])
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([email])
 }
 
 enum ScopedTokenType {

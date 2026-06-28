@@ -42,7 +42,7 @@ const DISPLAYS = [
 
 export function OutputsTab() {
   const { data: session } = useSession();
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   // Display pages scope themselves to a tenant via ?org= (see useMatchState) —

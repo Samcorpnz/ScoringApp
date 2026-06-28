@@ -12,10 +12,10 @@ export async function GET(req: NextRequest) {
   }
 
   const session = await auth();
-  if (!session?.user?.orgId || !session.user.role) {
+  if (!session?.user?.activeOrgId || !session.user.activeRole) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN" && session.user.role !== "OPERATOR") {
+  if (!["ADMIN", "MANAGER", "OPERATOR"].includes(session.user.activeRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "AUTH_SECRET is not configured" }, { status: 500 });
   }
 
-  const token = await new SignJWT({ orgId: session.user.orgId, role: session.user.role })
+  const token = await new SignJWT({ orgId: session.user.activeOrgId, role: session.user.activeRole })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.user.id)
     .setIssuedAt()

@@ -150,7 +150,7 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
 export function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<MatchState>) => void }) {
   const template = getTemplate(state.sport);
   const { data: session } = useSession();
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
       {/* Team colours */}
@@ -257,7 +257,9 @@ export function SettingsTab({ state, push }: { state: MatchState; push: (p: Part
         </p>
       </Card>
 
-      {session?.user?.role === "ADMIN" && orgId && <BridgeTokensCard orgId={orgId} />}
+      {(session?.user?.activeRole === "ADMIN" || session?.user?.activeRole === "MANAGER") && orgId && (
+        <BridgeTokensCard orgId={orgId} />
+      )}
     </div>
   );
 }

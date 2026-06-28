@@ -6,6 +6,7 @@ import { useMatchState } from "../hooks/useMatchState";
 import { useControlToken } from "../hooks/useControlToken";
 import { ConnectionBadge } from "../components/ConnectionBadge";
 import { PlanBadge } from "../components/PlanBadge";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 import { MatchState } from "../types";
 import { useSoundCues, useSoundPlayback } from "../hooks/useSoundCues";
 import { ScoreTab } from "./components/ScoreTab";
@@ -42,7 +43,7 @@ export default function ControlPanel() {
     );
   }
 
-  if (session?.user?.role === "VIEWER") {
+  if (session?.user?.activeRole === "VIEWER") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
         <div className="text-sm" style={{ color: "var(--text-dim)" }}>
@@ -70,6 +71,7 @@ export default function ControlPanel() {
         <div className="flex items-center gap-4">
           <ConnectionBadge status={status} feedStale={feedStale} />
           <PlanBadge />
+          <OrgSwitcher />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>
               {session.user.name}

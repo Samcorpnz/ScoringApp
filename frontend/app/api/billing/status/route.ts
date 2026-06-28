@@ -5,11 +5,11 @@ import { getStripe } from "@/lib/stripe";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.orgId) {
+  if (!session?.user?.activeOrgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const account = await getAccountForOrg(session.user.orgId);
+  const account = await getAccountForOrg(session.user.activeOrgId);
   if (!account) {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }

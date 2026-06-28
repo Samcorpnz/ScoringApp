@@ -40,7 +40,7 @@ const PLANS = [
 
 export default function AccountPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = session?.user?.activeRole === "ADMIN";
   const [billingStatus, setBillingStatus] = useState<{
     plan: string;
     billingInterval: "month" | "year" | null;
@@ -145,13 +145,18 @@ export default function AccountPage() {
           {session?.user?.name ?? "—"}
         </p>
         <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
-          Role: {session?.user?.role ?? "—"}
+          Role: {session?.user?.activeRole ?? "—"}
         </p>
       </Card>
 
       <DisplayNameCard initialName={session?.user?.name ?? ""} />
       <PasswordCard />
       <EmailCard currentEmail={session?.user?.email ?? ""} />
+
+      {session?.user?.activeOrgId &&
+        (session.user.activeRole === "ADMIN" || session.user.activeRole === "MANAGER") && (
+          <TeamCard orgId={session.user.activeOrgId} actorRole={session.user.activeRole} actorUserId={session.user.id} />
+        )}
 
       {checkoutSecret ? (
         <Card title="Upgrade">
@@ -367,6 +372,180 @@ function SubscriptionPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// Client-side mirror of lib/roles.ts's rank table, used only to decide
+// which roles to *offer* in the UI — the API routes are the authoritative
+// enforcement, this just avoids showing controls that would 403.
+const ROLE_RANK: Record<string, number> = { ADMIN: 3, MANAGER: 2, OPERATOR: 1, VIEWER: 0 };
+const ALL_ROLES = ["ADMIN", "MANAGER", "OPERATOR", "VIEWER"] as const;
+
+function assignableRoles(actorRole: string): string[] {
+  if (actorRole === "ADMIN") return [...ALL_ROLES];
+  return ALL_ROLES.filter(r => ROLE_RANK[r] < ROLE_RANK.MANAGER);
+}
+
+function canActOnRole(actorRole: string, targetRole: string): boolean {
+  if (actorRole === "ADMIN") return true;
+  return ROLE_RANK[targetRole] < ROLE_RANK.MANAGER;
+}
+
+type Member = { userId: string; name: string; email: string; role: string; memberSince: string };
+type PendingInvite = { id: string; email: string; role: string; createdAt: string; expiresAt: string };
+
+function TeamCard({ orgId, actorRole, actorUserId }: { orgId: string; actorRole: string; actorUserId: string }) {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<PendingInvite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState(assignableRoles(actorRole).at(-1) ?? "VIEWER");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
+
+  const roleOptions = assignableRoles(actorRole);
+
+  async function refresh() {
+    const [membersRes, invitesRes] = await Promise.all([
+      fetch(`/api/orgs/${orgId}/members`).then(r => r.json()).catch(() => ({ members: [] })),
+      fetch(`/api/orgs/${orgId}/invitations`).then(r => r.json()).catch(() => ({ invitations: [] })),
+    ]);
+    setMembers(membersRes.members ?? []);
+    setInvitations(invitesRes.invitations ?? []);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, [orgId]);
+
+  async function handleInvite() {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "couldn't send invitation");
+      setInviteEmail("");
+      setStatus({ message: `Invitation sent to ${inviteEmail}.`, isError: false });
+      await refresh();
+    } catch (e) {
+      setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRevoke(invitationId: string) {
+    await fetch(`/api/orgs/${orgId}/invitations/${invitationId}`, { method: "DELETE" });
+    await refresh();
+  }
+
+  async function handleRoleChange(userId: string, role: string) {
+    const res = await fetch(`/api/orgs/${orgId}/members/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus({ message: data?.error ?? "couldn't change role", isError: true });
+      return;
+    }
+    await refresh();
+  }
+
+  async function handleRemove(userId: string) {
+    const res = await fetch(`/api/orgs/${orgId}/members/${userId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus({ message: data?.error ?? "couldn't remove member", isError: true });
+      return;
+    }
+    await refresh();
+  }
+
+  return (
+    <Card title="Team">
+      <div className="space-y-2">
+        {members.map(m => (
+          <div key={m.userId} className="flex items-center justify-between gap-2 py-1">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {m.name} <span style={{ color: "var(--text-dim)" }}>({m.email})</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {canActOnRole(actorRole, m.role) && m.userId !== actorUserId ? (
+                <select
+                  className="rounded-lg px-2 py-1 text-xs font-semibold"
+                  style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                  value={m.role}
+                  onChange={e => handleRoleChange(m.userId, e.target.value)}
+                >
+                  {ALL_ROLES.filter(r => r === m.role || roleOptions.includes(r)).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-xs" style={{ color: "var(--text-dim)" }}>{m.role}</span>
+              )}
+              {canActOnRole(actorRole, m.role) && m.userId !== actorUserId && (
+                <SmallBtn label="Remove" onClick={() => handleRemove(m.userId)} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {invitations.length > 0 && (
+        <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+          <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: "var(--text-dim)" }}>
+            Pending invitations
+          </p>
+          <div className="space-y-2">
+            {invitations.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between gap-2">
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {inv.email} — {inv.role}
+                </p>
+                <SmallBtn label="Revoke" onClick={() => handleRevoke(inv.id)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 pt-4 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
+        <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: "var(--text-dim)" }}>
+          Invite someone
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="email"
+            placeholder="Email address"
+            className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+          />
+          <select
+            className="rounded-lg px-2 py-2 text-sm font-semibold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            value={inviteRole}
+            onChange={e => setInviteRole(e.target.value)}
+          >
+            {roleOptions.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <SmallBtn label={busy ? "Sending…" : "Invite"} onClick={handleInvite} primary />
+        </div>
+        {status && <StatusText message={status.message} isError={status.isError} />}
+      </div>
+    </Card>
   );
 }
 
