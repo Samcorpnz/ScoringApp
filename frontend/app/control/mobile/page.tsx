@@ -29,7 +29,7 @@ const CLOCK_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 45].map(m => ({
 
 export default function MobileControl() {
   const controlToken = useControlToken();
-  const { state, status, feedStale, sendManualUpdate, sendReset } = useMatchState({
+  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({
     secret: controlToken,
     role: "control",
   });
@@ -136,7 +136,7 @@ export default function MobileControl() {
           }}>Mobile</span>
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <ConnectionBadge status={status} feedStale={feedStale} />
+          <ConnectionBadge status={status} feedStale={feedStale} relayUnreachable={relayUnreachable} />
           <a href="/control" style={{ fontSize: 11, color: "var(--text-dim)", textDecoration: "none" }}>
             Full panel ↗
           </a>

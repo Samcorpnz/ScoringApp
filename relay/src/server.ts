@@ -10,7 +10,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores } from "./persistence";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
-import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
+import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import { matchStatePatchSchema, matchStateSchema } from "./schemas";
@@ -108,7 +108,23 @@ export function createServer(options: ServerOptions = {}) {
     matchStates.set(orgId, next);
     io.to(orgId).emit("matchStateChange", next);
     getMatchStore(orgId)?.save(next);
+    publishStateUpdate(orgId, next);
   }
+
+  // Keeps this instance's cache fresh for orgs being written to on a *different*
+  // relay instance, so a client that (re)connects here after a failover doesn't
+  // get served a snapshot from before the other instance's most recent writes.
+  // Ignores out-of-order messages via the same sequenceId guard used for
+  // bridge-originated updates.
+  subscribeStateUpdates((orgId, raw) => {
+    const parsed = matchStateSchema.safeParse(raw);
+    if (!parsed.success) return;
+    const incoming = parsed.data as MatchState;
+    const current = matchStates.get(orgId);
+    if (!current || incoming.sequenceId >= current.sequenceId) {
+      matchStates.set(orgId, incoming);
+    }
+  });
 
   async function applyManualUpdate(orgId: string, patch: Partial<MatchState>): Promise<MatchState> {
     const current = await getState(orgId);
