@@ -8,6 +8,7 @@ export const LEGACY_ROOM_ID = "legacy-single-tenant";
 
 export interface AuthResult {
   orgId: string;
+  matchId?: string;
 }
 
 function hashToken(token: string): string {
@@ -29,7 +30,7 @@ export async function verifyBridgeSecret(
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
   if (!token || token.type !== "BRIDGE" || token.revokedAt) return null;
-  return { orgId: token.orgId };
+  return { orgId: token.orgId, matchId: token.matchId ?? undefined };
 }
 
 // The control panel authenticates with a short-lived JWT minted by the
@@ -53,8 +54,9 @@ export async function verifyControlSecret(
     const { payload } = await jwtVerify(secret, key);
     const orgId = payload.orgId as string | undefined;
     const role = payload.role as string | undefined;
+    const matchId = payload.matchId as string | undefined;
     if (!orgId || (role !== "ADMIN" && role !== "OPERATOR")) return null;
-    return { orgId };
+    return { orgId, matchId };
   } catch {
     return null;
   }
