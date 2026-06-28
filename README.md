@@ -20,28 +20,40 @@ Saturn Console (RS422/serial)
 
 ## Quick Start (local development)
 
-### 1. Relay
+### Option A — Docker Compose (recommended for a first run)
+Spins up Postgres, Redis, the relay, and the frontend together — no Neon/Upstash
+account needed locally.
+```bash
+cp .env.example .env   # set AUTH_SECRET (openssl rand -hex 32)
+docker compose up --build
+```
+Then open http://localhost:3000, sign up for an account, and continue to the
+control panel. The bridge still runs natively (see step 2 below) — serial
+ports don't pass cleanly into Docker on Windows/Mac.
+
+### Option B — run each piece natively
+#### 1. Relay
 ```bash
 cd relay
 npm install
-cp .env.example .env   # set secrets
+cp .env.example .env   # set DATABASE_URL, AUTH_SECRET, ALLOWED_ORIGINS
 npm run dev            # starts on :4000
 ```
 
-### 2. Bridge (venue laptop)
+#### 2. Bridge (venue laptop)
 ```bash
 cd bridge
 npm install
 cp .env.example .env
-# edit .env: set RELAY_URL, BRIDGE_SECRET, SERIAL_PORT
+# edit .env: set RELAY_URL and either SERIAL_PORT or a ChampionData source
 npm run dev
 ```
 
-### 3. Frontend
+#### 3. Frontend
 ```bash
 cd frontend
 npm install
-# .env.local already points to localhost:4000
+cp .env.example .env.local   # set DATABASE_URL, AUTH_SECRET, NEXTAUTH_URL
 npm run dev            # starts on :3000
 ```
 
@@ -54,19 +66,22 @@ Then open http://localhost:3000
 ### Relay → Fly.io (recommended)
 1. `fly apps create <name>` (or reuse the existing `scorehub-relay` app)
 2. Deploy from repo root: `fly deploy` (uses `fly.toml`, builds `relay/Dockerfile`)
-3. Set secrets: `fly secrets set BRIDGE_SECRET=... CONTROL_SECRET=... ALLOWED_ORIGINS=...` (`ALLOWED_ORIGINS` is the frontend's deployed origin — production is `https://app.scorehub.co.nz`; `scorehub.co.nz` apex is reserved for the marketing site, not this app)
+3. Set secrets: `fly secrets set DATABASE_URL=... AUTH_SECRET=... ALLOWED_ORIGINS=... REDIS_URL=...` (`ALLOWED_ORIGINS` is the frontend's deployed origin — production is `https://app.scorehub.co.nz`; `scorehub.co.nz` apex is reserved for the marketing site, not this app. `AUTH_SECRET` must match the frontend's value exactly — see Phase 2/SA-20 in the multi-tenant auth model. Add R2_* vars for logo/sound uploads, see `relay/.env.example`.)
 4. Scale into additional regions for failover: `fly scale count 2 --region iad`
 5. Note the public anycast URL (e.g. `https://scorehub-relay.fly.dev`)
 
 ### Frontend → Vercel
 1. Push to GitHub
 2. Import the `frontend/` folder in Vercel
-3. Set env vars: `NEXT_PUBLIC_RELAY_URL`, `NEXT_PUBLIC_CONTROL_SECRET`
+3. Set env vars: `NEXT_PUBLIC_RELAY_URL`, `DATABASE_URL`, `AUTH_SECRET` (must match the relay's), `NEXTAUTH_URL` — see `frontend/.env.example` for the full list (Stripe, Resend, Sentry are optional)
 
 ### Bridge → venue laptop
+The bridge ships a built-in admin UI (port 4002 by default) for picking a COM
+port and monitoring connection status — see `bridge/src/ui`. For manual setup:
 1. `npm run build` then `npm start` (or just `npm run dev`)
 2. Set `RELAY_URL` in `.env` to the Fly.io URL
-3. Set `SERIAL_PORT` to your COM port (Windows: `COM3`, Mac/Linux: `/dev/tty.usbserial-XXXX`)
+3. Generate a bridge token from the control panel's Settings tab (Bridge Devices card) and set it as `BRIDGE_SECRET`/the bridge's token field
+4. Set `SERIAL_PORT` to your COM port (Windows: `COM3`, Mac/Linux: `/dev/tty.usbserial-XXXX`)
 
 ### Human-gated production deploys (SA-12)
 `.github/workflows/deploy.yml` runs the full test suite, then deploys relay (Fly.io) and frontend (Vercel) — but only after a manual approval, via a `production` GitHub Environment with required reviewers. This is the only deploy path that should be live; Fly.io's and Vercel's own GitHub-push auto-deploy must be turned off in their dashboards, or every push deploys immediately regardless of this gate. One-time setup (repo admin, in GitHub/Fly.io/Vercel dashboards — not done as part of this change):

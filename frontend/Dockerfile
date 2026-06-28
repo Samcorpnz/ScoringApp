@@ -1,31 +1,44 @@
+# Build context is the repo root, not frontend/ — frontend depends on the
+# internal @scorehub/db workspace package (Prisma client) and runs
+# `prisma migrate deploy` on startup, same reasoning as relay/Dockerfile.
+
+# ── Build stage ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+COPY scripts ./scripts
+COPY frontend/package.json ./frontend/
+COPY packages/db/package.json ./packages/db/
+COPY relay/package.json ./relay/
+COPY bridge/package.json ./bridge/
+RUN npm ci
+
+COPY packages/db ./packages/db
+RUN npm run build --workspace=@scorehub/db
 
 ARG NEXT_PUBLIC_RELAY_URL
-ARG NEXT_PUBLIC_CONTROL_SECRET
 ENV NEXT_PUBLIC_RELAY_URL=$NEXT_PUBLIC_RELAY_URL
-ENV NEXT_PUBLIC_CONTROL_SECRET=$NEXT_PUBLIC_CONTROL_SECRET
 
-COPY . .
-RUN npm run build
+COPY frontend ./frontend
+RUN npm run build --workspace=frontend
 
-# Production image — installs only runtime deps, no standalone needed
+# ── Runtime stage ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
-RUN npm install --omit=dev
-
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/packages/db ./packages/db
+COPY --from=builder /app/frontend/package.json ./frontend/
+COPY --from=builder /app/frontend/.next ./frontend/.next
+COPY --from=builder /app/frontend/public ./frontend/public
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
+WORKDIR /app/frontend
 
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema ../packages/db/prisma/schema.prisma && npm start"]
