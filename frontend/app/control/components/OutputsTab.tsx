@@ -1,3 +1,4 @@
+import { useSession } from "next-auth/react";
 import { RELAY_URL } from "../lib/relay";
 import { SectionLabel } from "./primitives";
 
@@ -40,12 +41,21 @@ const DISPLAYS = [
 ];
 
 export function OutputsTab() {
+  const { data: session } = useSession();
+  const orgId = session?.user?.orgId;
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  // Display pages scope themselves to a tenant via ?org= (see useMatchState) —
+  // without it the relay falls back to the legacy single-tenant room, which
+  // no longer exists post-multi-tenant migration and yields no data (SA-65).
+  const withOrg = (path: string) => orgId ? `${path}?org=${orgId}` : path;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4">
-        {DISPLAYS.map(d => (
+        {DISPLAYS.map(d => {
+          const href = withOrg(d.href);
+          return (
           <div key={d.href} className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
@@ -59,27 +69,28 @@ export function OutputsTab() {
                   ))}
                 </div>
                 <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{d.desc}</p>
-                <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-dim)" }}>{origin}{d.href}</p>
+                <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-dim)" }}>{origin}{href}</p>
               </div>
               <div className="flex flex-col gap-2 flex-shrink-0">
                 <button
                   className="rounded-lg px-4 py-2 text-xs font-bold tracking-wide whitespace-nowrap"
                   style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-                  onClick={() => window.open(d.href, `scoreboard-${d.label}`, `width=${d.windowSize.split(",")[0]},height=${d.windowSize.split(",")[1]},menubar=no,toolbar=no,location=no,status=no`)}
+                  onClick={() => window.open(href, `scoreboard-${d.label}`, `width=${d.windowSize.split(",")[0]},height=${d.windowSize.split(",")[1]},menubar=no,toolbar=no,location=no,status=no`)}
                 >
                   ↗ Pop Out
                 </button>
                 <button
                   className="rounded-lg px-4 py-2 text-xs font-bold tracking-wide whitespace-nowrap"
                   style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-                  onClick={() => navigator.clipboard.writeText(`${origin}${d.href}`)}
+                  onClick={() => navigator.clipboard.writeText(`${origin}${href}`)}
                 >
                   Copy URL
                 </button>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Graphics software section */}
@@ -89,7 +100,7 @@ export function OutputsTab() {
           For software that drives its own graphics templates (Singular.live, Chyron, Ross Xpression, VIZRT), connect to the live data feed:
         </p>
         <div className="mt-4 space-y-3">
-          <DataFeedRow label="REST snapshot" value={`${RELAY_URL}/state`} desc="GET — JSON snapshot of current state, poll at 1–5 Hz" />
+          <DataFeedRow label="REST snapshot" value={`${RELAY_URL}${withOrg("/state")}`} desc="GET — JSON snapshot of current state, poll at 1–5 Hz" />
           <DataFeedRow label="WebSocket (Socket.io)" value={`${RELAY_URL}`} desc={`Connect with socket.io-client, listen to "matchStateChange" event`} />
           <DataFeedRow
             label="Event name"
@@ -100,7 +111,7 @@ export function OutputsTab() {
         <div className="mt-4 rounded-lg p-3 text-xs font-mono overflow-x-auto"
           style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", whiteSpace: "pre" }}>
 {`// Example: connect from any JS graphics template
-const socket = io("${RELAY_URL}");
+const socket = io("${RELAY_URL}", { auth: { orgId: "${orgId ?? "<your-org-id>"}" } });
 socket.on("matchStateChange", (state) => {
   // state.home.name, state.home.score, state.home.color, state.home.logoUrl
   // state.visitor.name, state.visitor.score
