@@ -90,6 +90,14 @@ export class BridgeController {
     return this.status === "running" || this.status === "connecting";
   }
 
+  getRelayHealth(): { connected: boolean; disconnectedSince: number | null; outageAlerted: boolean } {
+    return {
+      connected: this.socket?.connected ?? false,
+      disconnectedSince: this.disconnectedSince,
+      outageAlerted: this.alertedRelayOutage,
+    };
+  }
+
   async start(): Promise<void> {
     if (this.isRunning()) {
       log.warn("Already running — stop first");
@@ -141,7 +149,8 @@ export class BridgeController {
     this.socket = io(relayUrl, {
       auth: { secret: bridgeSecret, role: "bridge" },
       reconnection: true,
-      reconnectionDelay: 2000,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
     });
 
     this.socket.on("connect", () => {

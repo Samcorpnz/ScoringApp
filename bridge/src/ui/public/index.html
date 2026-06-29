@@ -119,6 +119,18 @@
     min-height: 18px;
   }
   .error-msg { font-size: 12px; color: var(--danger); margin-top: 6px; min-height: 16px; }
+  .relay-badge {
+    display: none;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-top: 6px;
+  }
+  .relay-badge.show { display: inline-block; animation: pulse 1.2s infinite; }
 
   /* Buttons */
   .btn-row { display: flex; gap: 8px; margin-top: 12px; }
@@ -324,6 +336,7 @@
       </div>
       <div class="score-display" id="scoreDisplay"></div>
       <div class="error-msg" id="errorMsg"></div>
+      <div class="relay-badge" id="relayBadge">RELAY UNREACHABLE — SWITCH TO MANUAL CONTROL</div>
       <div class="btn-row">
         <button class="btn-start" id="btnStart" onclick="startBridge()">Start</button>
         <button class="btn-stop" id="btnStop" onclick="stopBridge()" disabled>Stop</button>
@@ -591,6 +604,9 @@
     }
 
     err.textContent = data.lastError || '';
+
+    const relayBadge = document.getElementById('relayBadge');
+    relayBadge.classList.toggle('show', !!(data.relay && data.relay.outageAlerted));
 
     const isRunning = status === 'running' || status === 'connecting';
     btnStart.disabled = isRunning;

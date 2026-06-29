@@ -9,7 +9,7 @@ import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, NetballMatchStats, NetballPlayerStats, NetballTeamStats } from "../../types";
 
 export default function AdvancedDisplay() {
-  const { state, status } = useMatchState();
+  const { state, status, relayUnreachable } = useMatchState();
   const [showOnCourtOnly, setShowOnCourtOnly] = useState(true);
   const { textScale: _ts, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
@@ -19,7 +19,7 @@ export default function AdvancedDisplay() {
       style={themeStyle}
     >
       <div className="fixed top-4 right-4 z-10">
-        <ConnectionBadge status={status} />
+        <ConnectionBadge status={status} relayUnreachable={relayUnreachable} />
       </div>
 
       <div
@@ -38,7 +38,7 @@ export default function AdvancedDisplay() {
           <span className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--text-dim)" }}>
             {state.matchName || "SCOREBOARD"}
           </span>
-          <ConnectionBadge status={status} />
+          <ConnectionBadge status={status} relayUnreachable={relayUnreachable} />
         </div>
 
         {/* Main scoreboard row */}

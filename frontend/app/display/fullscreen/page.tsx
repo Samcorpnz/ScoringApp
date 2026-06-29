@@ -23,7 +23,7 @@ const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 type Layout = "wide" | "stacked" | "minimal";
 
 export default function FullscreenDisplay() {
-  const { state, status } = useMatchState();
+  const { state, status, relayUnreachable } = useMatchState();
   const [layout, setLayout] = useState<Layout>("wide");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHud, setShowHud] = useState(true);
@@ -84,7 +84,7 @@ export default function FullscreenDisplay() {
         }}
       >
         <div className="absolute top-4 right-4 flex items-center gap-3">
-          <ConnectionBadge status={status} />
+          <ConnectionBadge status={status} relayUnreachable={relayUnreachable} />
           <LayoutPicker layout={layout} setLayout={setLayout} />
           <button
             onClick={toggleFullscreen}

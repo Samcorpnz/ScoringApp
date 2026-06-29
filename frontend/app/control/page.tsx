@@ -20,7 +20,7 @@ type Tab = "score" | "outputs" | "logos" | "theme" | "audio" | "settings";
 
 export default function ControlPanel() {
   const controlToken = useControlToken();
-  const { state, status, feedStale, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
+  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -69,7 +69,7 @@ export default function ControlPanel() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <ConnectionBadge status={status} feedStale={feedStale} />
+          <ConnectionBadge status={status} feedStale={feedStale} relayUnreachable={relayUnreachable} />
           <PlanBadge />
           <OrgSwitcher />
           {session?.user?.name && (
