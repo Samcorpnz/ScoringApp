@@ -23,10 +23,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
   const body = await req.json().catch(() => ({}));
   const label = typeof body?.label === "string" ? body.label.slice(0, 100) : undefined;
+  const matchId = typeof body?.matchId === "string" ? body.matchId : undefined;
+
+  if (matchId) {
+    const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });
+    if (!match || match.orgId !== orgId) {
+      return NextResponse.json({ error: "match not found" }, { status: 404 });
+    }
+  }
 
   const plaintext = crypto.randomBytes(32).toString("hex");
   await prisma.scopedToken.create({
-    data: { orgId, type: "BRIDGE", tokenHash: hashToken(plaintext), label },
+    data: { orgId, matchId, type: "BRIDGE", tokenHash: hashToken(plaintext), label },
   });
 
   return NextResponse.json({ token: plaintext }, { status: 201 });

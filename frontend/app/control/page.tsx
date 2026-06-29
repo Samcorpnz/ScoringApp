@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useMatchState } from "../hooks/useMatchState";
 import { useControlToken } from "../hooks/useControlToken";
@@ -19,7 +20,17 @@ import { SettingsTab } from "./components/SettingsTab";
 type Tab = "score" | "outputs" | "logos" | "theme" | "audio" | "settings";
 
 export default function ControlPanel() {
-  const controlToken = useControlToken();
+  return (
+    <Suspense fallback={null}>
+      <ControlPanelInner />
+    </Suspense>
+  );
+}
+
+function ControlPanelInner() {
+  const router = useRouter();
+  const matchId = useSearchParams().get("matchId") ?? undefined;
+  const controlToken = useControlToken(matchId);
   const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
@@ -145,7 +156,14 @@ export default function ControlPanel() {
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} controlToken={controlToken} />}
-        {tab === "settings" && <SettingsTab state={state} push={push} />}
+        {tab === "settings" && (
+          <SettingsTab
+            state={state}
+            push={push}
+            matchId={matchId}
+            onEnded={() => router.push("/matches")}
+          />
+        )}
       </div>
     </div>
   );

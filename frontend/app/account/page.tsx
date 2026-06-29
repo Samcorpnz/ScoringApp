@@ -329,7 +329,7 @@ function SubscriptionPanel({
           </p>
           {sub?.cancelAtPeriodEnd ? (
             <p className="text-xs mt-1" style={{ color: "var(--danger, #e05252)" }}>
-              Cancels on {formatRenewalDate(sub.currentPeriodEnd)} — you'll move to Free after that.
+              Cancels on {formatRenewalDate(sub.currentPeriodEnd)} — you&apos;ll move to Free after that.
             </p>
           ) : (
             <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>

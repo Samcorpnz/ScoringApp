@@ -8,7 +8,8 @@ import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
-import { getMatchStore, allActiveStores } from "./persistence";
+import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
+import { prisma } from "@scorehub/db";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
@@ -89,45 +90,57 @@ export function createServer(options: ServerOptions = {}) {
     io.adapter(createAdapter(redisClients.pub, redisClients.sub));
   }
 
-  // Per-org in-memory state and the active bridge connection for that org.
-  // This is what makes match state genuinely tenant-scoped: one relay process
-  // can serve many orgs, each isolated to its own Socket.io room.
-  const matchStates = new Map<string, MatchState>();
-  const bridgeSockets = new Map<string, Socket>();
+  // Per-(org, match) in-memory state and the active bridge connection for
+  // that room. This is what makes match state genuinely tenant-scoped: one
+  // relay process can serve many orgs (and many matches per org), each
+  // isolated to its own Socket.io room. Omitting matchId addresses the
+  // org's singleton "default" room — unchanged from before multi-match
+  // support existed, so bridges/displays/old links never had to change.
+  function roomFor(orgId: string, matchId?: string): string {
+    return matchId ? `match:${matchId}` : orgId;
+  }
 
-  async function getState(orgId: string): Promise<MatchState> {
-    const cached = matchStates.get(orgId);
-    if (cached) return cached;
-    const store = getMatchStore(orgId);
+  const matchStates = new Map<string, { orgId: string; matchId?: string; state: MatchState }>();
+  const bridgeSockets = new Map<string, Socket>();
+  const roomCounts = new Map<string, number>();
+
+  async function getState(orgId: string, matchId?: string): Promise<MatchState> {
+    const room = roomFor(orgId, matchId);
+    const cached = matchStates.get(room);
+    if (cached) return cached.state;
+    const store = getMatchStore(orgId, matchId);
     const state = store ? await store.load() : { ...DEFAULT_MATCH_STATE };
-    matchStates.set(orgId, state);
+    matchStates.set(room, { orgId, matchId, state });
     return state;
   }
 
-  function setState(orgId: string, next: MatchState): void {
-    matchStates.set(orgId, next);
-    io.to(orgId).emit("matchStateChange", next);
-    getMatchStore(orgId)?.save(next);
-    publishStateUpdate(orgId, next);
+  function setState(orgId: string, next: MatchState, matchId?: string): void {
+    const room = roomFor(orgId, matchId);
+    matchStates.set(room, { orgId, matchId, state: next });
+    io.to(room).emit("matchStateChange", next);
+    getMatchStore(orgId, matchId)?.save(next);
+    publishStateUpdate(room, next);
   }
 
-  // Keeps this instance's cache fresh for orgs being written to on a *different*
+  // Keeps this instance's cache fresh for rooms being written to on a *different*
   // relay instance, so a client that (re)connects here after a failover doesn't
   // get served a snapshot from before the other instance's most recent writes.
   // Ignores out-of-order messages via the same sequenceId guard used for
-  // bridge-originated updates.
-  subscribeStateUpdates((orgId, raw) => {
+  // bridge-originated updates. Only updates rooms this instance already has
+  // cached — a room with no local entry has no locally-connected clients, so
+  // getState() will load it fresh from the store on demand instead.
+  subscribeStateUpdates((room, raw) => {
     const parsed = matchStateSchema.safeParse(raw);
     if (!parsed.success) return;
     const incoming = parsed.data as MatchState;
-    const current = matchStates.get(orgId);
-    if (!current || incoming.sequenceId >= current.sequenceId) {
-      matchStates.set(orgId, incoming);
+    const current = matchStates.get(room);
+    if (current && incoming.sequenceId >= current.state.sequenceId) {
+      matchStates.set(room, { ...current, state: incoming });
     }
   });
 
-  async function applyManualUpdate(orgId: string, patch: Partial<MatchState>): Promise<MatchState> {
-    const current = await getState(orgId);
+  async function applyManualUpdate(orgId: string, patch: Partial<MatchState>, matchId?: string): Promise<MatchState> {
+    const current = await getState(orgId, matchId);
     const next: MatchState = {
       ...current,
       ...patch,
@@ -136,7 +149,7 @@ export function createServer(options: ServerOptions = {}) {
       home:    { ...current.home,    ...(patch.home    ?? {}) },
       visitor: { ...current.visitor, ...(patch.visitor ?? {}) },
     };
-    setState(orgId, next);
+    setState(orgId, next, matchId);
     return next;
   }
 
@@ -146,15 +159,16 @@ export function createServer(options: ServerOptions = {}) {
   // multiple instances share Redis (SA-19) — it's a no-op true when Redis
   // is unset, so single-instance behavior is unchanged.
   const clockInterval = setInterval(() => {
-    for (const [orgId, state] of matchStates) {
-      if (!state.isRunning || bridgeSockets.get(orgId)?.connected) continue;
-      acquireTickLock(orgId)
+    for (const [room, entry] of matchStates) {
+      const { orgId, matchId, state } = entry;
+      if (!state.isRunning || bridgeSockets.get(room)?.connected) continue;
+      acquireTickLock(room)
         .then(acquired => {
           if (!acquired) return;
           const next = state.countDown ? state.clockSeconds - 1 : state.clockSeconds + 1;
-          setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 });
+          setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 }, matchId);
         })
-        .catch(err => console.error(`[relay] failed to acquire tick lock for org ${orgId}`, err));
+        .catch(err => console.error(`[relay] failed to acquire tick lock for room ${room}`, err));
     }
   }, 1000);
 
@@ -432,8 +446,30 @@ export function createServer(options: ServerOptions = {}) {
       return;
     }
     try {
-      const next = await applyManualUpdate(result.orgId, parsed.data as Partial<MatchState>);
+      const next = await applyManualUpdate(result.orgId, parsed.data as Partial<MatchState>, result.matchId);
       res.json(next);
+    } catch (err) {
+      respondToStateError(res, err);
+    }
+  });
+
+  // Always creates a brand-new LIVE match (entitlement-gated), used by
+  // /setup's "Start Match" so every ad-hoc match gets its own id rather than
+  // silently reusing whatever the org's current LIVE match happens to be.
+  app.post("/match", controlRateLimit, async (req, res) => {
+    const secret = req.headers["x-control-secret"];
+    const result = await verifyControlSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
+    if (!result) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!process.env.DATABASE_URL) {
+      res.status(501).json({ error: "match creation requires multi-tenant mode (DATABASE_URL)" });
+      return;
+    }
+    try {
+      const id = await createLiveMatch(result.orgId);
+      res.json({ id });
     } catch (err) {
       respondToStateError(res, err);
     }
@@ -442,67 +478,85 @@ export function createServer(options: ServerOptions = {}) {
   // ─── Socket.io ───────────────────────────────────────────────────────────────
 
   io.use(async (socket, next) => {
-    const { secret, role, orgId: requestedOrgId } = socket.handshake.auth as {
+    const { secret, role, orgId: requestedOrgId, matchId: requestedMatchId } = socket.handshake.auth as {
       secret?: string;
       role?: string;
       orgId?: string;
+      matchId?: string;
     };
 
     let orgId: string | null = null;
+    let matchId: string | undefined;
 
     if (role === "bridge") {
       const result = await verifyBridgeSecret(secret, BRIDGE_SECRET);
       if (result) {
         orgId = result.orgId;
+        matchId = result.matchId;
         (socket as any).isBridge = true;
       }
     } else if (role === "control") {
       const result = await verifyControlSecret(secret, CONTROL_SECRET);
       if (result) {
         orgId = result.orgId;
+        matchId = result.matchId;
         (socket as any).isControl = true;
       }
     }
 
-    (socket as any).orgId = orgId ?? requestedOrgId ?? LEGACY_ROOM_ID;
+    orgId = orgId ?? requestedOrgId ?? LEGACY_ROOM_ID;
+
+    // Viewer/display connections have no signed token — they pass orgId and
+    // an optional matchId straight from the display URL's query params, so
+    // matchId has to be validated against orgId here before it's trusted.
+    if (!matchId && requestedMatchId && process.env.DATABASE_URL) {
+      const row = await prisma.match.findUnique({ where: { id: requestedMatchId } });
+      if (row && row.orgId === orgId) matchId = requestedMatchId;
+    }
+
+    (socket as any).orgId = orgId;
+    (socket as any).matchId = matchId;
     next();
   });
 
   io.on("connection", (socket) => {
     const orgId = (socket as any).orgId as string;
+    const matchId = (socket as any).matchId as string | undefined;
     const isBridge  = (socket as any).isBridge  === true;
     const isControl = (socket as any).isControl === true;
     const role = isBridge ? "bridge" : isControl ? "control" : "viewer";
 
-    socket.join(orgId);
-    console.log(`[+] ${role} connected to org ${orgId} (${socket.id})`);
+    const room = roomFor(orgId, matchId);
+    socket.join(room);
+    roomCounts.set(room, (roomCounts.get(room) ?? 0) + 1);
+    console.log(`[+] ${role} connected to room ${room} (${socket.id})`);
 
     // Register listeners synchronously, before the async state load below —
     // otherwise a client emitting an update immediately on connect can race
     // ahead of `await getState(orgId)` and have its event silently dropped.
     if (isBridge) {
-      const existingBridge = bridgeSockets.get(orgId);
+      const existingBridge = bridgeSockets.get(room);
       if (existingBridge) {
-        console.warn(`[relay] Replacing existing bridge connection for org ${orgId}`);
+        console.warn(`[relay] Replacing existing bridge connection for room ${room}`);
         existingBridge.disconnect(true);
       }
-      bridgeSockets.set(orgId, socket);
+      bridgeSockets.set(room, socket);
 
       socket.on("stateUpdate", async (rawState: unknown) => {
         const parsed = matchStateSchema.safeParse(rawState);
         if (!parsed.success) {
-          console.warn(`[relay] rejected malformed stateUpdate from org ${orgId}:`, parsed.error.issues);
+          console.warn(`[relay] rejected malformed stateUpdate from room ${room}:`, parsed.error.issues);
           return;
         }
         const state = parsed.data as MatchState;
-        const current = await getState(orgId);
+        const current = await getState(orgId, matchId);
         if (state.sequenceId >= current.sequenceId) {
           setState(orgId, {
             ...state,
             home:         { ...state.home,    color: current.home.color,    logoUrl: current.home.logoUrl    },
             visitor:      { ...state.visitor, color: current.visitor.color, logoUrl: current.visitor.logoUrl },
             displayTheme: { ...current.displayTheme },
-          });
+          }, matchId);
         }
       });
     }
@@ -511,17 +565,17 @@ export function createServer(options: ServerOptions = {}) {
       socket.on("manualUpdate", async (rawPatch: unknown) => {
         const parsed = matchStatePatchSchema.safeParse(rawPatch);
         if (!parsed.success) {
-          console.warn(`[relay] rejected malformed manualUpdate from org ${orgId}:`, parsed.error.issues);
+          console.warn(`[relay] rejected malformed manualUpdate from room ${room}:`, parsed.error.issues);
           return;
         }
         const patch = parsed.data as Partial<MatchState>;
-        await applyManualUpdate(orgId, patch);
-        const bridge = bridgeSockets.get(orgId);
+        await applyManualUpdate(orgId, patch, matchId);
+        const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", patch);
       });
 
       socket.on("resetMatch", async () => {
-        const current = await getState(orgId);
+        const current = await getState(orgId, matchId);
         const next: MatchState = {
           ...DEFAULT_MATCH_STATE,
           sequenceId: current.sequenceId + 1,
@@ -529,25 +583,43 @@ export function createServer(options: ServerOptions = {}) {
           visitor: { ...DEFAULT_MATCH_STATE.visitor, name: current.visitor.name, color: current.visitor.color, logoUrl: current.visitor.logoUrl },
           displayTheme: { ...current.displayTheme },
         };
-        setState(orgId, next);
-        const bridge = bridgeSockets.get(orgId);
+        setState(orgId, next, matchId);
+        const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", next);
       });
     }
 
     socket.on("disconnect", () => {
-      if (isBridge && bridgeSockets.get(orgId) === socket) bridgeSockets.delete(orgId);
-      console.log(`[-] ${role} disconnected from org ${orgId} (${socket.id})`);
+      if (isBridge && bridgeSockets.get(room) === socket) bridgeSockets.delete(room);
+      const remaining = (roomCounts.get(room) ?? 1) - 1;
+      if (remaining <= 0) {
+        roomCounts.delete(room);
+        // Only matchId-scoped rooms are ever evicted — the org-singleton
+        // ("default") room is cached for the process lifetime as before.
+        if (matchId) {
+          matchStates.delete(room);
+          evictMatchStore(orgId, matchId).catch(err =>
+            console.error("[relay] failed to evict match store on last disconnect:", room, err)
+          );
+        }
+      } else {
+        roomCounts.set(room, remaining);
+      }
+      console.log(`[-] ${role} disconnected from room ${room} (${socket.id})`);
     });
 
-    getState(orgId)
+    getState(orgId, matchId)
       .then(state => socket.emit("matchStateChange", state))
       .catch(err => {
         if (err instanceof ConcurrentMatchLimitError) {
           socket.emit("error", { message: err.message });
           return;
         }
-        console.error("[relay] failed to load initial state for org:", orgId, err);
+        if (err instanceof MatchNotFoundError) {
+          socket.emit("error", { message: "match not found" });
+          return;
+        }
+        console.error("[relay] failed to load initial state for room:", room, err);
       });
   });
 
