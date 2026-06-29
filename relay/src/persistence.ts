@@ -4,6 +4,13 @@ import { getOrgAccount, ConcurrentMatchLimitError } from "./entitlements";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
+export class MatchNotFoundError extends Error {
+  constructor() {
+    super("match not found");
+    this.name = "MatchNotFoundError";
+  }
+}
+
 export interface MatchStore {
   orgId: string;
   load(): Promise<MatchState>;
@@ -13,52 +20,95 @@ export interface MatchStore {
 
 const stores = new Map<string, MatchStore>();
 
-// One store per org, lazily created and cached so debounce timers persist
-// across calls. Each org's active (LIVE) match is found-or-created on first
-// access — this is what makes match state genuinely tenant-scoped rather
-// than a single relay-wide singleton.
-export function getMatchStore(orgId: string): MatchStore | null {
+// Shared by the legacy org-singleton path below and the explicit "create a
+// new match" REST endpoint (server.ts POST /match) — both need the same
+// free-tier concurrent-LIVE-match gate, so the check lives in one place.
+async function createLiveMatch(orgId: string): Promise<string> {
+  const account = await getOrgAccount(orgId);
+  if (account && account.plan === "free") {
+    const liveElsewhere = await prisma.match.count({
+      where: { status: "LIVE", org: { accountId: account.accountId } },
+    });
+    if (liveElsewhere > 0) throw new ConcurrentMatchLimitError();
+  }
+  const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object } });
+  return created.id;
+}
+
+export { createLiveMatch };
+
+// One store per (org, match) pair, lazily created and cached so debounce
+// timers persist across calls.
+//
+// Passing no matchId preserves the original singleton behavior verbatim:
+// the org's most recent LIVE match is found-or-created on first access. This
+// is what bridges, display links, and any pre-existing /control bookmark
+// still use, so none of them needed to change when multi-match support was
+// added.
+//
+// Passing a matchId scopes the store to that exact row (after verifying it
+// belongs to orgId). A SCHEDULED match is transitioned to LIVE on first
+// access here, behind the same concurrency gate as createLiveMatch — so a
+// pre-scheduled fixture can't bypass the free-tier limit just because its
+// row already existed.
+export function getMatchStore(orgId: string, matchId?: string): MatchStore | null {
   if (!process.env.DATABASE_URL) return null;
 
-  const existing = stores.get(orgId);
+  const cacheKey = `${orgId}:${matchId ?? "default"}`;
+  const existing = stores.get(cacheKey);
   if (existing) return existing;
 
-  let matchId: string | null = null;
+  let resolvedId: string | null = null;
   let pending: MatchState | null = null;
   let timer: NodeJS.Timeout | null = null;
 
-  async function resolveMatchId(): Promise<string> {
-    if (matchId) return matchId;
-    const live = await prisma.match.findFirst({ where: { orgId, status: "LIVE" }, orderBy: { createdAt: "desc" } });
-    if (live) {
-      const id: string = live.id;
-      matchId = id;
-      return id;
-    }
-    const account = await getOrgAccount(orgId);
-    if (account && account.plan === "free") {
-      const liveElsewhere = await prisma.match.count({
-        where: { status: "LIVE", org: { accountId: account.accountId } },
-      });
-      if (liveElsewhere > 0) throw new ConcurrentMatchLimitError();
+  async function resolveMatch(): Promise<string> {
+    if (resolvedId) return resolvedId;
+
+    if (matchId) {
+      const row = await prisma.match.findUnique({ where: { id: matchId } });
+      if (!row || row.orgId !== orgId) throw new MatchNotFoundError();
+      if (row.status === "SCHEDULED") {
+        const account = await getOrgAccount(orgId);
+        if (account && account.plan === "free") {
+          const liveElsewhere = await prisma.match.count({
+            where: { status: "LIVE", org: { accountId: account.accountId } },
+          });
+          if (liveElsewhere > 0) throw new ConcurrentMatchLimitError();
+        }
+        await prisma.match.update({ where: { id: matchId }, data: { status: "LIVE" } });
+      }
+      resolvedId = matchId;
+      return matchId;
     }
 
-    const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object } });
-    const id: string = created.id;
-    matchId = id;
-    return id;
+    const live = await prisma.match.findFirst({ where: { orgId, status: "LIVE" }, orderBy: { createdAt: "desc" } });
+    if (live) {
+      resolvedId = live.id;
+      return live.id;
+    }
+    resolvedId = await createLiveMatch(orgId);
+    return resolvedId;
   }
 
   async function writeThrough(state: MatchState): Promise<void> {
-    const id = await resolveMatchId();
-    await prisma.match.update({ where: { id }, data: { state: state as object } });
+    const id = await resolveMatch();
+    await prisma.match.update({
+      where: { id },
+      data: {
+        state: state as object,
+        sport: state.sport,
+        homeName: state.home?.name,
+        visitorName: state.visitor?.name,
+      },
+    });
   }
 
   const store: MatchStore = {
     orgId,
 
     async load() {
-      const id = await resolveMatchId();
+      const id = await resolveMatch();
       const row = await prisma.match.findUnique({ where: { id } });
       return (row?.state as unknown as MatchState) ?? { ...DEFAULT_MATCH_STATE };
     },
@@ -83,8 +133,21 @@ export function getMatchStore(orgId: string): MatchStore | null {
     },
   };
 
-  stores.set(orgId, store);
+  stores.set(cacheKey, store);
   return store;
+}
+
+// Called when the last socket leaves a match's room (server.ts) so the cache
+// doesn't grow forever as orgs accumulate matches over time — unlike the
+// legacy org-singleton entry (cacheKey ending in ":default"), of which there
+// is only ever one per org, so it's left to live for the process lifetime as
+// before.
+export async function evictMatchStore(orgId: string, matchId: string): Promise<void> {
+  const cacheKey = `${orgId}:${matchId}`;
+  const store = stores.get(cacheKey);
+  if (!store) return;
+  await store.flush().catch(err => console.error("[relay] failed to flush match state on evict:", orgId, matchId, err));
+  stores.delete(cacheKey);
 }
 
 export function allActiveStores(): MatchStore[] {

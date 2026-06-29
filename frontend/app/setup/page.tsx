@@ -27,9 +27,10 @@ export default function SetupPage() {
   const [state, setState] = useState<SetupState>("form");
   const [message, setMessage] = useState("");
 
-  const controlToken = useControlToken();
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const controlToken = useControlToken(matchId ?? undefined);
   const { state: matchState, status: connStatus, sendManualUpdate } = useMatchState(
-    state === "applying" ? { secret: controlToken, role: "control" } : undefined
+    state === "applying" && controlToken ? { secret: controlToken, role: "control" } : undefined
   );
 
   // Once the socket is connected (only mounted once the form is submitted),
@@ -48,7 +49,7 @@ export default function SetupPage() {
       home: { ...matchState.home, name: homeName.trim() },
       visitor: { ...matchState.visitor, name: visitorName.trim() },
     });
-    router.push("/control");
+    router.push(`/control?matchId=${matchId}`);
   }, [state, connStatus]);
 
   async function handleSubmit() {
@@ -62,11 +63,12 @@ export default function SetupPage() {
         setMessage(body?.error ?? "Upgrade required to start a new match.");
         return;
       }
-      if (!res.ok) {
+      if (!res.ok || !body?.id) {
         setState("error");
         setMessage(body?.error ?? "Couldn't set up your match — try again.");
         return;
       }
+      setMatchId(body.id);
       setState("applying");
     } catch {
       setState("error");

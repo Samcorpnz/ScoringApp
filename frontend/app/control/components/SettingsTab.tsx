@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MatchState } from "../../types";
@@ -12,13 +14,29 @@ interface BridgeToken {
   revokedAt: string | null;
 }
 
+interface MatchOption {
+  id: string;
+  homeName: string | null;
+  visitorName: string | null;
+  status: string;
+}
+
 function BridgeTokensCard({ orgId }: { orgId: string }) {
   const [tokens, setTokens] = useState<BridgeToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
+  const [pinnedMatchId, setPinnedMatchId] = useState("");
+  const [matches, setMatches] = useState<MatchOption[]>([]);
   const [generating, setGenerating] = useState(false);
   const [justCreated, setJustCreated] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/orgs/${orgId}/matches?status=LIVE,SCHEDULED`)
+      .then(res => res.ok ? res.json() : { matches: [] })
+      .then(data => setMatches(data.matches || []))
+      .catch(() => setMatches([]));
+  }, [orgId]);
 
   const loadTokens = async () => {
     setLoading(true);
@@ -43,12 +61,13 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
       const res = await fetch(`/api/orgs/${orgId}/tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: label.trim() || undefined }),
+        body: JSON.stringify({ label: label.trim() || undefined, matchId: pinnedMatchId || undefined }),
       });
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
       setJustCreated(token);
       setLabel("");
+      setPinnedMatchId("");
       await loadTokens();
     } catch {
       setError("Failed to generate token");
@@ -104,6 +123,19 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
           value={label}
           onChange={e => setLabel(e.target.value)}
         />
+        <select
+          className="rounded-lg px-3 py-2 text-sm shrink-0"
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          value={pinnedMatchId}
+          onChange={e => setPinnedMatchId(e.target.value)}
+        >
+          <option value="">All matches</option>
+          {matches.map(m => (
+            <option key={m.id} value={m.id}>
+              {(m.homeName || "Home")} v {(m.visitorName || "Visitor")} ({m.status === "LIVE" ? "live" : "scheduled"})
+            </option>
+          ))}
+        </select>
         <button
           className="rounded-lg px-3 py-2 text-sm font-semibold shrink-0"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
@@ -147,10 +179,38 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
   );
 }
 
-export function SettingsTab({ state, push }: { state: MatchState; push: (p: Partial<MatchState>) => void }) {
+export function SettingsTab({ state, push, matchId, onEnded }: {
+  state: MatchState;
+  push: (p: Partial<MatchState>) => void;
+  matchId?: string;
+  onEnded?: () => void;
+}) {
   const template = getTemplate(state.sport);
   const { data: session } = useSession();
   const orgId = session?.user?.orgId;
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState("");
+
+  async function handleEndMatch() {
+    if (!orgId || !matchId) return;
+    if (!window.confirm("End this match? It will move to History and can't be scored again.")) return;
+    setEnding(true);
+    setEndError("");
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/matches/${matchId}/end`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setEndError(body?.error ?? "Couldn't end the match — try again.");
+        setEnding(false);
+        return;
+      }
+      onEnded?.();
+    } catch {
+      setEndError("Couldn't reach the server — try again.");
+      setEnding(false);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
       {/* Team colours */}
@@ -245,6 +305,26 @@ export function SettingsTab({ state, push }: { state: MatchState; push: (p: Part
           Apply Template Defaults
         </button>
       </Card>
+
+      {/* End match */}
+      {matchId && (
+        <Card title="End Match">
+          <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>
+            Moves this match to History. Displays connected to it will stop receiving updates.
+          </p>
+          {endError && (
+            <p className="text-xs mb-3 font-semibold" style={{ color: "var(--danger)" }}>{endError}</p>
+          )}
+          <button
+            className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold"
+            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
+            disabled={ending}
+            onClick={handleEndMatch}
+          >
+            {ending ? "Ending…" : "End Match"}
+          </button>
+        </Card>
+      )}
 
       {/* Connection info */}
       <Card title="Connection">

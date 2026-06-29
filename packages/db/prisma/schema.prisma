@@ -56,6 +56,7 @@ model Org {
 }
 
 enum MatchStatus {
+  SCHEDULED
   LIVE
   ENDED
 }
@@ -63,16 +64,28 @@ enum MatchStatus {
 // Replaces the relay's in-memory singleton match state. `state` mirrors the
 // relay's MatchState shape verbatim (kept as Json so the relay's TypeScript
 // type stays the single source of truth for the score-state schema).
+// sport/competition/homeName/visitorName are mirrored out of `state` onto
+// real columns purely so the matches list can filter/sort without querying
+// into JSON — `state` remains the source of truth the relay reads/writes.
 model Match {
-  id        String      @id @default(uuid())
-  orgId     String
-  org       Org         @relation(fields: [orgId], references: [id])
-  state     Json
-  status    MatchStatus @default(LIVE)
-  createdAt DateTime    @default(now())
-  endedAt   DateTime?
+  id          String      @id @default(uuid())
+  orgId       String
+  org         Org         @relation(fields: [orgId], references: [id])
+  state       Json
+  status      MatchStatus @default(LIVE)
+  sport       String?
+  competition String?
+  homeName    String?
+  visitorName String?
+  scheduledAt DateTime?
+  createdAt   DateTime    @default(now())
+  endedAt     DateTime?
 
-  @@index([orgId])
+  tokens ScopedToken[]
+
+  @@index([orgId, status])
+  @@index([orgId, sport])
+  @@index([orgId, competition])
 }
 
 model User {
@@ -131,10 +144,15 @@ enum ScopedTokenType {
 // Per-org credential for headless devices (the bridge) that can't do an
 // interactive NextAuth login. Only the hash is stored; the plaintext is
 // shown once at creation time.
+// matchId pins a bridge device to one match (venues running several
+// courts/games concurrently each get their own bridge); null keeps the
+// pre-existing org-wide behavior.
 model ScopedToken {
   id         String          @id @default(uuid())
   orgId      String
   org        Org             @relation(fields: [orgId], references: [id])
+  matchId    String?
+  match      Match?          @relation(fields: [matchId], references: [id])
   type       ScopedTokenType
   tokenHash  String          @unique
   label      String?
@@ -142,4 +160,5 @@ model ScopedToken {
   revokedAt  DateTime?
 
   @@index([orgId])
+  @@index([matchId])
 }
