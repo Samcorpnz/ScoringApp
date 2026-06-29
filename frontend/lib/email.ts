@@ -37,6 +37,33 @@ export async function sendEmailChangeVerification({ to, token }: { to: string; t
   });
 }
 
+export async function sendInvitationEmail({
+  to,
+  orgName,
+  role,
+  token,
+}: {
+  to: string;
+  orgName: string;
+  role: string;
+  token: string;
+}): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = `${baseUrl}/invite/accept?token=${token}`;
+
+  await getResend().emails.send({
+    from,
+    to,
+    subject: `You've been invited to join ${orgName} on ScoreHub`,
+    text: `You've been invited to join ${orgName} on ScoreHub as ${role}.\n\n${link}\n\nThis link expires in 7 days. If you weren't expecting this, you can ignore this email.`,
+    html: `<p>You've been invited to join <strong>${orgName}</strong> on ScoreHub as <strong>${role}</strong>.</p><p><a href="${link}">${link}</a></p><p>This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`,
+  });
+}
+
 export async function sendPaymentFailedEmail({ to }: { to: string[] }): Promise<void> {
   if (to.length === 0) return;
   const from = process.env.EMAIL_FROM;

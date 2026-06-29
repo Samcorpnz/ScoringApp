@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status: authStatus } = useSession({
@@ -33,6 +34,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           </span>
         </div>
         <div className="flex items-center gap-4">
+          <OrgSwitcher />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
           )}

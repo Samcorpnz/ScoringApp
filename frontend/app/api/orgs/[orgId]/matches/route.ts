@@ -11,7 +11,7 @@ const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

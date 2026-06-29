@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { PlanBadge } from "../components/PlanBadge";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
 
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
 
   useEffect(() => {
     if (!orgId) return;
@@ -85,6 +86,7 @@ export default function DashboardPage() {
         </span>
         <div className="flex items-center gap-4">
           <PlanBadge />
+          <OrgSwitcher />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
           )}
