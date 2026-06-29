@@ -1,12 +1,84 @@
 "use client";
 
-const links = [
-  { href: "/control",               title: "Control Panel",        desc: "Operator view — scores, names, logos, colours, outputs.", highlight: true },
-  { href: "/display/fullscreen",    title: "Fullscreen Display",   desc: "Second screen / projector / capture card. Press F for fullscreen." },
-  { href: "/display/basic",         title: "Basic Display",        desc: "Clean scoreboard panel for venue screens." },
-  { href: "/display/advanced",      title: "Advanced Display",     desc: "Full stats display with player roster and timeout pips." },
-  { href: "/display/overlay",       title: "Lower-Third Overlay",  desc: "Transparent — OBS/vMix/Wirecast Browser Source (1920×120)." },
-  { href: "/display/scorebug",      title: "Scorebug",             desc: "Compact corner widget for streaming overlays (?position=tr)." },
+const SAMPLE_HOME = { name: "Sharks", score: 47, color: "#3b82f6" };
+const SAMPLE_VISITOR = { name: "Magic", score: 42, color: "#ef4444" };
+
+const previews = [
+  {
+    title: "Basic Display",
+    desc: "Clean scoreboard panel for venue screens.",
+    render: () => (
+      <div className="flex items-center gap-3 rounded-lg overflow-hidden" style={{ background: "#0a0e14", border: "1px solid #1f2937" }}>
+        <div className="w-1 self-stretch" style={{ background: SAMPLE_HOME.color }} />
+        <div className="flex-1 text-center py-3">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">{SAMPLE_HOME.name}</p>
+          <p className="text-xl font-black text-white">{SAMPLE_HOME.score}</p>
+        </div>
+        <div className="px-3 text-center" style={{ borderLeft: "1px solid #1f2937", borderRight: "1px solid #1f2937" }}>
+          <p className="text-xs font-mono text-gray-300">08:42</p>
+          <p className="text-[9px] text-gray-500">Q3</p>
+        </div>
+        <div className="flex-1 text-center py-3">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">{SAMPLE_VISITOR.name}</p>
+          <p className="text-xl font-black text-white">{SAMPLE_VISITOR.score}</p>
+        </div>
+        <div className="w-1 self-stretch" style={{ background: SAMPLE_VISITOR.color }} />
+      </div>
+    ),
+  },
+  {
+    title: "Advanced Display",
+    desc: "Full stats display with player roster and timeout pips.",
+    render: () => (
+      <div className="rounded-lg overflow-hidden p-3" style={{ background: "#0a0e14", border: "1px solid #1f2937" }}>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400">{SAMPLE_HOME.name}</p>
+            <p className="text-lg font-black text-white">{SAMPLE_HOME.score}</p>
+          </div>
+          <p className="text-xs font-mono text-gray-300">08:42</p>
+          <div className="flex-1 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400">{SAMPLE_VISITOR.name}</p>
+            <p className="text-lg font-black text-white">{SAMPLE_VISITOR.score}</p>
+          </div>
+        </div>
+        <div className="flex justify-center gap-1">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: i < 2 ? "#3b82f6" : "#1f2937" }} />
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  {
+    title: "Lower-Third Overlay",
+    desc: "Transparent — OBS/vMix/Wirecast Browser Source (1920×120).",
+    render: () => (
+      <div
+        className="flex items-center gap-3 rounded-md px-3 py-2"
+        style={{ background: "linear-gradient(90deg, rgba(10,14,20,0.92), rgba(10,14,20,0.6))", border: "1px solid #1f2937" }}
+      >
+        <span className="text-xs font-bold text-white">{SAMPLE_HOME.name}</span>
+        <span className="text-sm font-black" style={{ color: "#3b82f6" }}>{SAMPLE_HOME.score}</span>
+        <span className="text-gray-500 text-xs">–</span>
+        <span className="text-sm font-black" style={{ color: "#ef4444" }}>{SAMPLE_VISITOR.score}</span>
+        <span className="text-xs font-bold text-white">{SAMPLE_VISITOR.name}</span>
+        <span className="ml-auto text-[10px] font-mono text-gray-400">Q3 08:42</span>
+      </div>
+    ),
+  },
+  {
+    title: "Scorebug",
+    desc: "Compact corner widget for streaming overlays (?position=tr).",
+    render: () => (
+      <div className="flex items-center gap-2 rounded-md px-2 py-1.5 w-fit" style={{ background: "#0a0e14", border: "1px solid #1f2937" }}>
+        <span className="text-[10px] font-bold text-gray-300">{SAMPLE_HOME.name}</span>
+        <span className="text-xs font-black text-white">{SAMPLE_HOME.score}</span>
+        <span className="text-[10px] font-black text-white">{SAMPLE_VISITOR.score}</span>
+        <span className="text-[10px] font-bold text-gray-300">{SAMPLE_VISITOR.name}</span>
+      </div>
+    ),
+  },
 ] as const;
 
 export default function Home() {
@@ -54,38 +126,25 @@ export default function Home() {
           </a>
         </div>
 
-        {/* Navigation cards */}
+        {/* Sample previews */}
+        <div className="mb-4 text-center">
+          <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--text-secondary)" }}>
+            See it in action
+          </p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {links.map(link => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="group rounded-xl p-5 flex flex-col gap-2 transition-all duration-200"
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border)",
-                textDecoration: "none",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = "var(--border-accent)";
-                e.currentTarget.style.background = "var(--bg-elevated)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = (link as any).highlight ? "var(--border-accent)" : "var(--border)";
-                e.currentTarget.style.background = (link as any).highlight ? "var(--accent-dim)" : "var(--bg-surface)";
-              }}
+          {previews.map(preview => (
+            <div
+              key={preview.title}
+              className="rounded-xl p-4 flex flex-col gap-3"
+              style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
             >
-              <span
-                className="text-base font-bold flex items-center gap-2"
-                style={{ color: "var(--accent)" }}
-              >
-                {link.title}
-                <span className="text-xs transition-transform group-hover:translate-x-1">→</span>
-              </span>
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {link.desc}
-              </span>
-            </a>
+              <div>
+                <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>{preview.title}</p>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{preview.desc}</p>
+              </div>
+              {preview.render()}
+            </div>
           ))}
         </div>
       </div>
