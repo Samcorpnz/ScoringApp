@@ -6,6 +6,7 @@ dist/
 .next/
 out/
 build/
+packages/db/generated/
 
 # Environment files — never commit these
 .env
