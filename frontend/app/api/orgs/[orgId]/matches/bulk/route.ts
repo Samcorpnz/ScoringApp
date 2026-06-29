@@ -34,10 +34,10 @@ interface RowError {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN" && session.user.role !== "OPERATOR") {
+  if (session.user.activeRole !== "ADMIN" && session.user.activeRole !== "OPERATOR") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -13,10 +13,10 @@ const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN" && session.user.role !== "OPERATOR") {
+  if (session.user.activeRole !== "ADMIN" && session.user.activeRole !== "OPERATOR") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   if (!authSecret) {
     return NextResponse.json({ error: "AUTH_SECRET is not configured" }, { status: 500 });
   }
-  const secret = await new SignJWT({ orgId, role: session.user.role })
+  const secret = await new SignJWT({ orgId, role: session.user.activeRole })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("5m")
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 export async function GET(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

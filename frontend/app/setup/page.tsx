@@ -18,7 +18,7 @@ export default function SetupPage() {
       window.location.href = "/login?callbackUrl=/setup";
     },
   });
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
 
   const [sport, setSport] = useState<SportType>("netball");
   const [matchName, setMatchName] = useState("");

@@ -187,7 +187,7 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
 }) {
   const template = getTemplate(state.sport);
   const { data: session } = useSession();
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState("");
 
@@ -337,7 +337,9 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
         </p>
       </Card>
 
-      {session?.user?.role === "ADMIN" && orgId && <BridgeTokensCard orgId={orgId} />}
+      {(session?.user?.activeRole === "ADMIN" || session?.user?.activeRole === "MANAGER") && orgId && (
+        <BridgeTokensCard orgId={orgId} />
+      )}
     </div>
   );
 }

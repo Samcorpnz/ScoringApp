@@ -12,14 +12,21 @@ const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 const FEED_STALE_MS = 8_000;
 const FEED_STALE_CHECK_MS = 1_000;
 
+// SA-56's failover SLA targets a sub-5s reconnect. A disconnect lasting much
+// longer than that is no longer "mid-failover" — it's worth telling the
+// operator explicitly rather than just showing the generic OFFLINE dot.
+const RELAY_UNREACHABLE_MS = 10_000;
+
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [feedStale, setFeedStale] = useState(false);
+  const [relayUnreachable, setRelayUnreachable] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
+  const disconnectedSinceRef = useRef<number | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
   const secret = auth?.secret;
@@ -39,13 +46,28 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     const socket = io(RELAY_URL, {
       auth: secret !== undefined ? { secret, role } : orgId ? { orgId, matchId } : {},
       reconnection: true,
-      reconnectionDelay: 2000,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
     });
     socketRef.current = socket;
 
-    socket.on("connect",    () => { setStatus("connected"); lastUpdateRef.current = Date.now(); setFeedStale(false); });
-    socket.on("disconnect", () => { setStatus("disconnected"); setFeedStale(false); });
-    socket.on("connect_error", () => { setStatus("disconnected"); setFeedStale(false); });
+    socket.on("connect", () => {
+      setStatus("connected");
+      lastUpdateRef.current = Date.now();
+      setFeedStale(false);
+      disconnectedSinceRef.current = null;
+      setRelayUnreachable(false);
+    });
+    socket.on("disconnect", () => {
+      setStatus("disconnected");
+      setFeedStale(false);
+      disconnectedSinceRef.current ??= Date.now();
+    });
+    socket.on("connect_error", () => {
+      setStatus("disconnected");
+      setFeedStale(false);
+      disconnectedSinceRef.current ??= Date.now();
+    });
 
     socket.on("matchStateChange", (incoming: MatchState) => {
       lastUpdateRef.current = Date.now();
@@ -65,6 +87,12 @@ export function useMatchState(auth?: { secret: string; role: string }) {
         stateRef.current.inputSource !== "none" &&
         Date.now() - lastUpdateRef.current >= FEED_STALE_MS;
       setFeedStale(shouldBeStale);
+
+      const shouldBeUnreachable =
+        status === "disconnected" &&
+        disconnectedSinceRef.current !== null &&
+        Date.now() - disconnectedSinceRef.current >= RELAY_UNREACHABLE_MS;
+      setRelayUnreachable(shouldBeUnreachable);
     }, FEED_STALE_CHECK_MS);
     return () => clearInterval(interval);
   }, [status]);
@@ -77,5 +105,5 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     socketRef.current?.emit("resetMatch");
   };
 
-  return { state, status, feedStale, sendManualUpdate, sendReset };
+  return { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset };
 }

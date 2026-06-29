@@ -11,7 +11,7 @@ import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
 import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
-import { getRedisClients, acquireTickLock, closeRedis } from "./redis";
+import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import { matchStatePatchSchema, matchStateSchema } from "./schemas";
@@ -119,7 +119,25 @@ export function createServer(options: ServerOptions = {}) {
     matchStates.set(room, { orgId, matchId, state: next });
     io.to(room).emit("matchStateChange", next);
     getMatchStore(orgId, matchId)?.save(next);
+    publishStateUpdate(room, next);
   }
+
+  // Keeps this instance's cache fresh for rooms being written to on a *different*
+  // relay instance, so a client that (re)connects here after a failover doesn't
+  // get served a snapshot from before the other instance's most recent writes.
+  // Ignores out-of-order messages via the same sequenceId guard used for
+  // bridge-originated updates. Only updates rooms this instance already has
+  // cached — a room with no local entry has no locally-connected clients, so
+  // getState() will load it fresh from the store on demand instead.
+  subscribeStateUpdates((room, raw) => {
+    const parsed = matchStateSchema.safeParse(raw);
+    if (!parsed.success) return;
+    const incoming = parsed.data as MatchState;
+    const current = matchStates.get(room);
+    if (current && incoming.sequenceId >= current.state.sequenceId) {
+      matchStates.set(room, { ...current, state: incoming });
+    }
+  });
 
   async function applyManualUpdate(orgId: string, patch: Partial<MatchState>, matchId?: string): Promise<MatchState> {
     const current = await getState(orgId, matchId);

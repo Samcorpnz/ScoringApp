@@ -9,17 +9,17 @@ import { getStripe } from "@/lib/stripe";
 // "free" once the period actually ends.
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.orgId) {
+  if (!session?.user?.activeOrgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.activeRole !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
   const resume = body?.resume === true;
 
-  const account = await getAccountForOrg(session.user.orgId);
+  const account = await getAccountForOrg(session.user.activeOrgId);
   if (!account?.stripeSubscriptionId) {
     return NextResponse.json({ error: "no active subscription" }, { status: 404 });
   }

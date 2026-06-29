@@ -7,6 +7,7 @@ import { useMatchState } from "../hooks/useMatchState";
 import { useControlToken } from "../hooks/useControlToken";
 import { ConnectionBadge } from "../components/ConnectionBadge";
 import { PlanBadge } from "../components/PlanBadge";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 import { MatchState } from "../types";
 import { useSoundCues, useSoundPlayback } from "../hooks/useSoundCues";
 import { ScoreTab } from "./components/ScoreTab";
@@ -30,7 +31,7 @@ function ControlPanelInner() {
   const router = useRouter();
   const matchId = useSearchParams().get("matchId") ?? undefined;
   const controlToken = useControlToken(matchId);
-  const { state, status, feedStale, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
+  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -53,7 +54,7 @@ function ControlPanelInner() {
     );
   }
 
-  if (session?.user?.role === "VIEWER") {
+  if (session?.user?.activeRole === "VIEWER") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-base)" }}>
         <div className="text-sm" style={{ color: "var(--text-dim)" }}>
@@ -79,8 +80,9 @@ function ControlPanelInner() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <ConnectionBadge status={status} feedStale={feedStale} />
+          <ConnectionBadge status={status} feedStale={feedStale} relayUnreachable={relayUnreachable} />
           <PlanBadge />
+          <OrgSwitcher />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>
               {session.user.name}

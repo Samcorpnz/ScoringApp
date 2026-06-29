@@ -73,7 +73,7 @@ export default function MatchesPage() {
       window.location.href = "/login?callbackUrl=/matches";
     },
   });
-  const orgId = session?.user?.orgId;
+  const orgId = session?.user?.activeOrgId;
 
   const [tab, setTab] = useState<TabKey>("live");
   const [matches, setMatches] = useState<MatchRow[]>([]);

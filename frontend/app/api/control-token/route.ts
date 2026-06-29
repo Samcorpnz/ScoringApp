@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
   }
 
   const session = await auth();
-  if (!session?.user?.orgId || !session.user.role) {
+  if (!session?.user?.activeOrgId || !session.user.activeRole) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN" && session.user.role !== "OPERATOR") {
+  if (!["ADMIN", "MANAGER", "OPERATOR"].includes(session.user.activeRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -32,12 +32,12 @@ export async function GET(req: NextRequest) {
   const matchId = req.nextUrl.searchParams.get("matchId") ?? undefined;
   if (matchId) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });
-    if (!match || match.orgId !== session.user.orgId) {
+    if (!match || match.orgId !== session.user.activeOrgId) {
       return NextResponse.json({ error: "match not found" }, { status: 404 });
     }
   }
 
-  const token = await new SignJWT({ orgId: session.user.orgId, role: session.user.role, ...(matchId ? { matchId } : {}) })
+  const token = await new SignJWT({ orgId: session.user.activeOrgId, role: session.user.activeRole, ...(matchId ? { matchId } : {}) })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.user.id)
     .setIssuedAt()

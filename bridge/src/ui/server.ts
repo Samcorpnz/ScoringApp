@@ -17,6 +17,7 @@ export function createUiServer(controller: BridgeController, port: number = 4002
     res.json({
       status: controller.status,
       lastError: controller.lastError,
+      relay: controller.getRelayHealth(),
       state: {
         home: controller.getState().home.score,
         visitor: controller.getState().visitor.score,

@@ -11,11 +11,11 @@ export async function DELETE(
 ) {
   const { orgId, tokenId } = await params;
   const session = await auth();
-  if (!session?.user?.orgId || session.user.orgId !== orgId) {
+  if (!session?.user?.activeOrgId || session.user.activeOrgId !== orgId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden — admin role required" }, { status: 403 });
+  if (session.user.activeRole !== "ADMIN" && session.user.activeRole !== "MANAGER") {
+    return NextResponse.json({ error: "forbidden — admin or manager role required" }, { status: 403 });
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { id: tokenId } });

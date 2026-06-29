@@ -7,7 +7,7 @@ import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 
 export default function BasicDisplay() {
-  const { state, status } = useMatchState();
+  const { state, status, relayUnreachable } = useMatchState();
   const { textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   return (
@@ -17,7 +17,7 @@ export default function BasicDisplay() {
     >
       {/* Connection badge — top right */}
       <div className="fixed top-4 right-4 z-10">
-        <ConnectionBadge status={status} />
+        <ConnectionBadge status={status} relayUnreachable={relayUnreachable} />
       </div>
 
       {/* Match name */}

@@ -2,6 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import { PlanBadge } from "../components/PlanBadge";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 
 // This page used to eagerly provision (find-or-create) the org's one LIVE
 // match on every load and show its display links directly. Now that orgs
@@ -35,6 +36,7 @@ export default function DashboardPage() {
         </span>
         <div className="flex items-center gap-4">
           <PlanBadge />
+          <OrgSwitcher />
           {session?.user?.name && (
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
           )}
