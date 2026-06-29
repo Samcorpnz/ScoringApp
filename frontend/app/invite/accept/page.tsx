@@ -126,7 +126,7 @@ function InviteAcceptInner() {
           Join <span style={{ color: "var(--accent)" }}>{info.orgName}</span>
         </h1>
         <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-          You've been invited as <strong>{info.role}</strong> ({info.email}).
+          You&apos;ve been invited as <strong>{info.role}</strong> ({info.email}).
         </p>
       </div>
 
