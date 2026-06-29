@@ -40,7 +40,6 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
       - name: Deploy frontend to Vercel
-        working-directory: frontend
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
           vercel build --prod --token="$VERCEL_TOKEN"
