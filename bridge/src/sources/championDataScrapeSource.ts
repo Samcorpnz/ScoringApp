@@ -11,9 +11,13 @@
  */
 
 import puppeteer, { Browser, Page } from "puppeteer";
+import dns from "dns";
+import { promisify } from "util";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
+
+const dnsLookup = promisify(dns.lookup);
 
 export interface ScrapeSourceOptions {
   url: string;
@@ -58,6 +62,29 @@ function isPrivateOrReservedHost(h: string): boolean {
   return false;
 }
 
+// Re-resolves and re-checks the destination of every request the page makes
+// (not just the initial navigation URL). Puppeteer/Chrome does its own DNS
+// resolution, so validating only the configured CD_SCRAPE_URL string would
+// leave a DNS-rebinding gap: a hostname that resolved to a public IP at
+// validation time could resolve to a private/metadata address by the time
+// Chrome actually connects.
+async function isRequestTargetSafe(rawUrl: string): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  if (isPrivateOrReservedHost(parsed.hostname.toLowerCase())) return false;
+  try {
+    const { address } = await dnsLookup(parsed.hostname);
+    return !isPrivateOrReservedHost(address);
+  } catch {
+    return false;
+  }
+}
+
 // Bounds the poll interval to [100ms, 60s]. Math.min/max alone aren't safe
 // here: a malformed CD_POLL_MS produces NaN, and NaN poisons both Math.min
 // and Math.max, so the "clamp" silently lets an unbounded value (and the
@@ -99,9 +126,11 @@ export async function startScrapeSource(
       const type = req.resourceType();
       if (["image", "stylesheet", "font", "media"].includes(type)) {
         req.abort();
-      } else {
-        req.continue();
+        return;
       }
+      isRequestTargetSafe(req.url())
+        .then(safe => (safe ? req.continue() : req.abort()))
+        .catch(() => req.abort());
     });
 
     // Intercept JSON responses from the ChampionData API

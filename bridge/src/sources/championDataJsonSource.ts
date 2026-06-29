@@ -9,6 +9,9 @@
  */
 
 import fetch from "node-fetch";
+import dns, { LookupAddress } from "dns";
+import http from "http";
+import https from "https";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
@@ -58,6 +61,33 @@ function isPrivateOrReservedHost(h: string): boolean {
   return false;
 }
 
+// Re-validates the *resolved* address at connection time, not just the
+// configured hostname string. Without this, a hostname that resolves to a
+// public IP during validation could later resolve to a private/metadata
+// address (DNS rebinding) and the request would still go through.
+function safeLookup(
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family: number) => void
+): void {
+  dns.lookup(hostname, options, (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family: number) => {
+    if (err) return callback(err, address, family);
+    const addresses: string[] = Array.isArray(address) ? address.map(a => a.address) : [address];
+    const unsafe = addresses.find(isPrivateOrReservedHost);
+    if (unsafe) {
+      return callback(new Error(`Resolved address for ${hostname} is private/reserved: ${unsafe}`), address, family);
+    }
+    callback(null, address, family);
+  });
+}
+
+const safeHttpAgent = new http.Agent({ lookup: safeLookup });
+const safeHttpsAgent = new https.Agent({ lookup: safeLookup });
+
+function selectSafeAgent(parsedUrl: URL): http.Agent | https.Agent {
+  return parsedUrl.protocol === "http:" ? safeHttpAgent : safeHttpsAgent;
+}
+
 // Bounds the poll interval to [100ms, 60s]. Math.min/max alone aren't safe
 // here: a malformed CD_POLL_MS produces NaN, and NaN poisons both Math.min
 // and Math.max, so the "clamp" silently lets an unbounded value (and the
@@ -91,7 +121,7 @@ export function startJsonSource(
     if (!active) return;
 
     try {
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, agent: selectSafeAgent });
       if (!res.ok) {
         console.warn(`[cd-json] HTTP ${res.status} from ${url}`);
       } else {
