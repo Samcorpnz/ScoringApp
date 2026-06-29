@@ -95,6 +95,7 @@ port and monitoring connection status — see `bridge/src/ui`. For manual setup:
 ## Runbooks
 
 - [Database backups](docs/runbooks/database-backups.md) — current RPO/RTO on free-tier Neon/Upstash, and the daily DIY backup job (SA-57). Paid multi-AZ upgrade deliberately deferred until paying customers exist.
+- [Manual control failover](docs/runbooks/manual-control-failover.md) — switching a live match to manual scoring when the bridge/hardware fails (SA-59). Also published to [Confluence](https://samcorp.atlassian.net/wiki/spaces/SA/pages/6651906/Runbook+Manual+Control+Failover+Bridge+Hardware+Failure).
 
 ## Serial Protocol
 

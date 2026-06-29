@@ -7,11 +7,13 @@
  * All configuration is managed through the UI or via env vars / bridge-config.json.
  */
 
-import { BridgeController } from "./controller";
-import { createUiServer } from "./ui/server";
 import { log } from "./logger";
 import { initSentry, captureException } from "./sentry";
 
+// initSentry() must run before express (imported transitively via
+// ./controller and ./ui/server) is loaded, otherwise Sentry's
+// auto-instrumentation can't patch it for request tracing — hence the
+// dynamic imports below instead of static ones.
 initSentry();
 
 process.on("uncaughtException", (err) => {
@@ -27,6 +29,9 @@ const UI_PORT    = parseInt(process.env.UI_PORT ?? "4002", 10);
 const AUTOSTART  = process.env.CD_AUTOSTART === "true";
 
 async function main(): Promise<void> {
+  const { BridgeController } = await import("./controller");
+  const { createUiServer } = await import("./ui/server");
+
   const controller = new BridgeController();
   createUiServer(controller, UI_PORT);
 
