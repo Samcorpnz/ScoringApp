@@ -4,6 +4,35 @@ import path from "path";
 import { BridgeController, BridgeConfig } from "../controller";
 import { addSseClient, removeSseClient } from "../logger";
 
+function isPrivateOrReservedHost(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h) return true;
+  if (h === "localhost" || h === "::1") return true;
+  if (h.startsWith("127.")) return true;
+  if (h.startsWith("10.")) return true;
+  if (h.startsWith("192.168.")) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return true;
+  if (h.startsWith("169.254.")) return true;
+  if (h.startsWith("100.6") || h.startsWith("100.7") || /^100\.(?:[6-9]\d|1[01]\d|12[0-7])\./.test(h)) return true;
+  if (h === "0.0.0.0") return true;
+  if (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
+  return false;
+}
+
+function validateScrapeUrl(raw: string): string {
+  const parsed = new URL(raw);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("cdScrapeUrl must use http or https");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("cdScrapeUrl must not include credentials");
+  }
+  if (isPrivateOrReservedHost(parsed.hostname)) {
+    throw new Error("cdScrapeUrl host is not allowed");
+  }
+  return parsed.toString();
+}
+
 export function createUiServer(controller: BridgeController, port: number = 4002): ReturnType<typeof createServer> {
   const app = express();
   app.use(express.json());
@@ -42,6 +71,14 @@ export function createUiServer(controller: BridgeController, port: number = 4002
     if (patch.baudRate) patch.baudRate = Number(patch.baudRate);
     if (patch.cdPollMs) patch.cdPollMs = Number(patch.cdPollMs);
     if (patch.cdScrapePollMs) patch.cdScrapePollMs = Number(patch.cdScrapePollMs);
+    if (typeof patch.cdScrapeUrl === "string" && patch.cdScrapeUrl.trim() !== "") {
+      try {
+        patch.cdScrapeUrl = validateScrapeUrl(patch.cdScrapeUrl);
+      } catch (err) {
+        res.status(400).json({ ok: false, error: (err as Error).message });
+        return;
+      }
+    }
     controller.updateConfig(patch);
     res.json({ ok: true, config: controller.getConfig() });
   });
