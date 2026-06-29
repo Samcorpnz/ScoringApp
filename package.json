@@ -8,6 +8,11 @@
     "bridge",
     "packages/db"
   ],
+  "dependencies": {
+    "react": "^19",
+    "react-dom": "^19",
+    "eslint": "^9"
+  },
   "scripts": {
     "dev:relay": "npm run dev --workspace=relay",
     "dev:frontend": "npm run dev --workspace=frontend",
@@ -25,7 +30,10 @@
     "ws": ">=8.21.0",
     "qs": ">=6.15.2",
     "js-yaml": ">=4.2.0 <5.0.0",
-    "form-data": ">=4.0.6"
+    "form-data": ">=4.0.6",
+    "react": "^19",
+    "react-dom": "^19",
+    "eslint": "^9"
   },
   "allowScripts": {
     "@prisma/client@6.19.3": true,
