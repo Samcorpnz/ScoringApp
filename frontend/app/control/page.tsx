@@ -161,7 +161,7 @@ function ControlPanelInner() {
             state={state}
             push={push}
             matchId={matchId}
-            onEnded={() => router.push("/matches")}
+            onEnded={() => router.push("/dashboard")}
           />
         )}
       </div>
