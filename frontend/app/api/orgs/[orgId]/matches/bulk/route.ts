@@ -23,7 +23,7 @@ interface RowError {
 }
 
 // Bulk-creates SCHEDULED matches from a parsed fixture list (CSV upload on
-// the /matches "Upcoming" tab). Direct Prisma write, no relay round-trip —
+// the /dashboard "Upcoming" tab). Direct Prisma write, no relay round-trip —
 // scheduling a fixture doesn't bring anything live, so the relay's
 // concurrent-LIVE-match entitlement check doesn't apply here; it applies
 // later, when someone actually opens a fixture's control panel (see

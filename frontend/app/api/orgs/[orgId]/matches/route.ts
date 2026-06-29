@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   return NextResponse.json({ id: body.id });
 }
 
-// Lists this org's matches for the /matches hub — Upcoming/Live/History
+// Lists this org's matches for the /dashboard hub — Upcoming/Live/History
 // tabs and the sport/competition filters all go through this one query.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
