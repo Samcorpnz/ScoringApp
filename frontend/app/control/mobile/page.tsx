@@ -5,22 +5,8 @@ import { useSession } from "next-auth/react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useControlToken } from "../../hooks/useControlToken";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { MatchState, SportType, formatClock } from "../../types";
-
-// Sport-aware scoring increments
-const SCORE_INCREMENTS: Record<SportType, number[]> = {
-  netball:      [1],
-  basketball:   [1, 2, 3],
-  rugby_union:  [3, 5, 7],   // penalty/drop, try, converted try
-  rugby_league: [2, 4, 6],   // conversion/penalty, try, try+conv
-  volleyball:   [1],
-  football:     [1],
-  handball:     [1],
-  hockey:       [1],
-  waterpolo:    [1],
-  tennis:       [1],
-  custom:       [1, 2, 3],
-};
+import { MatchState, formatClock } from "../../types";
+import { getTemplate } from "../../sport-templates";
 
 const CLOCK_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 45].map(m => ({
   label: `${m}m`,
@@ -102,7 +88,7 @@ export default function MobileControl() {
 
   const push = (patch: Partial<MatchState>) => sendManualUpdate(patch);
   const clockRunning = isAuthority || state.isRunning;
-  const increments   = SCORE_INCREMENTS[state.sport] ?? [1];
+  const increments   = getTemplate(state.sport).scoreIncrements;
   const period       = parseInt(state.period || "1", 10);
 
   return (

@@ -18,12 +18,16 @@ const FEED_STALE_CHECK_MS = 1_000;
 const RELAY_UNREACHABLE_MS = 10_000;
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
+export type ControllerStatus = "granted" | "conflict" | "revoked" | "viewer";
 
 export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [feedStale, setFeedStale] = useState(false);
   const [relayUnreachable, setRelayUnreachable] = useState(false);
+  const [controllerStatus, setControllerStatus] = useState<ControllerStatus>(
+    auth?.role === "control" ? "connecting" as unknown as ControllerStatus : "viewer"
+  );
   const socketRef = useRef<Socket | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const disconnectedSinceRef = useRef<number | null>(null);
@@ -77,6 +81,10 @@ export function useMatchState(auth?: { secret: string; role: string }) {
       );
     });
 
+    socket.on("controllerGranted", () => setControllerStatus("granted"));
+    socket.on("controllerConflict", () => setControllerStatus("conflict"));
+    socket.on("controllerRevoked",  () => setControllerStatus("revoked"));
+
     return () => { socket.disconnect(); };
   }, [secret, role]);
 
@@ -105,5 +113,13 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     socketRef.current?.emit("resetMatch");
   };
 
-  return { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset };
+  const sendUndo = () => {
+    socketRef.current?.emit("undo");
+  };
+
+  const takeControl = () => {
+    socketRef.current?.emit("takeControl");
+  };
+
+  return { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl };
 }

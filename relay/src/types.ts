@@ -1,133 +1,18 @@
-export interface TeamPlayer {
-  number: number;
-  name: string;
-  onCourt: boolean;
-  faults: number;
-  points: number;
-}
+export type {
+  TeamPlayer,
+  TeamState,
+  Possession,
+  SportType,
+  NetballPlayerStats,
+  NetballTeamStats,
+  NetballMatchStats,
+  DisplayTheme,
+  MatchState,
+} from "@scorehub/types";
 
-export interface TeamState {
-  name: string;
-  score: number;
-  faults: number;
-  timeouts: number;
-  players: TeamPlayer[];
-  color: string;
-  logoUrl: string;
-}
+export { DEFAULT_DISPLAY_THEME } from "@scorehub/types";
 
-export type Possession = "home" | "visitor" | "both" | "none";
-export type SportType =
-  | "netball" | "basketball"
-  | "rugby_union" | "rugby_league"
-  | "volleyball" | "football"
-  | "handball" | "hockey" | "waterpolo" | "tennis" | "custom";
-
-export interface NetballPlayerStats {
-  playerId: number;
-  playerName: string;
-  playerFirstname: string;
-  playerSurname: string;
-  currentPosition: string;
-  startingPositionCode: string;
-  goals: number;
-  goalAttempts: number;
-  goalMisses: number;
-  shootingPercentage: number;
-  goalAssists: number;
-  feeds: number;
-  centrePassReceives: number;
-  secondPhaseReceives: number;
-  penalties: number;
-  obstructionPenalties: number;
-  contactPenalties: number;
-  intercepts: number;
-  deflections: number;
-  pickups: number;
-  rebounds: number;
-  offensiveRebounds: number;
-  defensiveRebounds: number;
-  turnovers: number;
-  gain: number;
-  blocked: number;
-  blocks: number;
-  badPasses: number;
-  badHands: number;
-  offsides: number;
-  breaks: number;
-}
-
-export interface NetballTeamStats {
-  squadId: number;
-  squadName: string;
-  goals: number;
-  goalAttempts: number;
-  shootingPercentage: number;
-  goalsFromCentrePass: number;
-  goalsFromTurnovers: number;
-  goalsFromGains: number;
-  centrePassReceives: number;
-  secondPhaseReceives: number;
-  feeds: number;
-  penalties: number;
-  turnovers: number;
-  gain: number;
-  rebounds: number;
-  offensiveRebounds: number;
-  defensiveRebounds: number;
-  intercepts: number;
-  deflections: number;
-  pickups: number;
-  blocks: number;
-  timeInPossession: number;
-  players: NetballPlayerStats[];
-}
-
-export interface NetballMatchStats {
-  matchId: number;
-  matchStatus: string;
-  period: number;
-  periodCompleted: number;
-  roundNumber: number;
-  home: NetballTeamStats;
-  visitor: NetballTeamStats;
-}
-
-export interface DisplayTheme {
-  primaryColor: string;
-  backgroundColor: string;
-  font: string;
-  textScale: number;
-  competitionLogoUrl: string;
-}
-
-export const DEFAULT_DISPLAY_THEME: DisplayTheme = {
-  primaryColor: "#00C8FF",
-  backgroundColor: "#07090F",
-  font: "",
-  textScale: 1,
-  competitionLogoUrl: "",
-};
-
-export interface MatchState {
-  sequenceId: number;
-  clockSeconds: number;
-  countDown: boolean;
-  period: string;
-  periodBreak: boolean;
-  matchName: string;
-  isRunning: boolean;
-  possession: Possession;
-  hornActive: boolean;
-  sport: SportType;
-  inputSource: string;
-  home: TeamState;
-  visitor: TeamState;
-  netballStats?: NetballMatchStats;
-  displayTheme: DisplayTheme;
-}
-
-export const DEFAULT_MATCH_STATE: MatchState = {
+export const DEFAULT_MATCH_STATE = {
   sequenceId: 0,
   clockSeconds: 0,
   countDown: false,
@@ -135,11 +20,11 @@ export const DEFAULT_MATCH_STATE: MatchState = {
   periodBreak: false,
   matchName: "",
   isRunning: false,
-  possession: "none",
+  possession: "none" as const,
   hornActive: false,
-  sport: "netball",
+  sport: "netball" as const,
   inputSource: "none",
   home:    { name: "Home",    score: 0, faults: 0, timeouts: 0, players: [], color: "#F59E0B", logoUrl: "" },
   visitor: { name: "Visitor", score: 0, faults: 0, timeouts: 0, players: [], color: "#818CF8", logoUrl: "" },
-  displayTheme: { ...DEFAULT_DISPLAY_THEME },
+  displayTheme: { primaryColor: "#00C8FF", backgroundColor: "#07090F", font: "", textScale: 1, competitionLogoUrl: "" },
 };

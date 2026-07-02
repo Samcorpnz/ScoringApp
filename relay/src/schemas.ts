@@ -37,7 +37,11 @@ const possessionSchema = z.enum(["home", "visitor", "both", "none"]);
 
 const sportSchema = z.enum([
   "netball", "basketball", "rugby_union", "rugby_league",
-  "volleyball", "football", "handball", "hockey", "waterpolo", "tennis", "custom",
+  "volleyball", "football", "handball", "hockey", "waterpolo", "tennis",
+  "touch_rugby", "futsal", "pickleball", "badminton",
+  "table_tennis", "floorball", "squash", "lawn_bowls",
+  "indoor_cricket", "softball", "cricket",
+  "custom",
 ]);
 
 // .passthrough() on netballStats: it's a large, rarely-hand-edited nested
@@ -58,6 +62,8 @@ const matchStateFields = {
   home: teamStateSchema,
   visitor: teamStateSchema,
   netballStats: z.object({}).passthrough().optional(),
+  sportState: z.object({}).passthrough().optional(),
+  sportConfig: z.record(z.string(), z.unknown()).optional(),
   displayTheme: displayThemeSchema,
 };
 

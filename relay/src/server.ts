@@ -23,6 +23,7 @@ export interface ServerOptions {
   uploadDir?: string;
   allowedOrigins?: string | string[];
   controlRateLimit?: number;
+  controllerTokenTtlMs?: number;
 }
 
 // BRIDGE_SECRET/CONTROL_SECRET are the legacy plain-secret auth path, only
@@ -103,6 +104,15 @@ export function createServer(options: ServerOptions = {}) {
   const matchStates = new Map<string, { orgId: string; matchId?: string; state: MatchState }>();
   const bridgeSockets = new Map<string, Socket>();
   const roomCounts = new Map<string, number>();
+  // Undo stack: stores pre-change states for manual control panel updates only.
+  // Bridge hardware updates and clock ticks are NOT undo-able.
+  const undoStacks = new Map<string, MatchState[]>();
+  const UNDO_STACK_SIZE = 50;
+  // Controller mutex: only one control panel may send scoring events per match.
+  // key = room, value = socket.id of the active controller.
+  // Token expires after TTL on ungraceful disconnect to allow page refresh.
+  const controllerTokens = new Map<string, { socketId: string; expiresAt: number }>();
+  const CONTROLLER_TOKEN_TTL_MS = options.controllerTokenTtlMs ?? 30_000;
 
   async function getState(orgId: string, matchId?: string): Promise<MatchState> {
     const room = roomFor(orgId, matchId);
@@ -141,6 +151,12 @@ export function createServer(options: ServerOptions = {}) {
 
   async function applyManualUpdate(orgId: string, patch: Partial<MatchState>, matchId?: string): Promise<MatchState> {
     const current = await getState(orgId, matchId);
+    // Capture pre-change state for undo before overwriting
+    const room = roomFor(orgId, matchId);
+    const stack = undoStacks.get(room) ?? [];
+    stack.push(current);
+    if (stack.length > UNDO_STACK_SIZE) stack.shift();
+    undoStacks.set(room, stack);
     const next: MatchState = {
       ...current,
       ...patch,
@@ -577,8 +593,15 @@ export function createServer(options: ServerOptions = {}) {
   const SPORT_DEFAULT_CLOCK: Record<string, number> = {
     netball: 900, basketball: 600, rugby_union: 0, rugby_league: 0,
     volleyball: 0, football: 0, handball: 1800, hockey: 900, waterpolo: 480,
-    tennis: 0, custom: 600,
+    tennis: 0, touch_rugby: 2400, futsal: 1200, pickleball: 0, badminton: 0,
+    table_tennis: 0, floorball: 1200, squash: 0, lawn_bowls: 0, custom: 600,
   };
+
+  // Sports where scores reset to 0 when a period/set/game ends (e.g. volleyball, tennis).
+  const SPORT_RESET_SCORE_ON_PERIOD = new Set<string>([
+    "volleyball", "tennis",
+    "pickleball", "badminton", "table_tennis", "squash",
+  ]);
 
   app.post("/action/period/end", actionRateLimit, actionAuth, async (req, res) => {
     const orgId = (req as any).orgId as string;
@@ -587,11 +610,16 @@ export function createServer(options: ServerOptions = {}) {
       const current = await getState(orgId, matchId);
       const n = parseInt(current.period, 10);
       const defaultClock = SPORT_DEFAULT_CLOCK[current.sport] ?? 0;
+      const resetScoreOnPeriod = SPORT_RESET_SCORE_ON_PERIOD.has(current.sport);
       const next = await applyManualUpdate(orgId, {
         isRunning: false,
         clockSeconds: defaultClock,
         period: String(isNaN(n) ? 2 : n + 1),
         periodBreak: true,
+        ...(resetScoreOnPeriod && {
+          home: { ...current.home, score: 0 },
+          visitor: { ...current.visitor, score: 0 },
+        }),
       }, matchId);
       res.json({ ok: true, period: next.period, clockSeconds: next.clockSeconds });
     } catch (err) { respondToStateError(res, err); }
@@ -706,7 +734,40 @@ export function createServer(options: ServerOptions = {}) {
     }
 
     if (isControl) {
+      // Controller mutex: check if another controller already holds the token for this room.
+      const now = Date.now();
+      const existing = controllerTokens.get(room);
+      const existingIsActive = existing && existing.socketId !== socket.id && existing.expiresAt > now;
+
+      if (existingIsActive) {
+        // Another controller is active — notify this socket so the UI can show a "take control?" prompt
+        socket.emit("controllerConflict", { activeControllerId: existing.socketId });
+        // Don't grant control yet; the client can send "takeControl" to revoke the existing token
+      } else {
+        // Grant control (either no existing token, expired token, or same socket reconnecting)
+        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
+        socket.emit("controllerGranted");
+      }
+
+      // Client requests to take control from an existing controller
+      socket.on("takeControl", () => {
+        const prior = controllerTokens.get(room);
+        if (prior && prior.socketId !== socket.id) {
+          // Notify the displaced controller that they've lost control
+          io.to(prior.socketId).emit("controllerRevoked");
+        }
+        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
+        socket.emit("controllerGranted");
+      });
+
+      // Reject scoring events from sockets that don't hold the controller token
+      function assertController(): boolean {
+        const token = controllerTokens.get(room);
+        return token?.socketId === socket.id;
+      }
+
       socket.on("manualUpdate", async (rawPatch: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
         const parsed = matchStatePatchSchema.safeParse(rawPatch);
         if (!parsed.success) {
           console.warn(`[relay] rejected malformed manualUpdate from room ${room}:`, parsed.error.issues);
@@ -719,7 +780,13 @@ export function createServer(options: ServerOptions = {}) {
       });
 
       socket.on("resetMatch", async () => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
         const current = await getState(orgId, matchId);
+        // Push pre-reset state to undo stack so resets can be undone
+        const stack = undoStacks.get(room) ?? [];
+        stack.push(current);
+        if (stack.length > UNDO_STACK_SIZE) stack.shift();
+        undoStacks.set(room, stack);
         const next: MatchState = {
           ...DEFAULT_MATCH_STATE,
           sequenceId: current.sequenceId + 1,
@@ -731,10 +798,36 @@ export function createServer(options: ServerOptions = {}) {
         const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", next);
       });
+
+      socket.on("undo", async () => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const stack = undoStacks.get(room);
+        if (!stack?.length) return;
+        const previous = stack.pop()!;
+        undoStacks.set(room, stack);
+        const current = matchStates.get(room);
+        const restored: MatchState = {
+          ...previous,
+          // Keep sequenceId monotonic so viewers always accept the update
+          sequenceId: (current?.state.sequenceId ?? previous.sequenceId) + 1,
+        };
+        matchStates.set(room, { orgId, matchId, state: restored });
+        io.to(room).emit("matchStateChange", restored);
+        getMatchStore(orgId, matchId)?.save(restored);
+        publishStateUpdate(room, restored);
+      });
     }
 
     socket.on("disconnect", () => {
       if (isBridge && bridgeSockets.get(room) === socket) bridgeSockets.delete(room);
+      // Start controller token TTL on disconnect so a page refresh doesn't lose control,
+      // but another person can take over if the original controller is genuinely gone.
+      if (isControl) {
+        const token = controllerTokens.get(room);
+        if (token?.socketId === socket.id) {
+          controllerTokens.set(room, { socketId: socket.id, expiresAt: Date.now() + CONTROLLER_TOKEN_TTL_MS });
+        }
+      }
       const remaining = (roomCounts.get(room) ?? 1) - 1;
       if (remaining <= 0) {
         roomCounts.delete(room);
@@ -742,6 +835,8 @@ export function createServer(options: ServerOptions = {}) {
         // ("default") room is cached for the process lifetime as before.
         if (matchId) {
           matchStates.delete(room);
+          undoStacks.delete(room);
+          controllerTokens.delete(room);
           evictMatchStore(orgId, matchId).catch(err =>
             console.error("[relay] failed to evict match store on last disconnect:", room, err)
           );

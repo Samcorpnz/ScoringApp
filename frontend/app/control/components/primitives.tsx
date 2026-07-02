@@ -18,71 +18,39 @@ export function ColorSwatch({ color }: { color: string }) {
   );
 }
 
-export function ScoreButtons({ score, onAdjust, sport }: { score: number; onAdjust: (d: number) => void; sport?: string }) {
-  if (sport === "netball") {
-    return (
-      <div className="space-y-2 mt-3">
-        <div className="flex items-center gap-2">
-          {[-2, -1].map(d => (
-            <button key={d}
-              className="rounded-xl py-4 text-xl font-black flex-1"
-              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-              onClick={() => onAdjust(d)}>{d}</button>
-          ))}
-          <div className="flex-1 text-center score-digit text-5xl" style={{ color: "var(--accent)" }}>{score}</div>
-          {[1, 2].map(d => (
-            <button key={d}
-              className="rounded-xl py-4 text-xl font-black flex-1"
-              style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={() => onAdjust(d)}>+{d}</button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (sport === "basketball") {
-    return (
-      <div className="space-y-2 mt-3">
-        <div className="flex items-center gap-2">
-          {[-3, -2, -1].map(d => (
-            <button key={d}
-              className="rounded-xl py-4 text-lg font-black flex-1"
-              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-              onClick={() => onAdjust(d)}>{d}</button>
-          ))}
-          <div className="flex-shrink-0 w-16 text-center score-digit text-4xl" style={{ color: "var(--accent)" }}>{score}</div>
-          {[1, 2, 3].map(d => (
-            <button key={d}
-              className="rounded-xl py-4 text-lg font-black flex-1"
-              style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={() => onAdjust(d)}>+{d}</button>
-          ))}
-        </div>
-        <div className="flex justify-between text-xs px-1" style={{ color: "var(--text-dim)" }}>
-          <span className="flex-1 text-center">FT</span>
-          <span className="flex-1 text-center">2PT</span>
-          <span className="flex-1 text-center">3PT</span>
-        </div>
-      </div>
-    );
-  }
+export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels }: {
+  score: number;
+  onAdjust: (d: number) => void;
+  scoreIncrements: number[];
+  scoreLabels?: string[];
+}) {
+  const compact = scoreIncrements.length > 2;
+  const btnClass = `rounded-xl py-4 font-black flex-1 ${compact ? "text-lg" : "text-xl"}`;
+  const scoreClass = `text-center score-digit ${compact ? "flex-shrink-0 w-14 text-4xl" : "flex-1 text-5xl"}`;
+  const negatives = [...scoreIncrements].reverse();
 
   return (
-    <div className="flex items-center gap-2 mt-3">
-      {[-5, -1].map(d => (
-        <button key={d}
-          className="rounded-xl py-4 text-xl font-black flex-1"
-          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-          onClick={() => onAdjust(d)}>{d}</button>
-      ))}
-      <div className="flex-1 text-center score-digit text-5xl" style={{ color: "var(--accent)" }}>{score}</div>
-      {[1, 5].map(d => (
-        <button key={d}
-          className="rounded-xl py-4 text-xl font-black flex-1"
-          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-          onClick={() => onAdjust(d)}>+{d}</button>
-      ))}
+    <div className="space-y-2 mt-3">
+      <div className="flex items-center gap-2">
+        {negatives.map(d => (
+          <button key={-d} className={btnClass}
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            onClick={() => onAdjust(-d)}>−{d}</button>
+        ))}
+        <div className={scoreClass} style={{ color: "var(--accent)" }}>{score}</div>
+        {scoreIncrements.map(d => (
+          <button key={d} className={btnClass}
+            style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+            onClick={() => onAdjust(d)}>+{d}</button>
+        ))}
+      </div>
+      {scoreLabels && (
+        <div className="flex justify-around text-xs px-1" style={{ color: "var(--text-dim)" }}>
+          {scoreLabels.map(label => (
+            <span key={label} className="flex-1 text-center">{label}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

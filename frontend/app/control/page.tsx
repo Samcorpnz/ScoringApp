@@ -31,7 +31,7 @@ function ControlPanelInner() {
   const router = useRouter();
   const matchId = useSearchParams().get("matchId") ?? undefined;
   const controlToken = useControlToken(matchId);
-  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({ secret: controlToken, role: "control" });
+  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -80,6 +80,16 @@ function ControlPanelInner() {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          {controllerStatus === "granted" && (
+            <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: "rgba(0,200,100,0.15)", color: "#00c864", border: "1px solid rgba(0,200,100,0.3)" }}>
+              ● IN CONTROL
+            </span>
+          )}
+          {(controllerStatus === "conflict" || controllerStatus === "revoked" || controllerStatus === "viewer") && (
+            <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: "var(--bg-elevated)", color: "var(--text-dim)", border: "1px solid var(--border)" }}>
+              ○ VIEWING ONLY
+            </span>
+          )}
           <ConnectionBadge status={status} feedStale={feedStale} relayUnreachable={relayUnreachable} />
           <PlanBadge />
           <OrgSwitcher />
@@ -126,6 +136,38 @@ function ControlPanelInner() {
         </div>
       </div>
 
+      {/* Controller conflict banner */}
+      {controllerStatus === "conflict" && (
+        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,160,0,0.12)", borderBottom: "1px solid rgba(255,160,0,0.3)" }}>
+          <span className="text-sm font-bold" style={{ color: "#ffa000" }}>
+            Another control panel is already connected to this match.
+          </span>
+          <button
+            onClick={takeControl}
+            className="rounded-lg px-4 py-1.5 text-xs font-bold"
+            style={{ background: "#ffa000", color: "#000" }}
+          >
+            Take Control
+          </button>
+        </div>
+      )}
+
+      {/* Revoked banner */}
+      {controllerStatus === "revoked" && (
+        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,60,60,0.12)", borderBottom: "1px solid rgba(255,60,60,0.3)" }}>
+          <span className="text-sm font-bold" style={{ color: "#ff3c3c" }}>
+            Control was taken by another operator. You are now viewing only.
+          </span>
+          <button
+            onClick={takeControl}
+            className="rounded-lg px-4 py-1.5 text-xs font-bold"
+            style={{ background: "#ff3c3c", color: "#fff" }}
+          >
+            Reclaim Control
+          </button>
+        </div>
+      )}
+
       {/* Tab nav */}
       <div role="tablist" aria-label="Control panel sections" className="flex px-6 pt-4 gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
         {(["score", "outputs", "logos", "theme", "audio", "settings"] as Tab[]).map(t => (
@@ -151,7 +193,7 @@ function ControlPanelInner() {
 
       {/* Tab content */}
       <div className="p-6 max-w-5xl" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} />}
+        {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} sendUndo={sendUndo} />}
         {tab === "outputs"  && <OutputsTab  />}
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}

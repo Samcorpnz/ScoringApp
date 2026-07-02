@@ -1,0 +1,115 @@
+import { describe, it, expect } from "vitest";
+import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
+import type { SportType } from "../types";
+
+// Every value in the SportType union (minus "indoor_cricket", "softball", "cricket"
+// which are reserved for Phases 2–4 and intentionally have no template yet).
+const DROP_IN_SPORT_TYPES: SportType[] = [
+  "netball", "basketball", "rugby_union", "rugby_league",
+  "volleyball", "football", "handball", "hockey", "waterpolo", "tennis",
+  "touch_rugby", "futsal", "pickleball", "badminton",
+  "table_tennis", "floorball", "squash", "lawn_bowls",
+  "custom",
+];
+
+const RESET_SCORE_SPORTS: SportType[] = [
+  "volleyball", "tennis", "pickleball", "badminton", "table_tennis", "squash",
+];
+
+describe("SPORT_TEMPLATES coverage", () => {
+  it("every drop-in SportType has a matching template", () => {
+    const keys = SPORT_TEMPLATES.map(t => t.sport);
+    for (const sport of DROP_IN_SPORT_TYPES) {
+      expect(keys).toContain(sport);
+    }
+  });
+
+  it("no duplicate sport keys", () => {
+    const keys = SPORT_TEMPLATES.map(t => t.sport);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("SportTemplate required fields", () => {
+  it.each(SPORT_TEMPLATES)("$sport has scoreIncrements with at least one entry", (template) => {
+    expect(Array.isArray(template.scoreIncrements)).toBe(true);
+    expect(template.scoreIncrements.length).toBeGreaterThanOrEqual(1);
+    for (const n of template.scoreIncrements) {
+      expect(typeof n).toBe("number");
+      expect(n).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(SPORT_TEMPLATES)("$sport has a non-empty label and periodLabel", (template) => {
+    expect(template.label.length).toBeGreaterThan(0);
+    expect(template.periodLabel.length).toBeGreaterThan(0);
+  });
+
+  it.each(SPORT_TEMPLATES)("$sport has periods >= 1", (template) => {
+    expect(template.periods).toBeGreaterThanOrEqual(1);
+  });
+
+  it.each(SPORT_TEMPLATES)("$sport has clockSeconds >= 0", (template) => {
+    expect(template.clockSeconds).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("resetScoreOnPeriod", () => {
+  it.each(RESET_SCORE_SPORTS)("$s has resetScoreOnPeriod: true", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.resetScoreOnPeriod).toBe(true);
+  });
+
+  const NON_RESET_SPORTS: SportType[] = [
+    "football", "touch_rugby", "futsal", "floorball", "lawn_bowls",
+    "handball", "hockey", "waterpolo", "netball", "basketball",
+    "rugby_union", "rugby_league",
+  ];
+  it.each(NON_RESET_SPORTS)("$s does NOT have resetScoreOnPeriod", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.resetScoreOnPeriod).toBeFalsy();
+  });
+});
+
+describe("squash matchConfig", () => {
+  const squash = SPORT_TEMPLATES.find(t => t.sport === "squash");
+
+  it("squash template has matchConfig", () => {
+    expect(squash?.matchConfig).toBeDefined();
+    expect(squash?.matchConfig?.length).toBeGreaterThan(0);
+  });
+
+  it("squash matchConfig has a 'format' field", () => {
+    const field = squash?.matchConfig?.find(f => f.key === "format");
+    expect(field).toBeDefined();
+    expect(field?.type).toBe("select");
+    expect(field?.defaultValue).toBe("bo5");
+  });
+
+  it("squash format options include bo3 and bo5", () => {
+    const field = squash?.matchConfig?.find(f => f.key === "format");
+    const values = field?.options.map(o => o.value) ?? [];
+    expect(values).toContain("bo3");
+    expect(values).toContain("bo5");
+  });
+});
+
+describe("lawn_bowls scoreIncrements", () => {
+  it("lawn_bowls has increments 1, 2, 3, 4", () => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === "lawn_bowls");
+    expect(template?.scoreIncrements).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("getTemplate fallback", () => {
+  it("returns the custom template for an unknown sport string", () => {
+    const result = getTemplate("underwater_hockey" as SportType);
+    expect(result.sport).toBe("custom");
+  });
+
+  it("returns the correct template for a known sport", () => {
+    const result = getTemplate("badminton");
+    expect(result.sport).toBe("badminton");
+    expect(result.periods).toBe(3);
+  });
+});

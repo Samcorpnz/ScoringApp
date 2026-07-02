@@ -67,6 +67,26 @@ function nextEvent<T = unknown>(socket: Socket, event: string): Promise<T> {
   return new Promise<T>(resolve => socket.once(event, resolve));
 }
 
+// Connects as "control" and ensures the controller token is granted.
+// If another controller already holds the token (30s TTL from a prior test's
+// disconnect), we send takeControl immediately so the socket is always the
+// active controller when this helper resolves.
+async function connectControl(): Promise<Socket> {
+  const socket = ioClient(serverUrl, {
+    auth: { secret: CONTROL_SECRET, role: "control" },
+    reconnection: false,
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.on("connect_error", reject);
+    socket.on("controllerGranted", resolve);
+    socket.on("controllerConflict", () => {
+      socket.emit("takeControl");
+      // controllerGranted will fire next and resolve the outer promise
+    });
+  });
+  return socket;
+}
+
 // ─── REST API ─────────────────────────────────────────────────────────────────
 
 describe("GET /", () => {
@@ -315,8 +335,8 @@ describe("socket — bridge stateUpdate", () => {
 
 describe("socket — control manualUpdate", () => {
   it("applies patch and broadcasts to all viewers", async () => {
-    const { socket: control } = await connectAndWait("control");
-    const { socket: viewer  } = await connectAndWait();
+    const control = await connectControl();
+    const { socket: viewer } = await connectAndWait();
     try {
       const broadcastPromise = nextEvent<MatchState>(viewer, "matchStateChange");
       control.emit("manualUpdate", { period: "4" });
@@ -340,8 +360,8 @@ describe("socket — control resetMatch", () => {
         visitor: { name: "Owls",  color: "#0000ff", score: 44 },
       });
 
-    const { socket: control } = await connectAndWait("control");
-    const { socket: viewer  } = await connectAndWait();
+    const control = await connectControl();
+    const { socket: viewer } = await connectAndWait();
     try {
       const broadcastPromise = nextEvent<MatchState>(viewer, "matchStateChange");
       control.emit("resetMatch");

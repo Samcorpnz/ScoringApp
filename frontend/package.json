@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@scorehub/db": "*",
+    "@scorehub/types": "*",
     "@sentry/nextjs": "^10.62.0",
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.8.0",

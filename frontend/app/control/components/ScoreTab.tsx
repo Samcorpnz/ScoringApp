@@ -7,10 +7,11 @@ import { parseClock } from "../lib/parseClock";
 import { getTemplate } from "../../sport-templates";
 import { ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } from "./primitives";
 
-export function ScoreTab({ state, push, sendReset }: {
+export function ScoreTab({ state, push, sendReset, sendUndo }: {
   state: MatchState;
   push: (p: Partial<MatchState>) => void;
   sendReset: () => void;
+  sendUndo: () => void;
 }) {
   const [homeName,   setHomeName]   = useState("");
   const [visName,    setVisName]    = useState("");
@@ -19,17 +20,18 @@ export function ScoreTab({ state, push, sendReset }: {
   const [clockInput, setClockInput] = useState("");
   const displayClock = useInterpolatedClock({ clockSeconds: state.clockSeconds, isRunning: state.isRunning, countDown: state.countDown });
 
-  // Keep a stable ref to push/state so keyboard handlers don't go stale
+  // Keep stable refs so keyboard handlers don't go stale
   const stateRef = useRef(state);
   stateRef.current = state;
   const pushRef = useRef(push);
   pushRef.current = push;
+  const undoRef = useRef(sendUndo);
+  undoRef.current = sendUndo;
 
-  const isNetball = state.sport === "netball";
   const isBasketball = state.sport === "basketball";
-  const scoreDelta2 = isNetball ? 2 : 5;
   const faultLabel = isBasketball ? "Fouls" : "Faults";
   const template = getTemplate(state.sport);
+  const { scoreIncrements, scoreLabels } = template;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -39,62 +41,56 @@ export function ScoreTab({ state, push, sendReset }: {
 
       const s = stateRef.current;
       const p = pushRef.current;
-      const bball = s.sport === "basketball";
-      const delta2 = s.sport === "netball" ? 2 : 5;
+      const inc = getTemplate(s.sport).scoreIncrements;
+      // Keys 1/2/3 → increment[0/1/2]; Q/W/E → negative; mirror on right side (9/0/8, O/P/I)
+      const homeKeys:    [string, number][] = [["1", 0], ["2", 1], ["3", 2]];
+      const homeNegKeys: [string, number][] = [["q", 0], ["Q", 0], ["w", 1], ["W", 1], ["e", 2], ["E", 2]];
+      const visKeys:     [string, number][] = [["9", 0], ["0", 1], ["8", 2]];
+      const visNegKeys:  [string, number][] = [["o", 0], ["O", 0], ["p", 1], ["P", 1], ["i", 2], ["I", 2]];
+
+      // Cmd/Ctrl+Z — undo last action
+      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+        e.preventDefault();
+        undoRef.current();
+        return;
+      }
 
       switch (e.key) {
         case " ":
           e.preventDefault();
           p({ isRunning: !s.isRunning });
           break;
-        // Home team — left side of keyboard
-        case "1":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score + 1) } });
-          break;
-        case "2":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score + (bball ? 2 : delta2)) } });
-          break;
-        case "3":
-          if (bball) p({ home: { ...s.home, score: Math.max(0, s.home.score + 3) } });
-          break;
-        case "q": case "Q":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score - 1) } });
-          break;
-        case "w": case "W":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score - (bball ? 2 : delta2)) } });
-          break;
-        case "e": case "E":
-          if (bball) p({ home: { ...s.home, score: Math.max(0, s.home.score - 3) } });
-          break;
-        // Visitor team — right side of keyboard
-        case "8":
-          if (bball) p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + 3) } });
-          break;
-        case "9":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + 1) } });
-          break;
-        case "0":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + (bball ? 2 : delta2)) } });
-          break;
-        case "i": case "I":
-          if (bball) p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - 3) } });
-          break;
-        case "o": case "O":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - 1) } });
-          break;
-        case "p": case "P":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - (bball ? 2 : delta2)) } });
-          break;
-        // Period
         case "[":
           { const n = parseInt(s.period, 10); p({ period: String(isNaN(n) || n <= 1 ? 1 : n - 1) }); break; }
         case "]":
           { const n = parseInt(s.period, 10); p({ period: String(isNaN(n) ? 2 : n + 1) }); break; }
+        default: {
+          for (const [key, idx] of homeKeys) {
+            if (e.key === key && inc[idx] !== undefined)
+              { p({ home: { ...s.home, score: Math.max(0, s.home.score + inc[idx]) } }); return; }
+          }
+          for (const [key, idx] of homeNegKeys) {
+            if (e.key === key && inc[idx] !== undefined)
+              { p({ home: { ...s.home, score: Math.max(0, s.home.score - inc[idx]) } }); return; }
+          }
+          for (const [key, idx] of visKeys) {
+            if (e.key === key && inc[idx] !== undefined)
+              { p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + inc[idx]) } }); return; }
+          }
+          for (const [key, idx] of visNegKeys) {
+            if (e.key === key && inc[idx] !== undefined)
+              { p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - inc[idx]) } }); return; }
+          }
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Sport-specific control panel override (used by complex sports like Cricket, Softball)
+  const CustomPanel = template.controlPanel;
+  if (CustomPanel) return <CustomPanel state={state} push={push} sendReset={sendReset} sendUndo={sendUndo} />;
 
   return (
     <div className="space-y-6">
@@ -110,6 +106,15 @@ export function ScoreTab({ state, push, sendReset }: {
         onClick={() => push({ isRunning: !state.isRunning })}
       >
         {state.isRunning ? "■  STOP" : "▶  START"}
+      </button>
+
+      {/* Undo last action */}
+      <button
+        className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
+        style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+        onClick={sendUndo}
+      >
+        ↩ UNDO  <span style={{ fontSize: 10, opacity: 0.6 }}>⌘Z</span>
       </button>
 
       {/* End Period / Reopen Period */}
@@ -131,6 +136,11 @@ export function ScoreTab({ state, push, sendReset }: {
               ...(isBasketball && {
                 home: { ...state.home, faults: 0 },
                 visitor: { ...state.visitor, faults: 0 },
+              }),
+              // Set-based sports (volleyball, tennis, etc.) reset scores between games
+              ...(template.resetScoreOnPeriod && {
+                home: { ...state.home, score: 0, ...(isBasketball ? { faults: 0 } : {}) },
+                visitor: { ...state.visitor, score: 0, ...(isBasketball ? { faults: 0 } : {}) },
               }),
             });
           }}
@@ -194,7 +204,7 @@ export function ScoreTab({ state, push, sendReset }: {
           <p className="text-sm font-black tracking-widest uppercase mb-1" style={{ color: state.home.color || "var(--home-color)" }}>
             {state.home.name || "Home"}
           </p>
-          <ScoreButtons sport={state.sport} score={state.home.score}
+          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.home.score}
             onAdjust={d => push({ home: { ...state.home, score: Math.max(0, state.home.score + d) } })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.home.faults}`}
@@ -208,7 +218,7 @@ export function ScoreTab({ state, push, sendReset }: {
           <p className="text-sm font-black tracking-widest uppercase mb-1" style={{ color: state.visitor.color || "var(--visitor-color)" }}>
             {state.visitor.name || "Visitor"}
           </p>
-          <ScoreButtons sport={state.sport} score={state.visitor.score}
+          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.visitor.score}
             onAdjust={d => push({ visitor: { ...state.visitor, score: Math.max(0, state.visitor.score + d) } })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.visitor.faults}`}
@@ -248,18 +258,19 @@ export function ScoreTab({ state, push, sendReset }: {
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-dim)" }}>
         <span className="font-semibold w-full" style={{ color: "var(--text-secondary)" }}>Keyboard shortcuts</span>
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>Space</kbd> Start/Stop</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>1</kbd> Home +1{isBasketball ? " (FT)" : ""}</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>2</kbd> Home +{isBasketball ? "2 (2PT)" : scoreDelta2}</span>
-        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>3</kbd> Home +3 (3PT)</span>}
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>Q</kbd> Home −1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>W</kbd> Home −{isBasketball ? 2 : scoreDelta2}</span>
-        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>E</kbd> Home −3</span>}
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>9</kbd> Visitor +1{isBasketball ? " (FT)" : ""}</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>0</kbd> Visitor +{isBasketball ? "2 (2PT)" : scoreDelta2}</span>
-        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>8</kbd> Visitor +3 (3PT)</span>}
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>O</kbd> Visitor −1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>P</kbd> Visitor −{isBasketball ? 2 : scoreDelta2}</span>
-        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>I</kbd> Visitor −3</span>}
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>⌘Z</kbd> Undo</span>
+        {(["1", "2", "3"] as const).map((key, i) => scoreIncrements[i] !== undefined && (
+          <span key={key}><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>{key}</kbd> Home +{scoreIncrements[i]}{scoreLabels?.[i] ? ` (${scoreLabels[i]})` : ""}</span>
+        ))}
+        {(["Q", "W", "E"] as const).map((key, i) => scoreIncrements[i] !== undefined && (
+          <span key={key}><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>{key}</kbd> Home −{scoreIncrements[i]}</span>
+        ))}
+        {(["9", "0", "8"] as const).map((key, i) => scoreIncrements[i] !== undefined && (
+          <span key={key}><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>{key}</kbd> Visitor +{scoreIncrements[i]}{scoreLabels?.[i] ? ` (${scoreLabels[i]})` : ""}</span>
+        ))}
+        {(["O", "P", "I"] as const).map((key, i) => scoreIncrements[i] !== undefined && (
+          <span key={key}><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>{key}</kbd> Visitor −{scoreIncrements[i]}</span>
+        ))}
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>[</kbd><kbd className="px-1.5 py-0.5 rounded font-mono ml-1" style={{ background: "var(--bg-elevated)" }}>]</kbd> Period −/+</span>
       </div>
 

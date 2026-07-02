@@ -6,7 +6,8 @@
     "frontend",
     "relay",
     "bridge",
-    "packages/db"
+    "packages/db",
+    "packages/types"
   ],
   "dependencies": {
     "react": "^19",

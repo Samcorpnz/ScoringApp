@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
-import { SportType } from "../types";
+import type { SportType } from "../types";
 import { useControlToken } from "../hooks/useControlToken";
 import { useMatchState } from "../hooks/useMatchState";
 
@@ -24,6 +24,7 @@ export default function SetupPage() {
   const [matchName, setMatchName] = useState("");
   const [homeName, setHomeName] = useState("");
   const [visitorName, setVisitorName] = useState("");
+  const [sportConfig, setSportConfig] = useState<Record<string, string>>({});
   const [state, setState] = useState<SetupState>("form");
   const [message, setMessage] = useState("");
 
@@ -32,6 +33,15 @@ export default function SetupPage() {
   const { state: matchState, status: connStatus, sendManualUpdate } = useMatchState(
     state === "applying" && controlToken ? { secret: controlToken, role: "control" } : undefined
   );
+
+  // Reset sport-specific config to template defaults when sport changes
+  useEffect(() => {
+    const template = getTemplate(sport);
+    if (!template.matchConfig?.length) { setSportConfig({}); return; }
+    const defaults: Record<string, string> = {};
+    for (const field of template.matchConfig) defaults[field.key] = field.defaultValue;
+    setSportConfig(defaults);
+  }, [sport]);
 
   // Once the socket is connected (only mounted once the form is submitted),
   // push the chosen sport/names and move on — the relay's manualUpdate
@@ -48,6 +58,7 @@ export default function SetupPage() {
       possession: template.defaultPossession,
       home: { ...matchState.home, name: homeName.trim() },
       visitor: { ...matchState.visitor, name: visitorName.trim() },
+      ...(Object.keys(sportConfig).length > 0 && { sportConfig }),
     });
     router.push(`/control?matchId=${matchId}`);
   }, [state, connStatus]);
@@ -153,6 +164,30 @@ export default function SetupPage() {
                 ))}
               </div>
             </div>
+
+            {/* Sport-specific config fields (e.g. match format for Squash, wicket penalty for Indoor Cricket) */}
+            {getTemplate(sport).matchConfig?.map(field => (
+              <div key={field.key} className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+                <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--text-dim)" }}>{field.label}</p>
+                <div className="flex flex-wrap gap-2">
+                  {field.options.map(opt => (
+                    <button
+                      key={opt.value}
+                      className="rounded-lg px-4 py-2 text-left"
+                      style={{
+                        background: sportConfig[field.key] === opt.value ? "var(--accent-dim)" : "var(--bg-elevated)",
+                        border: `1px solid ${sportConfig[field.key] === opt.value ? "var(--border-accent)" : "var(--border)"}`,
+                        color: sportConfig[field.key] === opt.value ? "var(--accent)" : "var(--text-secondary)",
+                      }}
+                      onClick={() => setSportConfig(prev => ({ ...prev, [field.key]: opt.value }))}
+                    >
+                      <div className="text-sm font-semibold">{opt.label}</div>
+                      {opt.description && <div className="text-xs mt-0.5" style={{ opacity: 0.7 }}>{opt.description}</div>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
 
             <div className="rounded-xl p-5 space-y-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
               <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} />
