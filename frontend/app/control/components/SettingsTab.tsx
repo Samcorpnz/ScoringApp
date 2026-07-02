@@ -94,6 +94,7 @@ function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
     { label: "Visitor −1",     url: `${baseUrl}/action/score/visitor?delta=-1${matchId ? `&matchId=${matchId}` : ""}` },
     { label: "Period next",    url: `${baseUrl}/action/period/next${qMatchId}` },
     { label: "Period prev",    url: `${baseUrl}/action/period/prev${qMatchId}` },
+    { label: "End period",     url: `${baseUrl}/action/period/end${qMatchId}` },
   ];
 
   return (

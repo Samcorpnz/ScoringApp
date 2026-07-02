@@ -48,6 +48,7 @@ const matchStateFields = {
   clockSeconds: z.number().int().min(-1).max(24 * 60 * 60),
   countDown: z.boolean(),
   period: z.string().max(20),
+  periodBreak: z.boolean(),
   matchName: z.string().max(MAX_NAME_LEN),
   isRunning: z.boolean(),
   possession: possessionSchema,

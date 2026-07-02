@@ -114,6 +114,7 @@ export interface MatchState {
   clockSeconds: number;
   countDown: boolean;
   period: string;
+  periodBreak: boolean;
   matchName: string;
   isRunning: boolean;
   possession: Possession;
@@ -131,6 +132,7 @@ export const DEFAULT_MATCH_STATE: MatchState = {
   clockSeconds: 0,
   countDown: false,
   period: "1",
+  periodBreak: false,
   matchName: "",
   isRunning: false,
   possession: "none",

@@ -7,13 +7,15 @@ interface Props {
   clockSeconds: number;
   countDown: boolean;
   period: string;
+  periodBreak?: boolean;
+  periodLabel?: string;
   isRunning: boolean;
   hornActive: boolean;
   matchName?: string;
   size?: "full" | "compact";
 }
 
-export function ClockPanel({ clockSeconds, countDown, period, isRunning, hornActive, matchName, size = "full" }: Props) {
+export function ClockPanel({ clockSeconds, countDown, period, periodBreak, periodLabel = "QTR", isRunning, hornActive, matchName, size = "full" }: Props) {
   const isCompact = size === "compact";
   const display = useInterpolatedClock({ clockSeconds, isRunning, countDown });
 
@@ -49,16 +51,20 @@ export function ClockPanel({ clockSeconds, countDown, period, isRunning, hornAct
       <div className="flex flex-col items-center gap-1">
         <p
           className="uppercase font-black tracking-widest"
-          style={{ fontSize: isCompact ? "1.2rem" : "calc(2rem * var(--text-scale, 1))", color: "var(--accent)" }}
+          style={{ fontSize: isCompact ? "1.2rem" : "calc(2rem * var(--text-scale, 1))", color: periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}
         >
-          {period}
+          {periodBreak
+            ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
+            : period}
         </p>
-        <p
-          className="uppercase tracking-widest font-semibold"
-          style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}
-        >
-          {period === "E" ? "EXTRA TIME" : "QTR"}
-        </p>
+        {!periodBreak && (
+          <p
+            className="uppercase tracking-widest font-semibold"
+            style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}
+          >
+            {period === "E" ? "EXTRA TIME" : periodLabel}
+          </p>
+        )}
       </div>
 
       {/* Running indicator */}

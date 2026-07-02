@@ -11,10 +11,12 @@ import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { formatClockDisplay } from "../../types";
+import { getTemplate } from "../../sport-templates";
 
 export default function OverlayDisplay() {
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
+  const { periodLabel } = getTemplate(state.sport);
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 
@@ -83,13 +85,15 @@ export default function OverlayDisplay() {
               fontSize: "0.6rem",
               fontWeight: 700,
               letterSpacing: "0.2em",
-              color: "var(--accent)",
+              color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)",
               textTransform: "uppercase",
             }}
           >
-            {period === "E" ? "EXTRA" : `QTR ${period}`}
+            {state.periodBreak
+              ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
+              : (period === "E" ? "EXTRA" : `${periodLabel} ${period}`)}
           </span>
-          {!isRunning && (
+          {!isRunning && !state.periodBreak && (
             <span style={{ fontSize: "0.5rem", color: "var(--stopped)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
               PAUSED
             </span>

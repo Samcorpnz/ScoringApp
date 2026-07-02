@@ -144,6 +144,8 @@ export function createServer(options: ServerOptions = {}) {
     const next: MatchState = {
       ...current,
       ...patch,
+      // Starting the clock always exits break state
+      ...(patch.isRunning === true ? { periodBreak: false } : {}),
       sequenceId: current.sequenceId + 1,
       inputSource: patch.inputSource ?? "manual",
       home:    { ...current.home,    ...(patch.home    ?? {}) },
@@ -568,6 +570,30 @@ export function createServer(options: ServerOptions = {}) {
       const n = parseInt(current.period, 10);
       const next = await applyManualUpdate(orgId, { period: String(isNaN(n) || n <= 1 ? 1 : n - 1) }, matchId);
       res.json({ ok: true, period: next.period });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  // Default clock duration per sport, mirroring sport-templates.ts in the frontend.
+  const SPORT_DEFAULT_CLOCK: Record<string, number> = {
+    netball: 900, basketball: 600, rugby_union: 0, rugby_league: 0,
+    volleyball: 0, football: 0, handball: 1800, hockey: 900, waterpolo: 480,
+    tennis: 0, custom: 600,
+  };
+
+  app.post("/action/period/end", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const current = await getState(orgId, matchId);
+      const n = parseInt(current.period, 10);
+      const defaultClock = SPORT_DEFAULT_CLOCK[current.sport] ?? 0;
+      const next = await applyManualUpdate(orgId, {
+        isRunning: false,
+        clockSeconds: defaultClock,
+        period: String(isNaN(n) ? 2 : n + 1),
+        periodBreak: true,
+      }, matchId);
+      res.json({ ok: true, period: next.period, clockSeconds: next.clockSeconds });
     } catch (err) { respondToStateError(res, err); }
   });
 

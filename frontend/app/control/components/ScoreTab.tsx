@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { MatchState, formatClockDisplay } from "../../types";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { parseClock } from "../lib/parseClock";
-import { Card, ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } from "./primitives";
+import { getTemplate } from "../../sport-templates";
+import { ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } from "./primitives";
 
 export function ScoreTab({ state, push, sendReset }: {
   state: MatchState;
@@ -25,7 +26,10 @@ export function ScoreTab({ state, push, sendReset }: {
   pushRef.current = push;
 
   const isNetball = state.sport === "netball";
+  const isBasketball = state.sport === "basketball";
   const scoreDelta2 = isNetball ? 2 : 5;
+  const faultLabel = isBasketball ? "Fouls" : "Faults";
+  const template = getTemplate(state.sport);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -35,6 +39,8 @@ export function ScoreTab({ state, push, sendReset }: {
 
       const s = stateRef.current;
       const p = pushRef.current;
+      const bball = s.sport === "basketball";
+      const delta2 = s.sport === "netball" ? 2 : 5;
 
       switch (e.key) {
         case " ":
@@ -46,30 +52,38 @@ export function ScoreTab({ state, push, sendReset }: {
           p({ home: { ...s.home, score: Math.max(0, s.home.score + 1) } });
           break;
         case "2":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score + scoreDelta2) } });
+          p({ home: { ...s.home, score: Math.max(0, s.home.score + (bball ? 2 : delta2)) } });
           break;
-        case "q":
-        case "Q":
+        case "3":
+          if (bball) p({ home: { ...s.home, score: Math.max(0, s.home.score + 3) } });
+          break;
+        case "q": case "Q":
           p({ home: { ...s.home, score: Math.max(0, s.home.score - 1) } });
           break;
-        case "w":
-        case "W":
-          p({ home: { ...s.home, score: Math.max(0, s.home.score - scoreDelta2) } });
+        case "w": case "W":
+          p({ home: { ...s.home, score: Math.max(0, s.home.score - (bball ? 2 : delta2)) } });
+          break;
+        case "e": case "E":
+          if (bball) p({ home: { ...s.home, score: Math.max(0, s.home.score - 3) } });
           break;
         // Visitor team — right side of keyboard
+        case "8":
+          if (bball) p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + 3) } });
+          break;
         case "9":
           p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + 1) } });
           break;
         case "0":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + scoreDelta2) } });
+          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + (bball ? 2 : delta2)) } });
           break;
-        case "o":
-        case "O":
+        case "i": case "I":
+          if (bball) p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - 3) } });
+          break;
+        case "o": case "O":
           p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - 1) } });
           break;
-        case "p":
-        case "P":
-          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - scoreDelta2) } });
+        case "p": case "P":
+          p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - (bball ? 2 : delta2)) } });
           break;
         // Period
         case "[":
@@ -80,8 +94,7 @@ export function ScoreTab({ state, push, sendReset }: {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  // scoreDelta2 changes when sport changes — re-register then
-  }, [scoreDelta2]);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -99,6 +112,48 @@ export function ScoreTab({ state, push, sendReset }: {
         {state.isRunning ? "■  STOP" : "▶  START"}
       </button>
 
+      {/* End Period / Reopen Period */}
+      <div className="flex gap-3">
+        <button
+          className="flex-1 rounded-xl py-4 text-lg font-black tracking-widest uppercase transition-all"
+          style={{ background: "rgba(251,146,60,0.1)", border: "2px solid rgba(251,146,60,0.4)", color: "rgb(251,146,60)" }}
+          onClick={() => {
+            const n = parseInt(state.period, 10);
+            const nextPeriod = isNaN(n) ? 2 : n + 1;
+            // FIBA: overtime periods are 5 minutes (300s), not 10
+            const nextClock = isBasketball && nextPeriod > 4 ? 300 : template.clockSeconds;
+            push({
+              isRunning: false,
+              clockSeconds: nextClock,
+              period: String(nextPeriod),
+              periodBreak: true,
+              // FIBA: team fouls reset each quarter
+              ...(isBasketball && {
+                home: { ...state.home, faults: 0 },
+                visitor: { ...state.visitor, faults: 0 },
+              }),
+            });
+          }}
+        >
+          ⏭  END {template.periodLabel}
+        </button>
+        <button
+          className="rounded-xl px-5 py-4 text-sm font-black tracking-widest uppercase transition-all"
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          onClick={() => {
+            const n = parseInt(state.period, 10);
+            push({
+              isRunning: false,
+              clockSeconds: template.clockSeconds,
+              period: String(isNaN(n) || n <= 1 ? 1 : n - 1),
+              periodBreak: false,
+            });
+          }}
+        >
+          ↩ REOPEN
+        </button>
+      </div>
+
       {/* Live status bar */}
       <div className="rounded-xl p-4 flex items-center justify-around gap-4 flex-wrap"
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
@@ -114,7 +169,11 @@ export function ScoreTab({ state, push, sendReset }: {
           <p className="clock-digit text-4xl" style={{ color: state.isRunning ? "#fff" : "var(--text-secondary)" }}>
             {formatClockDisplay(displayClock)}
           </p>
-          <p className="text-xs mt-1 font-black tracking-widest" style={{ color: "var(--accent)" }}>QTR {state.period}</p>
+          <p className="text-xs mt-1 font-black tracking-widest" style={{ color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}>
+            {state.periodBreak
+              ? (template.periodLabel === "HALF" ? "HALF TIME" : `${template.periodLabel} BREAK`)
+              : `${template.periodLabel} ${state.period}`}
+          </p>
           <p className="text-xs mt-1 font-semibold" style={{ color: state.isRunning ? "var(--running)" : "var(--stopped)" }}>
             {state.isRunning ? "● RUNNING" : "■ PAUSED"}
           </p>
@@ -138,9 +197,9 @@ export function ScoreTab({ state, push, sendReset }: {
           <ScoreButtons sport={state.sport} score={state.home.score}
             onAdjust={d => push({ home: { ...state.home, score: Math.max(0, state.home.score + d) } })} />
           <div className="flex gap-2 mt-3">
-            <SmallBtn label={`Faults: ${state.home.faults}`}
+            <SmallBtn label={`${faultLabel}: ${state.home.faults}`}
               onClick={() => push({ home: { ...state.home, faults: state.home.faults + 1 } })} />
-            <SmallBtn label="Reset faults"
+            <SmallBtn label={`Reset ${faultLabel.toLowerCase()}`}
               onClick={() => push({ home: { ...state.home, faults: 0 } })} />
           </div>
         </div>
@@ -152,9 +211,9 @@ export function ScoreTab({ state, push, sendReset }: {
           <ScoreButtons sport={state.sport} score={state.visitor.score}
             onAdjust={d => push({ visitor: { ...state.visitor, score: Math.max(0, state.visitor.score + d) } })} />
           <div className="flex gap-2 mt-3">
-            <SmallBtn label={`Faults: ${state.visitor.faults}`}
+            <SmallBtn label={`${faultLabel}: ${state.visitor.faults}`}
               onClick={() => push({ visitor: { ...state.visitor, faults: state.visitor.faults + 1 } })} />
-            <SmallBtn label="Reset faults"
+            <SmallBtn label={`Reset ${faultLabel.toLowerCase()}`}
               onClick={() => push({ visitor: { ...state.visitor, faults: 0 } })} />
           </div>
         </div>
@@ -189,14 +248,18 @@ export function ScoreTab({ state, push, sendReset }: {
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-dim)" }}>
         <span className="font-semibold w-full" style={{ color: "var(--text-secondary)" }}>Keyboard shortcuts</span>
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>Space</kbd> Start/Stop</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>1</kbd> Home +1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>2</kbd> Home +{scoreDelta2}</span>
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>1</kbd> Home +1{isBasketball ? " (FT)" : ""}</span>
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>2</kbd> Home +{isBasketball ? "2 (2PT)" : scoreDelta2}</span>
+        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>3</kbd> Home +3 (3PT)</span>}
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>Q</kbd> Home −1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>W</kbd> Home −{scoreDelta2}</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>9</kbd> Visitor +1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>0</kbd> Visitor +{scoreDelta2}</span>
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>W</kbd> Home −{isBasketball ? 2 : scoreDelta2}</span>
+        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>E</kbd> Home −3</span>}
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>9</kbd> Visitor +1{isBasketball ? " (FT)" : ""}</span>
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>0</kbd> Visitor +{isBasketball ? "2 (2PT)" : scoreDelta2}</span>
+        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>8</kbd> Visitor +3 (3PT)</span>}
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>O</kbd> Visitor −1</span>
-        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>P</kbd> Visitor −{scoreDelta2}</span>
+        <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>P</kbd> Visitor −{isBasketball ? 2 : scoreDelta2}</span>
+        {isBasketball && <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>I</kbd> Visitor −3</span>}
         <span><kbd className="px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-elevated)" }}>[</kbd><kbd className="px-1.5 py-0.5 rounded font-mono ml-1" style={{ background: "var(--bg-elevated)" }}>]</kbd> Period −/+</span>
       </div>
 

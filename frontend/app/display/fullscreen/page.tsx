@@ -17,6 +17,7 @@ import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatClockDisplay } from "../../types";
+import { getTemplate } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -113,6 +114,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName, possession } = state;
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
+  const periodLabel  = getTemplate(state.sport).periodLabel;
 
   return (
     <div className="flex h-full">
@@ -124,7 +126,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
         className="flex flex-col items-center justify-center px-12"
         style={{ flexShrink: 0, borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
       >
-        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
 
       {/* Visitor side */}
@@ -177,13 +179,14 @@ function TeamSide({ team, side, possession, relayUrl }: { team: TeamState; side:
 
 function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchState>["state"]; relayUrl: string }) {
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName } = state;
+  const periodLabel = getTemplate(state.sport).periodLabel;
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex items-center justify-center" style={{ borderBottom: "1px solid var(--border)" }}>
         <TeamSide team={home} side="home" possession={state.possession} relayUrl={relayUrl} />
       </div>
       <div className="flex items-center justify-center py-6" style={{ borderBottom: "1px solid var(--border)" }}>
-        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
       <div className="flex-1 flex items-center justify-center">
         <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} />
@@ -199,6 +202,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const { periodLabel } = getTemplate(state.sport);
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
       {state.matchName && (
@@ -215,7 +219,9 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
           <p className="clock-digit" style={{ fontSize: "calc(5rem * var(--text-scale, 1))", color: isRunning ? "#fff" : "var(--text-secondary)" }}>
             {formatClockDisplay(displayClock)}
           </p>
-          <p className="font-black tracking-widest" style={{ fontSize: "calc(2rem * var(--text-scale, 1))", color: "var(--accent)" }}>Q{period}</p>
+          <p className="font-black tracking-widest" style={{ fontSize: "calc(2rem * var(--text-scale, 1))", color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}>
+            {state.periodBreak ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`) : `${periodLabel} ${period}`}
+          </p>
         </div>
         <div className="text-center">
           <p className="uppercase font-bold tracking-widest mb-2" style={{ fontSize: "1rem", color: "var(--text-secondary)" }}>{visitor.name}</p>

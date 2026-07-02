@@ -5,6 +5,7 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
+import { getTemplate } from "../../sport-templates";
 
 export default function BasicDisplay() {
   const { state, status, relayUnreachable } = useMatchState();
@@ -64,6 +65,8 @@ export default function BasicDisplay() {
             clockSeconds={state.clockSeconds}
             countDown={state.countDown}
             period={state.period}
+            periodBreak={state.periodBreak}
+            periodLabel={getTemplate(state.sport).periodLabel}
             isRunning={state.isRunning}
             hornActive={state.hornActive}
             matchName={state.matchName}

@@ -78,7 +78,7 @@ export async function verifyControlSecret(
     const orgId = payload.orgId as string | undefined;
     const role = payload.role as string | undefined;
     const matchId = payload.matchId as string | undefined;
-    if (!orgId || (role !== "ADMIN" && role !== "OPERATOR")) return null;
+    if (!orgId || !["ADMIN", "MANAGER", "OPERATOR"].includes(role ?? "")) return null;
     return { orgId, matchId };
   } catch {
     return null;

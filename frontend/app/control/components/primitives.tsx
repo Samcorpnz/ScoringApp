@@ -41,6 +41,33 @@ export function ScoreButtons({ score, onAdjust, sport }: { score: number; onAdju
     );
   }
 
+  if (sport === "basketball") {
+    return (
+      <div className="space-y-2 mt-3">
+        <div className="flex items-center gap-2">
+          {[-3, -2, -1].map(d => (
+            <button key={d}
+              className="rounded-xl py-4 text-lg font-black flex-1"
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+              onClick={() => onAdjust(d)}>{d}</button>
+          ))}
+          <div className="flex-shrink-0 w-16 text-center score-digit text-4xl" style={{ color: "var(--accent)" }}>{score}</div>
+          {[1, 2, 3].map(d => (
+            <button key={d}
+              className="rounded-xl py-4 text-lg font-black flex-1"
+              style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+              onClick={() => onAdjust(d)}>+{d}</button>
+          ))}
+        </div>
+        <div className="flex justify-between text-xs px-1" style={{ color: "var(--text-dim)" }}>
+          <span className="flex-1 text-center">FT</span>
+          <span className="flex-1 text-center">2PT</span>
+          <span className="flex-1 text-center">3PT</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2 mt-3">
       {[-5, -1].map(d => (

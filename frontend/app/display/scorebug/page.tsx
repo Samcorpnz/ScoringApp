@@ -17,6 +17,7 @@ import { useMatchState } from "../../hooks/useMatchState";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { formatClockDisplay } from "../../types";
+import { getTemplate } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -37,6 +38,7 @@ function Scorebug() {
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
+  const { periodLabel } = getTemplate(state.sport);
 
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
@@ -108,12 +110,14 @@ function Scorebug() {
               fontSize: "0.6rem",
               fontWeight: 800,
               letterSpacing: "0.2em",
-              color: "var(--accent)",
+              color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)",
               textTransform: "uppercase",
             }}>
-              {period === "E" ? "EXTRA" : `QTR ${period}`}
+              {state.periodBreak
+                ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
+                : (period === "E" ? "EXTRA" : `${periodLabel} ${period}`)}
             </span>
-            {!isRunning && (
+            {!isRunning && !state.periodBreak && (
               <span style={{ fontSize: "0.5rem", color: "#94A3B8", letterSpacing: "0.15em", textTransform: "uppercase" }}>PAUSED</span>
             )}
           </div>
