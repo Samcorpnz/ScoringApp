@@ -5,7 +5,7 @@ primary_region = "syd"
   dockerfile = "relay/Dockerfile"
 
 [deploy]
-  release_command = "cd /app/packages/db && npx prisma migrate deploy"
+  release_command = "sh -c 'cd /app/packages/db && npx prisma migrate deploy'"
 
 [http_service]
   internal_port = 4000
