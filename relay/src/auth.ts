@@ -33,6 +33,29 @@ export async function verifyBridgeSecret(
   return { orgId: token.orgId, matchId: token.matchId ?? undefined };
 }
 
+// Stream Deck / webhook callers use a long-lived CONTROL ScopedToken (or a
+// short-lived control JWT) to authenticate action endpoints without a session.
+export async function verifyActionSecret(
+  secret: string | undefined,
+  legacySecret: string
+): Promise<AuthResult | null> {
+  if (!secret) return null;
+
+  if (!process.env.DATABASE_URL) {
+    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+  }
+
+  // Accept long-lived CONTROL ScopedTokens first (Stream Deck use-case).
+  const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
+  if (token && token.type === "CONTROL" && !token.revokedAt) {
+    return { orgId: token.orgId, matchId: token.matchId ?? undefined };
+  }
+
+  // Also accept short-lived control JWTs so the operator can test endpoints
+  // directly from the control panel without needing a separate token.
+  return verifyControlSecret(secret, legacySecret);
+}
+
 // The control panel authenticates with a short-lived JWT minted by the
 // frontend's /api/control-token route from the logged-in user's session —
 // not a long-lived shared secret. Requires ADMIN/OPERATOR role.

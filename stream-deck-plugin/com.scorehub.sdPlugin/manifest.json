@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "ScoreHub",
+  "Version": "1.0.0.0",
+  "Author": "ScoreHub",
+  "Description": "Control your ScoreHub scoreboard from your Stream Deck. Start/stop the clock and adjust scores with live feedback on every button.",
+  "Category": "ScoreHub",
+  "CategoryIcon": "imgs/plugin/category",
+  "Icon": "imgs/plugin/icon",
+  "SDKVersion": 2,
+  "Software": { "MinimumVersion": "6.4" },
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.15" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Nodejs": { "Version": "20", "Debug": "enabled", "EntryPoint": "bin/plugin.mjs" },
+  "UUID": "com.scorehub.sdplugin",
+  "Actions": [
+    {
+      "Name": "Clock",
+      "UUID": "com.scorehub.sdplugin.clock",
+      "Icon": "imgs/actions/clock/key",
+      "Tooltip": "Start or stop the match clock. Button face shows live running state.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "States": [
+        { "Image": "imgs/actions/clock/stopped", "Title": "▶ START" },
+        { "Image": "imgs/actions/clock/running", "Title": "■ STOP" }
+      ]
+    },
+    {
+      "Name": "Score",
+      "UUID": "com.scorehub.sdplugin.score",
+      "Icon": "imgs/actions/score/key",
+      "Tooltip": "Adjust a team's score. Configure team (home/visitor) and point value in the button settings. Shows live score on the button face.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "States": [
+        { "Image": "imgs/actions/score/key", "Title": "" }
+      ]
+    },
+    {
+      "Name": "Period",
+      "UUID": "com.scorehub.sdplugin.period",
+      "Icon": "imgs/actions/period/key",
+      "Tooltip": "Advance or go back a period/quarter. Shows the current period on the button face.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "States": [
+        { "Image": "imgs/actions/period/key", "Title": "" }
+      ]
+    }
+  ]
+}

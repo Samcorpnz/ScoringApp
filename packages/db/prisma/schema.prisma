@@ -165,6 +165,7 @@ model Invitation {
 
 enum ScopedTokenType {
   BRIDGE
+  CONTROL
 }
 
 // Per-org credential for headless devices (the bridge) that can't do an

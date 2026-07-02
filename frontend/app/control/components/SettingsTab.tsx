@@ -10,6 +10,8 @@ import { Card, ColorSwatch, TemplateRow } from "./primitives";
 interface BridgeToken {
   id: string;
   label?: string;
+  type: "BRIDGE" | "CONTROL";
+  matchId?: string | null;
   createdAt: string;
   revokedAt: string | null;
 }
@@ -19,6 +21,199 @@ interface MatchOption {
   homeName: string | null;
   visitorName: string | null;
   status: string;
+}
+
+function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
+  const [tokens, setTokens] = useState<BridgeToken[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [label, setLabel] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [justCreated, setJustCreated] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const loadTokens = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/tokens`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setTokens((data.tokens || []).filter((t: BridgeToken) => t.type === "CONTROL"));
+    } catch {
+      setError("Failed to load tokens");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadTokens(); }, [orgId]);
+
+  const generateToken = async () => {
+    setGenerating(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/tokens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label.trim() || undefined, type: "CONTROL" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { token } = await res.json();
+      setJustCreated(token);
+      setLabel("");
+      await loadTokens();
+    } catch {
+      setError("Failed to generate token");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const revokeToken = async (tokenId: string) => {
+    if (!confirm("Revoke this Stream Deck token?")) return;
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/tokens/${tokenId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      await loadTokens();
+    } catch {
+      setError("Failed to revoke token");
+    }
+  };
+
+  const qMatchId = matchId ? `?matchId=${matchId}` : "";
+  const baseUrl = RELAY_URL;
+
+  const actions = [
+    { label: "▶ Start",        url: `${baseUrl}/action/start${qMatchId}` },
+    { label: "■ Stop",         url: `${baseUrl}/action/stop${qMatchId}` },
+    { label: "⏯ Toggle",      url: `${baseUrl}/action/toggle${qMatchId}` },
+    { label: "Home +1",        url: `${baseUrl}/action/score/home?delta=1${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Home +2",        url: `${baseUrl}/action/score/home?delta=2${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Home −1",        url: `${baseUrl}/action/score/home?delta=-1${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Visitor +1",     url: `${baseUrl}/action/score/visitor?delta=1${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Visitor +2",     url: `${baseUrl}/action/score/visitor?delta=2${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Visitor −1",     url: `${baseUrl}/action/score/visitor?delta=-1${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Period next",    url: `${baseUrl}/action/period/next${qMatchId}` },
+    { label: "Period prev",    url: `${baseUrl}/action/period/prev${qMatchId}` },
+  ];
+
+  return (
+    <Card title="Stream Deck / Webhooks">
+      <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>
+        Control ScoreHub from a Stream Deck or any HTTP client. Install the plugin, generate a token,
+        and paste both into the Stream Deck property inspector — that&apos;s it.
+      </p>
+
+      {/* Plugin download */}
+      <div className="flex items-center gap-3 mb-4 p-3 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+        <div className="flex-1">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>ScoreHub Stream Deck Plugin</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>Double-click to install. Live score on every button.</p>
+        </div>
+        <a
+          href="/scorehub.streamDeckPlugin"
+          download="scorehub.streamDeckPlugin"
+          className="rounded-lg px-3 py-2 text-xs font-bold shrink-0"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
+        >
+          Download
+        </a>
+      </div>
+
+      {justCreated && (
+        <div className="mb-3 p-3 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-accent)" }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: "var(--accent)" }}>
+            Copy this token now — it won&apos;t be shown again:
+          </p>
+          <div className="flex gap-2">
+            <code className="text-xs flex-1 p-2 rounded overflow-x-auto" style={{ background: "var(--bg-base)", color: "var(--accent)" }}>
+              {justCreated}
+            </code>
+            <button
+              className="rounded-lg px-3 text-xs font-semibold shrink-0"
+              style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+              onClick={() => navigator.clipboard.writeText(justCreated)}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Label (e.g. Court 1 Stream Deck)"
+          className="flex-1 rounded-lg px-3 py-2 text-sm"
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          value={label}
+          onChange={e => setLabel(e.target.value)}
+        />
+        <button
+          className="rounded-lg px-3 py-2 text-sm font-semibold shrink-0"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+          onClick={generateToken}
+          disabled={generating}
+        >
+          {generating ? "Generating…" : "Generate Token"}
+        </button>
+      </div>
+
+      {error && <p className="text-xs mb-3" style={{ color: "#EF4444" }}>{error}</p>}
+
+      {!loading && tokens.length > 0 && (
+        <div className="space-y-1 mb-4">
+          {tokens.map(t => (
+            <div key={t.id} className="flex items-center justify-between gap-2 text-xs p-2 rounded" style={{ background: "var(--bg-elevated)" }}>
+              <div>
+                <span style={{ color: "var(--text-primary)" }}>{t.label || "Unlabeled"}</span>
+                <span className="ml-2" style={{ color: "var(--text-dim)" }}>{new Date(t.createdAt).toLocaleDateString()}</span>
+              </div>
+              {t.revokedAt ? (
+                <span style={{ color: "var(--text-dim)" }}>Revoked</span>
+              ) : (
+                <button
+                  className="rounded px-2 py-1 shrink-0"
+                  style={{ color: "#EF4444", border: "1px solid #EF444433" }}
+                  onClick={() => revokeToken(t.id)}
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>Endpoint URLs</p>
+        <div className="space-y-1">
+          {actions.map(a => (
+            <div key={a.label} className="flex items-center gap-2 text-xs">
+              <span className="w-24 shrink-0 font-semibold" style={{ color: "var(--text-secondary)" }}>{a.label}</span>
+              <code
+                className="flex-1 p-1.5 rounded truncate cursor-pointer"
+                style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}
+                title={a.url}
+                onClick={() => navigator.clipboard.writeText(a.url)}
+              >
+                {a.url}
+              </code>
+              <button
+                className="shrink-0 rounded px-2 py-1 text-xs"
+                style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
+                onClick={() => navigator.clipboard.writeText(a.url)}
+              >
+                Copy
+              </button>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs mt-2" style={{ color: "var(--text-dim)" }}>
+          Click any URL to copy. Set <code>x-control-secret</code> as a custom header in your Stream Deck HTTP action.
+        </p>
+      </div>
+    </Card>
+  );
 }
 
 function BridgeTokensCard({ orgId }: { orgId: string }) {
@@ -44,7 +239,7 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
       const res = await fetch(`/api/orgs/${orgId}/tokens`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setTokens(data.tokens || []);
+      setTokens((data.tokens || []).filter((t: BridgeToken) => t.type === "BRIDGE"));
     } catch {
       setError("Failed to load bridge tokens");
     } finally {
@@ -338,7 +533,10 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
       </Card>
 
       {(session?.user?.activeRole === "ADMIN" || session?.user?.activeRole === "MANAGER") && orgId && (
-        <BridgeTokensCard orgId={orgId} />
+        <>
+          <WebhookCard orgId={orgId} matchId={matchId} />
+          <BridgeTokensCard orgId={orgId} />
+        </>
       )}
     </div>
   );

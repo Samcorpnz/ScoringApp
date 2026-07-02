@@ -4,6 +4,9 @@ primary_region = "syd"
 [build]
   dockerfile = "relay/Dockerfile"
 
+[deploy]
+  release_command = "cd /app/packages/db && npx prisma migrate deploy"
+
 [http_service]
   internal_port = 4000
   force_https = true

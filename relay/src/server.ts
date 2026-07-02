@@ -10,7 +10,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
-import { verifyBridgeSecret, verifyControlSecret, LEGACY_ROOM_ID } from "./auth";
+import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
@@ -424,6 +424,18 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ status: "ok" });
   });
 
+  // Used by the Stream Deck plugin on startup: exchange a CONTROL token for
+  // the orgId (and optional matchId) needed to open a viewer socket.
+  app.get("/api/me", async (req, res) => {
+    const secret = req.headers["x-control-secret"];
+    const result = await verifyActionSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
+    if (!result) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    res.json({ orgId: result.orgId, matchId: result.matchId ?? null });
+  });
+
   app.get("/state", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
     try {
@@ -451,6 +463,112 @@ export function createServer(options: ServerOptions = {}) {
     } catch (err) {
       respondToStateError(res, err);
     }
+  });
+
+  // ─── Action endpoints (Stream Deck / keyboard shortcut webhooks) ────────────
+  // Atomic verbs rather than raw MatchState patches — safe to fire without
+  // knowing current state. Auth: long-lived CONTROL ScopedToken via
+  // x-control-secret, or a short-lived operator JWT from the control panel.
+  // ?matchId= on the query string overrides the token's pinned matchId so one
+  // token can drive multiple matches if it isn't pinned.
+
+  const actionRateLimit = rateLimit({
+    windowMs: 60_000,
+    limit: options.controlRateLimit ?? 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "too many requests" },
+  });
+
+  async function actionAuth(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ): Promise<void> {
+    const secret = req.headers["x-control-secret"];
+    const result = await verifyActionSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
+    if (!result) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    // ?matchId= on the request can override the token's own matchId (only if
+    // the token isn't pinned to a specific match).
+    const qMatchId = typeof req.query.matchId === "string" ? req.query.matchId : undefined;
+    (req as any).orgId = result.orgId;
+    (req as any).matchId = result.matchId ?? qMatchId;
+    next();
+  }
+
+  app.post("/action/start", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const next = await applyManualUpdate(orgId, { isRunning: true }, matchId);
+      res.json({ ok: true, isRunning: next.isRunning });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  app.post("/action/stop", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const next = await applyManualUpdate(orgId, { isRunning: false }, matchId);
+      res.json({ ok: true, isRunning: next.isRunning });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  app.post("/action/toggle", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const current = await getState(orgId, matchId);
+      const next = await applyManualUpdate(orgId, { isRunning: !current.isRunning }, matchId);
+      res.json({ ok: true, isRunning: next.isRunning });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  // POST /action/score/:team?delta=1  (team = home | visitor)
+  app.post("/action/score/:team", actionRateLimit, actionAuth, async (req, res) => {
+    const team = req.params.team as "home" | "visitor";
+    if (team !== "home" && team !== "visitor") {
+      res.status(400).json({ error: "team must be 'home' or 'visitor'" });
+      return;
+    }
+    const delta = parseInt(String(req.query.delta ?? req.body?.delta ?? "1"), 10);
+    if (isNaN(delta) || delta < -99 || delta > 99) {
+      res.status(400).json({ error: "delta must be an integer between -99 and 99" });
+      return;
+    }
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const current = await getState(orgId, matchId);
+      const newScore = Math.max(0, current[team].score + delta);
+      const next = await applyManualUpdate(orgId, { [team]: { ...current[team], score: newScore } }, matchId);
+      res.json({ ok: true, score: next[team].score });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  app.post("/action/period/next", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const current = await getState(orgId, matchId);
+      const n = parseInt(current.period, 10);
+      const next = await applyManualUpdate(orgId, { period: String(isNaN(n) ? 2 : n + 1) }, matchId);
+      res.json({ ok: true, period: next.period });
+    } catch (err) { respondToStateError(res, err); }
+  });
+
+  app.post("/action/period/prev", actionRateLimit, actionAuth, async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const matchId = (req as any).matchId as string | undefined;
+    try {
+      const current = await getState(orgId, matchId);
+      const n = parseInt(current.period, 10);
+      const next = await applyManualUpdate(orgId, { period: String(isNaN(n) || n <= 1 ? 1 : n - 1) }, matchId);
+      res.json({ ok: true, period: next.period });
+    } catch (err) { respondToStateError(res, err); }
   });
 
   // Always creates a brand-new LIVE match (entitlement-gated), used by

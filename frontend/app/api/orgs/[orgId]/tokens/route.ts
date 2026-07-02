@@ -24,6 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const body = await req.json().catch(() => ({}));
   const label = typeof body?.label === "string" ? body.label.slice(0, 100) : undefined;
   const matchId = typeof body?.matchId === "string" ? body.matchId : undefined;
+  const type = body?.type === "CONTROL" ? "CONTROL" : "BRIDGE";
 
   if (matchId) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
   const plaintext = crypto.randomBytes(32).toString("hex");
   await prisma.scopedToken.create({
-    data: { orgId, matchId, type: "BRIDGE", tokenHash: hashToken(plaintext), label },
+    data: { orgId, matchId, type, tokenHash: hashToken(plaintext), label },
   });
 
   return NextResponse.json({ token: plaintext }, { status: 201 });
@@ -51,8 +52,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
   }
 
   const tokens = await prisma.scopedToken.findMany({
-    where: { orgId, type: "BRIDGE" },
-    select: { id: true, label: true, createdAt: true, revokedAt: true },
+    where: { orgId },
+    select: { id: true, label: true, type: true, matchId: true, createdAt: true, revokedAt: true },
     orderBy: { createdAt: "desc" },
   });
 

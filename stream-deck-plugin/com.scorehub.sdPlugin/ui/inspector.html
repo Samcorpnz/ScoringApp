@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      color: #c8c8c8;
+      background: #1e1e1e;
+      padding: 12px;
+    }
+    .section {
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 3px;
+      margin-top: 8px;
+    }
+    input, select {
+      width: 100%;
+      background: #2a2a2a;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+      padding: 6px 8px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: #6366f1; }
+    button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 7px 12px;
+      background: #3730a3;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #4338ca; }
+    button:active { background: #312e81; }
+    .status {
+      margin-top: 8px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      min-height: 28px;
+    }
+    .status.idle    { background: #2a2a2a; color: #888; border: 1px solid #404040; }
+    .status.ok      { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+    .status.error   { background: #2d0a0a; color: #f87171; border: 1px solid #7f1d1d; }
+    .divider { border: none; border-top: 1px solid #333; margin: 14px 0; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Global: relay connection ────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Relay Connection</div>
+
+    <label>Relay URL</label>
+    <input type="text" id="relayUrl" placeholder="https://relay.yourdomain.com" autocomplete="off" />
+
+    <label>Control Token</label>
+    <input type="password" id="token" placeholder="Paste from Settings → Stream Deck tab" autocomplete="off" />
+
+    <button id="connectBtn">Connect &amp; Save</button>
+    <div id="status" class="status idle">Not connected</div>
+  </div>
+
+  <!-- ── Per-action: Score settings (shown only for score action) ───── -->
+  <div id="scoreSection" style="display:none">
+    <hr class="divider" />
+    <div class="section-title">Score Button</div>
+
+    <label>Team</label>
+    <select id="team">
+      <option value="home">Home</option>
+      <option value="visitor">Visitor</option>
+    </select>
+
+    <label>Points per press</label>
+    <select id="delta">
+      <option value="-2">−2</option>
+      <option value="-1">−1</option>
+      <option value="1">+1</option>
+      <option value="2">+2</option>
+      <option value="5">+5</option>
+    </select>
+  </div>
+
+  <!-- ── Per-action: Period settings (shown only for period action) ─── -->
+  <div id="periodSection" style="display:none">
+    <hr class="divider" />
+    <div class="section-title">Period Button</div>
+
+    <label>Direction</label>
+    <select id="direction">
+      <option value="next">▶ Next period</option>
+      <option value="prev">◀ Previous period</option>
+    </select>
+  </div>
+
+<script>
+  var ws = null;
+  var uuid = null;
+  var actionUUID = "";
+  var globalSettings = {};
+  var actionSettings = {};
+
+  function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, inInfo) {
+    uuid = inUUID;
+    try { actionUUID = JSON.parse(inInfo).action || ""; } catch (_) {}
+
+    // Show per-action sections based on which action opened this PI
+    if (actionUUID.indexOf("score") !== -1)  document.getElementById("scoreSection").style.display = "block";
+    if (actionUUID.indexOf("period") !== -1) document.getElementById("periodSection").style.display = "block";
+
+    ws = new WebSocket("ws://127.0.0.1:" + port);
+
+    ws.onopen = function () {
+      send({ event: registerEvent, uuid: uuid });
+      send({ event: "getSettings", context: uuid });
+      send({ event: "getGlobalSettings", context: uuid });
+    };
+
+    ws.onmessage = function (evt) {
+      var msg = JSON.parse(evt.data);
+
+      if (msg.event === "didReceiveGlobalSettings") {
+        globalSettings = msg.payload.settings || {};
+        document.getElementById("relayUrl").value = globalSettings.relayUrl || "";
+        document.getElementById("token").value = globalSettings.token ? "••••••••" : "";
+        if (globalSettings.connected) {
+          setStatus("ok", "Connected — " + (globalSettings.orgId || "").slice(0, 12) + "…");
+        }
+      }
+
+      if (msg.event === "didReceiveSettings") {
+        actionSettings = msg.payload.settings || {};
+        var teamEl = document.getElementById("team");
+        var deltaEl = document.getElementById("delta");
+        var dirEl = document.getElementById("direction");
+        if (teamEl) teamEl.value = actionSettings.team || "home";
+        if (deltaEl) deltaEl.value = String(actionSettings.delta != null ? actionSettings.delta : 1);
+        if (dirEl) dirEl.value = actionSettings.direction || "next";
+      }
+    };
+
+    // Save global settings on Connect click (also verifies credentials live)
+    document.getElementById("connectBtn").addEventListener("click", function () {
+      var relayUrl = document.getElementById("relayUrl").value.trim();
+      var rawToken = document.getElementById("token").value.trim();
+      // If the field still shows the masked placeholder, reuse the stored token
+      var token = rawToken === "••••••••" ? (globalSettings.token || "") : rawToken;
+
+      if (!relayUrl || !token) {
+        setStatus("error", "Relay URL and token are required");
+        return;
+      }
+      setStatus("idle", "Connecting…");
+
+      fetch(relayUrl.replace(/\/$/, "") + "/api/me", {
+        headers: { "x-control-secret": token },
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          globalSettings = {
+            relayUrl: relayUrl,
+            token: token,
+            orgId: data.orgId,
+            matchId: data.matchId || null,
+            connected: true,
+          };
+          send({ event: "setGlobalSettings", context: uuid, payload: globalSettings });
+          setStatus("ok", "Connected — " + data.orgId.slice(0, 12) + "…");
+        })
+        .catch(function (err) {
+          setStatus("error", "Failed: " + err.message);
+        });
+    });
+
+    // Save per-action settings whenever score/period fields change
+    ["team", "delta"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", function () {
+        actionSettings.team  = document.getElementById("team").value;
+        actionSettings.delta = parseInt(document.getElementById("delta").value, 10);
+        send({ event: "setSettings", context: uuid, payload: actionSettings });
+      });
+    });
+
+    var dirEl = document.getElementById("direction");
+    if (dirEl) {
+      dirEl.addEventListener("change", function () {
+        actionSettings.direction = dirEl.value;
+        send({ event: "setSettings", context: uuid, payload: actionSettings });
+      });
+    }
+  }
+
+  function send(obj) { ws && ws.readyState === 1 && ws.send(JSON.stringify(obj)); }
+
+  function setStatus(type, msg) {
+    var el = document.getElementById("status");
+    el.className = "status " + type;
+    el.textContent = msg;
+  }
+</script>
+</body>
+</html>
