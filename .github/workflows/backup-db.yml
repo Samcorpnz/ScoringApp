@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           STAMP=$(date -u +%Y%m%dT%H%M%SZ)
           echo "DUMP_FILE=backup-${STAMP}.dump" >> "$GITHUB_ENV"
-          pg_dump --no-owner --no-acl --format=custom --file="backup-${STAMP}.dump" "$DATABASE_URL"
+          /usr/lib/postgresql/18/bin/pg_dump --no-owner --no-acl --format=custom --file="backup-${STAMP}.dump" "$DATABASE_URL"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
