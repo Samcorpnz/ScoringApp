@@ -87,6 +87,10 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://scorehub:scorehub@postgres:5432/scorehub}
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env — must match the relay's AUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # Auth.js v5 refuses requests whose Host header it can't otherwise
+      # verify as trusted; Vercel sets its own trust signal automatically,
+      # but this container needs it explicit or every /api/auth/* call 500s.
+      AUTH_TRUST_HOST: "true"
     depends_on:
       postgres:
         condition: service_healthy
