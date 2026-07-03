@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 import type { SportType } from "../types";
 
-// Every value in the SportType union (minus "softball", "cricket" which are
-// reserved for Phases 3–4 and intentionally have no template yet).
+// Every value in the SportType union (minus "cricket" which is
+// reserved for Phase 4 and intentionally has no template yet).
 const DROP_IN_SPORT_TYPES: SportType[] = [
   "netball", "basketball", "rugby_union", "rugby_league",
   "volleyball", "football", "handball", "hockey", "waterpolo", "tennis",
   "touch_rugby", "futsal", "pickleball", "badminton",
   "table_tennis", "floorball", "squash", "lawn_bowls",
-  "indoor_cricket",
+  "indoor_cricket", "softball",
   "custom",
 ];
 
@@ -115,6 +115,30 @@ describe("indoor_cricket matchConfig", () => {
     const values = field?.options.map(o => o.value) ?? [];
     expect(values).toContain("2");
     expect(values).toContain("5");
+  });
+});
+
+describe("softball matchConfig", () => {
+  const softball = SPORT_TEMPLATES.find(t => t.sport === "softball");
+
+  it("softball template has matchConfig and a controlPanel override", () => {
+    expect(softball?.matchConfig).toBeDefined();
+    expect(softball?.matchConfig?.length).toBeGreaterThan(0);
+    expect(softball?.controlPanel).toBeDefined();
+  });
+
+  it("softball matchConfig has a 'format' field defaulting to fastpitch", () => {
+    const field = softball?.matchConfig?.find(f => f.key === "format");
+    expect(field).toBeDefined();
+    expect(field?.type).toBe("select");
+    expect(field?.defaultValue).toBe("fastpitch");
+  });
+
+  it("format options include fastpitch and slowpitch", () => {
+    const field = softball?.matchConfig?.find(f => f.key === "format");
+    const values = field?.options.map(o => o.value) ?? [];
+    expect(values).toContain("fastpitch");
+    expect(values).toContain("slowpitch");
   });
 });
 

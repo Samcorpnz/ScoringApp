@@ -17,7 +17,7 @@ import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatClockDisplay, formatScore } from "../../types";
-import { getTemplate } from "../../sport-templates";
+import { getPeriodLabel } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -114,7 +114,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName, possession } = state;
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
-  const periodLabel  = getTemplate(state.sport).periodLabel;
+  const periodLabel  = getPeriodLabel(state);
 
   return (
     <div className="flex h-full">
@@ -179,7 +179,7 @@ function TeamSide({ team, side, possession, relayUrl, scoreText }: { team: TeamS
 
 function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchState>["state"]; relayUrl: string }) {
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName } = state;
-  const periodLabel = getTemplate(state.sport).periodLabel;
+  const periodLabel = getPeriodLabel(state);
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex items-center justify-center" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -202,7 +202,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
-  const { periodLabel } = getTemplate(state.sport);
+  const periodLabel = getPeriodLabel(state);
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
       {state.matchName && (

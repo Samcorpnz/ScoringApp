@@ -11,12 +11,12 @@ import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { formatClockDisplay, formatScore } from "../../types";
-import { getTemplate } from "../../sport-templates";
+import { getPeriodLabel } from "../../sport-templates";
 
 export default function OverlayDisplay() {
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
-  const { periodLabel } = getTemplate(state.sport);
+  const periodLabel = getPeriodLabel(state);
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 

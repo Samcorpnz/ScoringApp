@@ -7,11 +7,12 @@
 | Phase 0 | Refactor + Architecture | ✅ Complete (commit d4cc37f) |
 | Phase 1 | 8 drop-in sports | ✅ Complete (commit d4cc37f) |
 | Phase 2 | Indoor Cricket | ✅ Complete |
-| Phase 3 | Softball | ⬜ Not started |
+| Phase 3 | Softball | ✅ Complete |
 | Phase 4 | Cricket | ⬜ Not started |
 
 Test counts after Phase 0+1: **85 relay tests, 125 frontend tests, all green.**
 Test counts after Phase 2: **85 relay tests, 135 frontend tests, all green.**
+Test counts after Phase 3: **85 relay tests, 145 frontend tests, all green.**
 
 ---
 
@@ -191,7 +192,7 @@ Needs a **secondary per-team counter** (wickets) displayed alongside runs, and a
 
 ---
 
-## Phase 3: Softball (~3–4 days)
+## Phase 3: Softball ✅
 
 Needs a dedicated half-inning control UI: outs, balls, strikes, inning tracker.
 
@@ -219,12 +220,18 @@ Needs a dedicated half-inning control UI: outs, balls, strikes, inning tracker.
 - "3 Outs / End Half-Inning" action — clears outs, flips top/bottom, advances inning
 - Run scoring: same as other sports (+1)
 
-### Files to change (beyond standard 4)
-- `packages/types/sports/softball.ts` — `SoftballState` type (already scaffolded)
-- New `SoftballTab.tsx` component registered via `controlPanel` plugin in template
-- `relay/src/server.ts` — softball event handlers (ball, strike, out, next-batter, half-inning change)
-- Match creation flow — format picker via `matchConfig`
-- Scoreboard display — show inning + half above score
+### What was built
+1. `packages/types/sports/softball.ts` — `SoftballState` type (was already scaffolded), re-exported from `frontend/app/types.ts`
+2. `frontend/app/sport-templates.ts` — `softball` template (`periodLabel: "INNING"`, `scoreIncrements: [1]`, `matchConfig` format selector: fastpitch [default] / slowpitch) with `controlPanel: SoftballTab`
+3. `frontend/app/control/components/SoftballTab.tsx` — dedicated panel (registered via the `controlPanel` plugin, so the generic `ScoreTab` is bypassed entirely for softball): Ball/Strike/Out/Next Batter buttons, auto walk-on-4-balls and out-on-3-strikes, auto half-inning flip (top→bottom) / inning advance (bottom→top) on 3rd out, mercy-rule hint (fastpitch, run diff ≥ 8, inning ≥ 6). All state changes go through the existing generic `push()` — no new relay events, same pattern as indoor cricket's wicket counter.
+4. `frontend/app/sport-templates.ts` — added `getPeriodLabel(state)` helper: returns "TOP"/"BOT" for softball (derived from `sportState.inningHalf`), falls back to the static `periodLabel` for every other sport. Wired into the 5 display pages (basic, advanced, fullscreen × 3 layouts, overlay, scorebug) in place of the old `getTemplate(state.sport).periodLabel` lookup.
+5. `relay/src/server.ts` — added `softball: 0` to `SPORT_DEFAULT_CLOCK` (softball tracks innings, not a countdown/countup clock)
+6. No relay schema changes needed — `softball` was already in the Zod `sportSchema` enum and `sportState`/`sportConfig` are passthrough
+7. Tests: `frontend/app/__tests__/sportTemplates.test.ts` (matchConfig coverage) and new `frontend/app/__tests__/getPeriodLabel.test.ts`
+
+### Not built (deliberately out of scope for this pass)
+- Dedicated relay-side ball/strike/out event handlers — the generic `manualUpdate` socket patch already covers this, consistent with indoor cricket
+- Mercy-rule auto-ending the match — only a visual hint is shown; ending is still a manual operator action
 
 ---
 

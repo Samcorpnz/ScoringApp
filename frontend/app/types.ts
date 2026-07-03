@@ -9,6 +9,8 @@ export type {
   DisplayTheme,
   MatchState,
   IndoorCricketState,
+  SoftballState,
+  SoftballFormat,
 } from "@scorehub/types";
 
 import type { MatchState } from "@scorehub/types";

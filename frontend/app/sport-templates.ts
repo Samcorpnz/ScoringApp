@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
-import type { SportType, Possession, MatchState } from "./types";
+import type { SportType, Possession, MatchState, SoftballState } from "./types";
+import { SoftballTab } from "./control/components/SoftballTab";
 
 export interface ControlPanelProps {
   state: MatchState;
@@ -302,6 +303,31 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     ],
   },
   {
+    sport: "softball",
+    label: "Softball",
+    structure: "7 innings (fastpitch)",
+    periods: 7,
+    periodLabel: "INNING",
+    clockSeconds: 0,
+    countDown: false,
+    timeoutsPerTeam: 0,
+    defaultPossession: "none",
+    scoreIncrements: [1],
+    controlPanel: SoftballTab,
+    matchConfig: [
+      {
+        key: "format",
+        label: "Format",
+        type: "select",
+        options: [
+          { value: "fastpitch", label: "Fastpitch", description: "WBSC international — 7 innings" },
+          { value: "slowpitch", label: "Slowpitch", description: "Community/social — 6 innings" },
+        ],
+        defaultValue: "fastpitch",
+      },
+    ],
+  },
+  {
     sport: "custom",
     label: "Custom",
     structure: "2 periods × 10:00",
@@ -317,4 +343,14 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
 
 export function getTemplate(sport: SportType): SportTemplate {
   return SPORT_TEMPLATES.find(t => t.sport === sport) ?? SPORT_TEMPLATES[SPORT_TEMPLATES.length - 1];
+}
+
+// Softball shows "TOP n" / "BOT n" instead of the static periodLabel (e.g. "INNING")
+// since which half of the inning it is matters more to viewers than the label itself.
+export function getPeriodLabel(state: MatchState): string {
+  if (state.sport === "softball") {
+    const sportState = state.sportState as SoftballState | undefined;
+    return sportState?.inningHalf === "bottom" ? "BOT" : "TOP";
+  }
+  return getTemplate(state.sport).periodLabel;
 }

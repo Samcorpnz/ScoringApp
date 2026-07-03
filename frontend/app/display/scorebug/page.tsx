@@ -17,7 +17,7 @@ import { useMatchState } from "../../hooks/useMatchState";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { formatClockDisplay, formatScore } from "../../types";
-import { getTemplate } from "../../sport-templates";
+import { getPeriodLabel } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -38,7 +38,7 @@ function Scorebug() {
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
-  const { periodLabel } = getTemplate(state.sport);
+  const periodLabel = getPeriodLabel(state);
 
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";

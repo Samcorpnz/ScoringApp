@@ -7,7 +7,7 @@ import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, NetballMatchStats, NetballPlayerStats, NetballTeamStats, formatScore } from "../../types";
-import { getTemplate } from "../../sport-templates";
+import { getPeriodLabel } from "../../sport-templates";
 
 export default function AdvancedDisplay() {
   const { state, status, relayUnreachable } = useMatchState();
@@ -54,7 +54,7 @@ export default function AdvancedDisplay() {
               countDown={state.countDown}
               period={state.period}
               periodBreak={state.periodBreak}
-              periodLabel={getTemplate(state.sport).periodLabel}
+              periodLabel={getPeriodLabel(state)}
               isRunning={state.isRunning}
               hornActive={state.hornActive}
             />

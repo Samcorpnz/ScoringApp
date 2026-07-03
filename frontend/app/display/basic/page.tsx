@@ -5,7 +5,7 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { getTemplate } from "../../sport-templates";
+import { getPeriodLabel } from "../../sport-templates";
 import { formatScore } from "../../types";
 
 export default function BasicDisplay() {
@@ -67,7 +67,7 @@ export default function BasicDisplay() {
             countDown={state.countDown}
             period={state.period}
             periodBreak={state.periodBreak}
-            periodLabel={getTemplate(state.sport).periodLabel}
+            periodLabel={getPeriodLabel(state)}
             isRunning={state.isRunning}
             hornActive={state.hornActive}
             matchName={state.matchName}

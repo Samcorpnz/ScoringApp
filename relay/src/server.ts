@@ -595,7 +595,7 @@ export function createServer(options: ServerOptions = {}) {
     volleyball: 0, football: 0, handball: 1800, hockey: 900, waterpolo: 480,
     tennis: 0, touch_rugby: 2400, futsal: 1200, pickleball: 0, badminton: 0,
     table_tennis: 0, floorball: 1200, squash: 0, lawn_bowls: 0,
-    indoor_cricket: 0, custom: 600,
+    indoor_cricket: 0, softball: 0, custom: 600,
   };
 
   // Sports where scores reset to 0 when a period/set/game ends (e.g. volleyball, tennis).
