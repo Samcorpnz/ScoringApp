@@ -1,4 +1,7 @@
-import { matchStatePatchSchema, matchStateSchema } from "../schemas";
+import {
+  matchStatePatchSchema, matchStateSchema,
+  cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
+} from "../schemas";
 
 const ALL_SPORT_TYPES = [
   "netball", "basketball", "rugby_union", "rugby_league",
@@ -51,6 +54,51 @@ describe("sportState passthrough", () => {
       sportState: { sport: "cricket", innings: [{ battingTeam: "home", runs: 43, wickets: 2 }] },
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("cricket event schemas", () => {
+  it("accepts a normal ball", () => {
+    const result = cricketBallEventSchema.safeParse({ battingTeam: "home", runs: 4, isWicket: false });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a wicket ball with wicketType and nextBatterIndex", () => {
+    const result = cricketBallEventSchema.safeParse({
+      battingTeam: "home", runs: 0, isWicket: true, wicketType: "bowled", nextBatterIndex: 3,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects runs above 6", () => {
+    const result = cricketBallEventSchema.safeParse({ battingTeam: "home", runs: 7, isWicket: false });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown wicketType", () => {
+    const result = cricketBallEventSchema.safeParse({ battingTeam: "home", runs: 0, isWicket: true, wicketType: "caught_behind" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing battingTeam", () => {
+    const result = cricketBallEventSchema.safeParse({ runs: 1, isWicket: false });
+    expect(result.success).toBe(false);
+  });
+
+  it("cricketOverCompleteEventSchema accepts an empty object and a nextBowlerIndex", () => {
+    expect(cricketOverCompleteEventSchema.safeParse({}).success).toBe(true);
+    expect(cricketOverCompleteEventSchema.safeParse({ nextBowlerIndex: 2 }).success).toBe(true);
+  });
+
+  it("cricketInningsChangeEventSchema requires battingTeam and accepts an optional target", () => {
+    expect(cricketInningsChangeEventSchema.safeParse({ battingTeam: "visitor" }).success).toBe(true);
+    expect(cricketInningsChangeEventSchema.safeParse({ battingTeam: "visitor", target: 180 }).success).toBe(true);
+    expect(cricketInningsChangeEventSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("cricketDeclareEventSchema requires battingTeam", () => {
+    expect(cricketDeclareEventSchema.safeParse({ battingTeam: "home" }).success).toBe(true);
+    expect(cricketDeclareEventSchema.safeParse({}).success).toBe(false);
   });
 });
 

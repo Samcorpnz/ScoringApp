@@ -31,7 +31,10 @@ function ControlPanelInner() {
   const router = useRouter();
   const matchId = useSearchParams().get("matchId") ?? undefined;
   const controlToken = useControlToken(matchId);
-  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl } = useMatchState({ secret: controlToken, role: "control" });
+  const {
+    state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
+    sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+  } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -193,7 +196,18 @@ function ControlPanelInner() {
 
       {/* Tab content */}
       <div className="p-6 max-w-5xl" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} sendUndo={sendUndo} />}
+        {tab === "score"    && (
+          <ScoreTab
+            state={state}
+            push={push}
+            sendReset={sendReset}
+            sendUndo={sendUndo}
+            sendCricketBall={sendCricketBall}
+            sendCricketOverComplete={sendCricketOverComplete}
+            sendCricketInningsChange={sendCricketInningsChange}
+            sendCricketDeclare={sendCricketDeclare}
+          />
+        )}
         {tab === "outputs"  && <OutputsTab  />}
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}

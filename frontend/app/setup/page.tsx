@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
-import type { SportType } from "../types";
+import type { SportType, CricketInningsState } from "../types";
 import { useControlToken } from "../hooks/useControlToken";
 import { useMatchState } from "../hooks/useMatchState";
+import { CricketSquadSetup, emptySquad } from "../control/components/CricketSquadSetup";
 
-type SetupState = "form" | "provisioning" | "applying" | "upgrade-required" | "error";
+type SetupState = "form" | "squad-entry" | "provisioning" | "applying" | "upgrade-required" | "error";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function SetupPage() {
   const [sportConfig, setSportConfig] = useState<Record<string, string>>({});
   const [state, setState] = useState<SetupState>("form");
   const [message, setMessage] = useState("");
+  const [homeSquad, setHomeSquad] = useState<string[]>(emptySquad());
+  const [visitorSquad, setVisitorSquad] = useState<string[]>(emptySquad());
 
   const [matchId, setMatchId] = useState<string | null>(null);
   const controlToken = useControlToken(matchId ?? undefined);
@@ -49,6 +52,12 @@ export default function SetupPage() {
   useEffect(() => {
     if (state !== "applying" || connStatus !== "connected") return;
     const template = getTemplate(sport);
+    const freshInnings: CricketInningsState = {
+      battingTeam: "home", runs: 0, wickets: 0, oversComplete: 0, ballsThisOver: 0,
+      extras: { wides: 0, noBalls: 0, byes: 0, legByes: 0, penalties: 0 },
+      batters: [], bowlers: [], currentBatter1Index: 0, currentBatter2Index: 1, currentBowlerIndex: 0,
+      thisOverBalls: [],
+    };
     sendManualUpdate({
       sport,
       matchName: matchName.trim(),
@@ -59,6 +68,16 @@ export default function SetupPage() {
       home: { ...matchState.home, name: homeName.trim() },
       visitor: { ...matchState.visitor, name: visitorName.trim() },
       ...(Object.keys(sportConfig).length > 0 && { sportConfig }),
+      ...(sport === "cricket" && {
+        sportState: {
+          sport: "cricket",
+          format: (sportConfig.format as "t20" | "odi" | "test") ?? "t20",
+          inningsNumber: 1,
+          innings: [freshInnings],
+          homeSquad: homeSquad.filter(n => n.trim()).map((name, id) => ({ id, name: name.trim() })),
+          visitorSquad: visitorSquad.filter(n => n.trim()).map((name, id) => ({ id, name: name.trim() })),
+        },
+      }),
     });
     router.push(`/control?matchId=${matchId}`);
   }, [state, connStatus]);
@@ -198,12 +217,25 @@ export default function SetupPage() {
             <button
               className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={handleSubmit}
+              onClick={() => sport === "cricket" ? setState("squad-entry") : handleSubmit()}
               disabled={!orgId}
             >
-              Start Match →
+              {sport === "cricket" ? "Next: Squads →" : "Start Match →"}
             </button>
           </div>
+        )}
+
+        {state === "squad-entry" && (
+          <CricketSquadSetup
+            homeTeamName={homeName}
+            visitorTeamName={visitorName}
+            homeSquad={homeSquad}
+            visitorSquad={visitorSquad}
+            onChangeHome={(idx, name) => setHomeSquad(prev => prev.map((n, i) => i === idx ? name : n))}
+            onChangeVisitor={(idx, name) => setVisitorSquad(prev => prev.map((n, i) => i === idx ? name : n))}
+            onBack={() => setState("form")}
+            onSubmit={handleSubmit}
+          />
         )}
       </div>
     </div>

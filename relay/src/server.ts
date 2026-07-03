@@ -14,7 +14,11 @@ import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, LEGACY_ROO
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
-import { matchStatePatchSchema, matchStateSchema } from "./schemas";
+import {
+  matchStatePatchSchema, matchStateSchema,
+  cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
+} from "./schemas";
+import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
 import { captureException } from "./sentry";
 
 export interface ServerOptions {
@@ -595,7 +599,7 @@ export function createServer(options: ServerOptions = {}) {
     volleyball: 0, football: 0, handball: 1800, hockey: 900, waterpolo: 480,
     tennis: 0, touch_rugby: 2400, futsal: 1200, pickleball: 0, badminton: 0,
     table_tennis: 0, floorball: 1200, squash: 0, lawn_bowls: 0,
-    indoor_cricket: 0, softball: 0, custom: 600,
+    indoor_cricket: 0, softball: 0, cricket: 0, custom: 600,
   };
 
   // Sports where scores reset to 0 when a period/set/game ends (e.g. volleyball, tennis).
@@ -798,6 +802,62 @@ export function createServer(options: ServerOptions = {}) {
         setState(orgId, next, matchId);
         const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", next);
+      });
+
+      socket.on("cricket:ball", async (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = cricketBallEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed cricket:ball from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const current = await getState(orgId, matchId);
+        const nextSportState = applyCricketBall(current, parsed.data);
+        await applyManualUpdate(orgId, { sportState: nextSportState }, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { sportState: nextSportState });
+      });
+
+      socket.on("cricket:overComplete", async (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = cricketOverCompleteEventSchema.safeParse(rawPayload ?? {});
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed cricket:overComplete from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const current = await getState(orgId, matchId);
+        const nextSportState = applyOverComplete(current, parsed.data);
+        await applyManualUpdate(orgId, { sportState: nextSportState }, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { sportState: nextSportState });
+      });
+
+      socket.on("cricket:inningsChange", async (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = cricketInningsChangeEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed cricket:inningsChange from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const current = await getState(orgId, matchId);
+        const nextSportState = applyInningsChange(current, parsed.data);
+        await applyManualUpdate(orgId, { sportState: nextSportState }, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { sportState: nextSportState });
+      });
+
+      socket.on("cricket:declare", async (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = cricketDeclareEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed cricket:declare from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const current = await getState(orgId, matchId);
+        const nextSportState = applyDeclare(current, parsed.data);
+        await applyManualUpdate(orgId, { sportState: nextSportState }, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { sportState: nextSportState });
       });
 
       socket.on("undo", async () => {

@@ -1,12 +1,17 @@
 import type { ComponentType } from "react";
-import type { SportType, Possession, MatchState, SoftballState } from "./types";
+import type { SportType, Possession, MatchState, SoftballState, CricketState, CricketBallEvent } from "./types";
 import { SoftballTab } from "./control/components/SoftballTab";
+import { CricketTab } from "./control/components/CricketTab";
 
 export interface ControlPanelProps {
   state: MatchState;
   push: (p: Partial<MatchState>) => void;
   sendReset: () => void;
   sendUndo: () => void;
+  sendCricketBall: (payload: CricketBallEvent) => void;
+  sendCricketOverComplete: (payload: { nextBowlerIndex?: number }) => void;
+  sendCricketInningsChange: (payload: { battingTeam: "home" | "visitor"; target?: number }) => void;
+  sendCricketDeclare: (payload: { battingTeam: "home" | "visitor" }) => void;
 }
 
 export interface ConfigFieldOption {
@@ -328,6 +333,32 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     ],
   },
   {
+    sport: "cricket",
+    label: "Cricket",
+    structure: "T20 / ODI / Test",
+    periods: 1,
+    periodLabel: "INNINGS",
+    clockSeconds: 0,
+    countDown: false,
+    timeoutsPerTeam: 0,
+    defaultPossession: "none",
+    scoreIncrements: [1, 2, 3, 4, 6],
+    controlPanel: CricketTab,
+    matchConfig: [
+      {
+        key: "format",
+        label: "Format",
+        type: "select",
+        options: [
+          { value: "t20", label: "T20", description: "20 overs per side" },
+          { value: "odi", label: "ODI", description: "50 overs per side" },
+          { value: "test", label: "Test", description: "Up to 2 innings per side, multi-day" },
+        ],
+        defaultValue: "t20",
+      },
+    ],
+  },
+  {
     sport: "custom",
     label: "Custom",
     structure: "2 periods × 10:00",
@@ -351,6 +382,12 @@ export function getPeriodLabel(state: MatchState): string {
   if (state.sport === "softball") {
     const sportState = state.sportState as SoftballState | undefined;
     return sportState?.inningHalf === "bottom" ? "BOT" : "TOP";
+  }
+  if (state.sport === "cricket") {
+    const cricket = state.sportState as CricketState | undefined;
+    const n = cricket?.inningsNumber ?? 1;
+    const ordinal = n === 1 ? "1ST" : n === 2 ? "2ND" : n === 3 ? "3RD" : `${n}TH`;
+    return `${ordinal} INNINGS`;
   }
   return getTemplate(state.sport).periodLabel;
 }

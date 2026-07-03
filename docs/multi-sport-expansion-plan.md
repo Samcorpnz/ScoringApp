@@ -8,11 +8,12 @@
 | Phase 1 | 8 drop-in sports | ✅ Complete (commit d4cc37f) |
 | Phase 2 | Indoor Cricket | ✅ Complete |
 | Phase 3 | Softball | ✅ Complete |
-| Phase 4 | Cricket | ⬜ Not started |
+| Phase 4 | Cricket | ✅ Complete |
 
 Test counts after Phase 0+1: **85 relay tests, 125 frontend tests, all green.**
 Test counts after Phase 2: **85 relay tests, 135 frontend tests, all green.**
 Test counts after Phase 3: **85 relay tests, 145 frontend tests, all green.**
+Test counts after Phase 4: **123 relay tests, 156 frontend tests, all green.**
 
 ---
 
@@ -268,6 +269,51 @@ Wicket type selector: Bowled / Caught / LBW / Run Out / Stumped / Hit Wicket / H
 - `relay/src/server.ts` — cricket event handlers (ball-by-ball, over complete, innings change, declare, follow-on)
 - `frontend/app/display/cricket/page.tsx` — dedicated cricket scoreboard layout
 - Test-specific: session tracking (morning/afternoon/evening), day number, declarations, follow-on trigger
+
+### What was built
+
+Unlike Phases 2–3, Cricket uses **dedicated relay socket events** rather than the generic
+`manualUpdate` passthrough — a deliberate departure, since ball-by-ball state transitions are
+complex enough to warrant server-side validation and pure transition functions.
+
+1. `packages/types/sports/cricket.ts` — `CricketState` (already scaffolded) extended with
+   `thisOverBalls` (last-over dot summary), `declared`, `dayNumber`/`session` (Test), and a new
+   `CricketBallEvent` wire-payload type.
+2. `relay/src/schemas.ts` — Zod schemas for the four new events (`cricketBallEventSchema`,
+   `cricketOverCompleteEventSchema`, `cricketInningsChangeEventSchema`,
+   `cricketDeclareEventSchema`), bounded per the existing SA-5 convention.
+3. `relay/src/cricket.ts` — pure state-transition functions (`applyCricketBall`,
+   `applyOverComplete`, `applyInningsChange`, `applyDeclare`, `isFollowOnEligible`): runs/extras
+   accounting (wide/no-ball/bye/leg-bye), wicket bookkeeping, strike rotation, automatic over
+   completion, innings-change with auto-computed chase target, and Test follow-on eligibility
+   (200-run deficit threshold). Maiden overs are auto-detected (`runsConcededThisOver` tracks
+   every run source — bat, byes, leg-byes, wides, no-balls — reset per over; zero at over
+   completion credits the bowler) and free hits are modelled (`CricketInningsState.freeHit` is
+   set after a no-ball and nullifies the next dismissal unless it's a run out), both surfaced in
+   `CricketTab` and the dedicated display page.
+4. `relay/src/server.ts` — four new socket handlers (`cricket:ball`, `cricket:overComplete`,
+   `cricket:inningsChange`, `cricket:declare`) following the existing `assertController` →
+   `safeParse` → pure-fn → `applyManualUpdate` boilerplate, so undo/persistence/broadcast stay
+   on the one shared path every other mutation uses. `cricket: 0` added to `SPORT_DEFAULT_CLOCK`.
+5. `frontend/app/sport-templates.ts` — `cricket` template with a `matchConfig` format selector
+   (t20/odi/test, default t20) and `controlPanel: CricketTab`; `getPeriodLabel` gets an ordinal
+   "1ST/2ND/3RD INNINGS" branch for the 5 generic display pages.
+6. `frontend/app/control/components/CricketTab.tsx` — ball-by-ball panel: run buttons (0/1/2/3/4/6)
+   with a wide/no-ball/bye/leg-bye modifier row, a wicket flow (type selector + next-batter
+   picker), bowler-change picker, innings-complete flow (including the Test follow-on
+   enforce/waive choice), and Test-only declare + day/session controls.
+7. `frontend/app/control/components/CricketSquadSetup.tsx` — pre-match squad entry, inserted as
+   a new `"squad-entry"` step in `frontend/app/setup/page.tsx` between the sport-selection form
+   and match creation (not a `matchConfig` field — that mechanism only supports simple selects).
+8. `frontend/app/display/cricket/page.tsx` — dedicated scoreboard: score header with CRR,
+   target/RRR for a chasing innings, current batsmen + bowler figures, last-over ball-by-ball
+   strip.
+9. `frontend/app/types.ts` `formatScore()` — cricket branch renders the batting team's current
+   innings as "R/W".
+10. Tests: `relay/src/__tests__/cricket.test.ts` (pure-engine unit tests + live-server socket
+    integration tests, including a malformed-payload rejection test per SA-5 convention),
+    `relay/src/__tests__/schemas.test.ts` (new event-schema cases), and cricket cases added to
+    `frontend/app/__tests__/{sportTemplates,formatScore,getPeriodLabel}.test.ts`.
 
 ---
 

@@ -4,15 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { MatchState, IndoorCricketState, formatClockDisplay, formatScore } from "../../types";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { parseClock } from "../lib/parseClock";
-import { getTemplate } from "../../sport-templates";
+import { getTemplate, ControlPanelProps } from "../../sport-templates";
 import { ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } from "./primitives";
 
-export function ScoreTab({ state, push, sendReset, sendUndo }: {
-  state: MatchState;
-  push: (p: Partial<MatchState>) => void;
-  sendReset: () => void;
-  sendUndo: () => void;
-}) {
+export function ScoreTab({
+  state, push, sendReset, sendUndo,
+  sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+}: ControlPanelProps) {
   const [homeName,   setHomeName]   = useState("");
   const [visName,    setVisName]    = useState("");
   const [matchName,  setMatchName]  = useState("");
@@ -110,7 +108,13 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
 
   // Sport-specific control panel override (used by complex sports like Cricket, Softball)
   const CustomPanel = template.controlPanel;
-  if (CustomPanel) return <CustomPanel state={state} push={push} sendReset={sendReset} sendUndo={sendUndo} />;
+  if (CustomPanel) return (
+    <CustomPanel
+      state={state} push={push} sendReset={sendReset} sendUndo={sendUndo}
+      sendCricketBall={sendCricketBall} sendCricketOverComplete={sendCricketOverComplete}
+      sendCricketInningsChange={sendCricketInningsChange} sendCricketDeclare={sendCricketDeclare}
+    />
+  );
 
   return (
     <div className="space-y-6">

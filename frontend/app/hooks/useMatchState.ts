@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { MatchState, DEFAULT_MATCH_STATE } from "../types";
+import { MatchState, DEFAULT_MATCH_STATE, CricketBallEvent } from "../types";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -121,5 +121,24 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     socketRef.current?.emit("takeControl");
   };
 
-  return { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl };
+  const sendCricketBall = (payload: CricketBallEvent) => {
+    socketRef.current?.emit("cricket:ball", payload);
+  };
+
+  const sendCricketOverComplete = (payload: { nextBowlerIndex?: number }) => {
+    socketRef.current?.emit("cricket:overComplete", payload);
+  };
+
+  const sendCricketInningsChange = (payload: { battingTeam: "home" | "visitor"; target?: number }) => {
+    socketRef.current?.emit("cricket:inningsChange", payload);
+  };
+
+  const sendCricketDeclare = (payload: { battingTeam: "home" | "visitor" }) => {
+    socketRef.current?.emit("cricket:declare", payload);
+  };
+
+  return {
+    state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
+    sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+  };
 }

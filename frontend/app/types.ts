@@ -11,9 +11,17 @@ export type {
   IndoorCricketState,
   SoftballState,
   SoftballFormat,
+  CricketState,
+  CricketFormat,
+  CricketInningsState,
+  CricketBatter,
+  CricketBowler,
+  WicketType,
+  CricketBallEvent,
+  CricketSession,
 } from "@scorehub/types";
 
-import type { MatchState } from "@scorehub/types";
+import type { MatchState, CricketState } from "@scorehub/types";
 
 export { DEFAULT_DISPLAY_THEME } from "@scorehub/types";
 
@@ -56,6 +64,13 @@ export function formatScore(state: MatchState, side: "home" | "visitor"): string
     const sportState = state.sportState as { homeWickets?: number; visitorWickets?: number } | undefined;
     const wickets = side === "home" ? sportState?.homeWickets ?? 0 : sportState?.visitorWickets ?? 0;
     return `${score}/${wickets}`;
+  }
+  if (state.sport === "cricket") {
+    const cricket = state.sportState as CricketState | undefined;
+    const innings = cricket?.innings.filter(i => i.battingTeam === side);
+    const current = innings?.[innings.length - 1];
+    if (!current) return "0/0";
+    return `${current.runs}/${current.wickets}`;
   }
   return String(score);
 }

@@ -116,7 +116,16 @@ export const DEFAULT_DISPLAY_THEME: DisplayTheme = {
 
 export type { IndoorCricketState } from "./sports/indoor_cricket";
 export type { SoftballState, SoftballFormat } from "./sports/softball";
-export type { CricketState, CricketFormat, CricketInningsState, CricketBatter, CricketBowler, WicketType } from "./sports/cricket";
+export type {
+  CricketState,
+  CricketFormat,
+  CricketInningsState,
+  CricketBatter,
+  CricketBowler,
+  WicketType,
+  CricketBallEvent,
+  CricketSession,
+} from "./sports/cricket";
 
 import type { IndoorCricketState } from "./sports/indoor_cricket";
 import type { SoftballState } from "./sports/softball";

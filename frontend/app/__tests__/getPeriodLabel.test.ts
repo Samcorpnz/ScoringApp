@@ -29,4 +29,17 @@ describe("getPeriodLabel", () => {
     expect(getPeriodLabel(top)).toBe("TOP");
     expect(getPeriodLabel(bottom)).toBe("BOT");
   });
+
+  it("returns '1ST INNINGS' for cricket when sportState is not yet set", () => {
+    const state = makeState({ sport: "cricket" });
+    expect(getPeriodLabel(state)).toBe("1ST INNINGS");
+  });
+
+  it("returns the ordinal innings label for cricket based on sportState.inningsNumber", () => {
+    const state = makeState({
+      sport: "cricket",
+      sportState: { sport: "cricket", format: "test", inningsNumber: 3, innings: [], homeSquad: [], visitorSquad: [] },
+    });
+    expect(getPeriodLabel(state)).toBe("3RD INNINGS");
+  });
 });

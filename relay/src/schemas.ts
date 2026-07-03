@@ -76,3 +76,43 @@ export const matchStateSchema = z.object(matchStateFields);
 export const matchStatePatchSchema = z.object(matchStateFields).partial();
 
 export type MatchStatePatch = z.infer<typeof matchStatePatchSchema>;
+
+// Payload schemas for the dedicated cricket:* socket events. Unlike
+// indoor_cricket/softball (whole sportState pushed through the generic,
+// passthrough-validated manualUpdate patch), cricket's ball-by-ball state
+// machine runs server-side, so its wire payloads get real validation.
+const wicketTypeSchema = z.enum([
+  "bowled", "caught", "lbw", "run_out", "stumped", "hit_wicket", "obstructed_field", "handled_ball",
+]);
+
+const battingTeamSchema = z.enum(["home", "visitor"]);
+
+export const cricketBallEventSchema = z.object({
+  battingTeam: battingTeamSchema,
+  runs: z.number().int().min(0).max(6),
+  isWicket: z.boolean(),
+  wicketType: wicketTypeSchema.optional(),
+  isWide: z.boolean().optional(),
+  isNoBall: z.boolean().optional(),
+  isBye: z.boolean().optional(),
+  isLegBye: z.boolean().optional(),
+  nextBatterIndex: z.number().int().min(0).max(10).optional(),
+});
+
+export const cricketOverCompleteEventSchema = z.object({
+  nextBowlerIndex: z.number().int().min(0).max(10).optional(),
+});
+
+export const cricketInningsChangeEventSchema = z.object({
+  battingTeam: battingTeamSchema,
+  target: z.number().int().min(0).max(9999).optional(),
+});
+
+export const cricketDeclareEventSchema = z.object({
+  battingTeam: battingTeamSchema,
+});
+
+export type CricketBallEventPayload = z.infer<typeof cricketBallEventSchema>;
+export type CricketOverCompleteEventPayload = z.infer<typeof cricketOverCompleteEventSchema>;
+export type CricketInningsChangeEventPayload = z.infer<typeof cricketInningsChangeEventSchema>;
+export type CricketDeclareEventPayload = z.infer<typeof cricketDeclareEventSchema>;
