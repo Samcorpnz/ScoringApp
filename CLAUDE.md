@@ -115,8 +115,22 @@ or scraping — for sports where no physical console feeds the bridge.
 
 ## Deployment
 
-Human-gated: `.github/workflows/deploy.yml` runs the full test suite then deploys relay (Fly.io)
-and frontend (Vercel), gated behind a `production` GitHub Environment with required reviewers.
-Fly.io's and Vercel's own git-push auto-deploy must stay disabled in their dashboards — otherwise
-every push deploys immediately, bypassing this gate. `AUTH_SECRET` must be identical between relay
-and frontend deployments (it's the shared JWT signing key for control tokens).
+Human-gated: `.github/workflows/deploy.yml` triggers on every push to `main`, runs the full test
+suite, then deploys relay (Fly.io) and frontend (Vercel), gated behind the `Production` GitHub
+Environment. That environment's `required_reviewers` protection rule (added 2026-07-03, one
+reviewer: the repo owner) is what actually pauses the workflow for approval — the `environment:`
+key in the YAML alone does nothing if the environment has no protection rules configured, which
+was the case for weeks (every push deployed immediately, no gate). Check
+`gh api repos/Samcorpnz/ScoringApp/environments/production` if this ever needs re-verifying; the
+name is matched case-insensitively. Fly.io's and Vercel's own git-push auto-deploy must also stay
+disabled in their dashboards — otherwise every push deploys immediately, bypassing this gate.
+`AUTH_SECRET` must be identical between relay and frontend deployments (it's the shared JWT
+signing key for control tokens). Required-reviewer environment protection is free on GitHub for
+public repos (like this one) regardless of plan — only private repos need Team/Enterprise for it.
+
+No hosted staging environment exists — one Fly app (`scorehub-relay`) and one Vercel project
+(`scoring-app`), both wired to `main`/production only. Vercel auto-generates preview deploys for
+branches/PRs (frontend only, would still hit prod relay/DB unless given separate env vars), but
+there's no second relay instance or DB branch to pair with it. Pre-prod testing today means
+`docker compose up --build` locally (see above) — verify there, then push to `main` and approve
+the deploy gate when it pauses.
