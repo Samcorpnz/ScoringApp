@@ -40,7 +40,7 @@ const DISPLAYS = [
   },
 ];
 
-export function OutputsTab() {
+export function OutputsTab({ matchId }: { matchId?: string }) {
   const { data: session } = useSession();
   const orgId = session?.user?.activeOrgId;
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -48,7 +48,16 @@ export function OutputsTab() {
   // Display pages scope themselves to a tenant via ?org= (see useMatchState) —
   // without it the relay falls back to the legacy single-tenant room, which
   // no longer exists post-multi-tenant migration and yields no data (SA-65).
-  const withOrg = (path: string) => orgId ? `${path}?org=${orgId}` : path;
+  // ?matchId= further scopes to this specific match — without it a display
+  // falls back to the org's singleton "default" match, which is wrong (or
+  // empty) once an org has more than one match going.
+  const withOrg = (path: string) => {
+    const params = new URLSearchParams();
+    if (orgId) params.set("org", orgId);
+    if (matchId) params.set("matchId", matchId);
+    const qs = params.toString();
+    return qs ? `${path}?${qs}` : path;
+  };
 
   return (
     <div className="space-y-6">
@@ -111,7 +120,7 @@ export function OutputsTab() {
         <div className="mt-4 rounded-lg p-3 text-xs font-mono overflow-x-auto"
           style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", whiteSpace: "pre" }}>
 {`// Example: connect from any JS graphics template
-const socket = io("${RELAY_URL}", { auth: { orgId: "${orgId ?? "<your-org-id>"}" } });
+const socket = io("${RELAY_URL}", { auth: { orgId: "${orgId ?? "<your-org-id>"}"${matchId ? `, matchId: "${matchId}"` : ""} } });
 socket.on("matchStateChange", (state) => {
   // state.home.name, state.home.score, state.home.color, state.home.logoUrl
   // state.visitor.name, state.visitor.score

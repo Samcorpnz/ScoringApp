@@ -208,7 +208,7 @@ function ControlPanelInner() {
             sendCricketDeclare={sendCricketDeclare}
           />
         )}
-        {tab === "outputs"  && <OutputsTab  />}
+        {tab === "outputs"  && <OutputsTab matchId={matchId} />}
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} controlToken={controlToken} />}
