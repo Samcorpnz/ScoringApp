@@ -10,12 +10,16 @@ COPY package*.json ./
 COPY scripts ./scripts
 COPY frontend/package.json ./frontend/
 COPY packages/db/package.json ./packages/db/
+COPY packages/types/package.json ./packages/types/
 COPY relay/package.json ./relay/
 COPY bridge/package.json ./bridge/
 RUN npm ci
 
 COPY packages/db ./packages/db
 RUN npm run build --workspace=@scorehub/db
+
+COPY packages/types ./packages/types
+RUN npm run build --workspace=@scorehub/types
 
 ARG NEXT_PUBLIC_RELAY_URL
 ENV NEXT_PUBLIC_RELAY_URL=$NEXT_PUBLIC_RELAY_URL
@@ -32,6 +36,7 @@ ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/packages/db ./packages/db
+COPY --from=builder /app/packages/types ./packages/types
 COPY --from=builder /app/frontend/package.json ./frontend/
 COPY --from=builder /app/frontend/.next ./frontend/.next
 COPY --from=builder /app/frontend/public ./frontend/public

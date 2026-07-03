@@ -13,12 +13,16 @@ COPY package*.json ./
 COPY scripts ./scripts
 COPY relay/package.json ./relay/
 COPY packages/db/package.json ./packages/db/
+COPY packages/types/package.json ./packages/types/
 COPY frontend/package.json ./frontend/
 COPY bridge/package.json ./bridge/
 RUN npm ci
 
 COPY packages/db ./packages/db
 RUN npm run build --workspace=@scorehub/db
+
+COPY packages/types ./packages/types
+RUN npm run build --workspace=@scorehub/types
 
 COPY relay/tsconfig.json ./relay/
 COPY relay/src ./relay/src
@@ -40,6 +44,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/packages/db ./packages/db
+COPY --from=builder /app/packages/types ./packages/types
 COPY --from=builder /app/relay/package.json ./relay/
 COPY --from=builder /app/relay/dist ./relay/dist
 # npm's hoisting can't fully dedupe across workspaces with conflicting
