@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MatchState, formatClockDisplay } from "../../types";
+import { MatchState, IndoorCricketState, formatClockDisplay, formatScore } from "../../types";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { parseClock } from "../lib/parseClock";
 import { getTemplate } from "../../sport-templates";
@@ -32,6 +32,26 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
   const faultLabel = isBasketball ? "Fouls" : "Faults";
   const template = getTemplate(state.sport);
   const { scoreIncrements, scoreLabels } = template;
+
+  const isIndoorCricket = state.sport === "indoor_cricket";
+  const wicketPenalty = Number(state.sportConfig?.wicketPenalty ?? 5);
+  const indoorCricketState = state.sportState as IndoorCricketState | undefined;
+  const homeWickets = indoorCricketState?.homeWickets ?? 0;
+  const visitorWickets = indoorCricketState?.visitorWickets ?? 0;
+
+  function takeWicket(side: "home" | "visitor") {
+    const team = state[side];
+    push({
+      [side]: { ...team, score: Math.max(0, team.score - wicketPenalty) },
+      sportState: {
+        sport: "indoor_cricket",
+        wicketPenalty: (wicketPenalty === 2 ? 2 : 5),
+        oversPerInnings: indoorCricketState?.oversPerInnings ?? 8,
+        homeWickets: side === "home" ? homeWickets + 1 : homeWickets,
+        visitorWickets: side === "visitor" ? visitorWickets + 1 : visitorWickets,
+      },
+    } as Partial<MatchState>);
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -172,7 +192,7 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
             {state.home.name || "HOME"}
           </p>
           <p className="score-digit text-5xl" style={{ color: state.home.color || "var(--home-color)" }}>
-            {state.home.score}
+            {formatScore(state, "home")}
           </p>
         </div>
         <div className="text-center">
@@ -193,7 +213,7 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
             {state.visitor.name || "VISITOR"}
           </p>
           <p className="score-digit text-5xl" style={{ color: state.visitor.color || "var(--visitor-color)" }}>
-            {state.visitor.score}
+            {formatScore(state, "visitor")}
           </p>
         </div>
       </div>
@@ -212,6 +232,11 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
             <SmallBtn label={`Reset ${faultLabel.toLowerCase()}`}
               onClick={() => push({ home: { ...state.home, faults: 0 } })} />
           </div>
+          {isIndoorCricket && (
+            <div className="mt-2">
+              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${homeWickets}`} onClick={() => takeWicket("home")} />
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
@@ -226,6 +251,11 @@ export function ScoreTab({ state, push, sendReset, sendUndo }: {
             <SmallBtn label={`Reset ${faultLabel.toLowerCase()}`}
               onClick={() => push({ visitor: { ...state.visitor, faults: 0 } })} />
           </div>
+          {isIndoorCricket && (
+            <div className="mt-2">
+              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${visitorWickets}`} onClick={() => takeWicket("visitor")} />
+            </div>
+          )}
         </div>
       </div>
 

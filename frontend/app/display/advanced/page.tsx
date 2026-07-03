@@ -6,7 +6,7 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { TeamState, Possession, NetballMatchStats, NetballPlayerStats, NetballTeamStats } from "../../types";
+import { TeamState, Possession, NetballMatchStats, NetballPlayerStats, NetballTeamStats, formatScore } from "../../types";
 import { getTemplate } from "../../sport-templates";
 
 export default function AdvancedDisplay() {
@@ -44,7 +44,7 @@ export default function AdvancedDisplay() {
 
         {/* Main scoreboard row */}
         <div className="flex items-stretch">
-          <TeamColumn team={state.home} side="home" possession={state.possession} />
+          <TeamColumn team={state.home} side="home" possession={state.possession} scoreText={formatScore(state, "home")} />
           <div
             className="flex flex-col items-center justify-center px-10 py-8 flex-shrink-0"
             style={{ borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
@@ -59,7 +59,7 @@ export default function AdvancedDisplay() {
               hornActive={state.hornActive}
             />
           </div>
-          <TeamColumn team={state.visitor} side="visitor" possession={state.possession} />
+          <TeamColumn team={state.visitor} side="visitor" possession={state.possession} scoreText={formatScore(state, "visitor")} />
         </div>
 
         {/* Netball stats section */}
@@ -85,18 +85,19 @@ export default function AdvancedDisplay() {
 // ─── Score column ─────────────────────────────────────────────────────────────
 
 function TeamColumn({
-  team, side, possession,
+  team, side, possession, scoreText,
 }: {
   team: TeamState;
   side: "home" | "visitor";
   possession: Possession;
+  scoreText: string;
 }) {
   const color = side === "home" ? "var(--home-color)" : "var(--visitor-color)";
   return (
     <div className="flex-1 flex flex-col">
       <div style={{ height: 6, background: color, boxShadow: `0 0 20px ${color}66` }} />
       <div className="flex flex-col items-center justify-center py-10 px-6 flex-1">
-        <ScorePanel team={team} side={side} possession={possession} size="full" />
+        <ScorePanel team={team} side={side} possession={possession} size="full" scoreText={scoreText} />
         {team.timeouts > 0 && (
           <div className="flex gap-2 mt-4">
             {Array.from({ length: Math.max(team.timeouts, 3) }).map((_, i) => (

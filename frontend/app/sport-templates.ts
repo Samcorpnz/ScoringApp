@@ -278,6 +278,30 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     scoreIncrements: [1, 2, 3, 4],
   },
   {
+    sport: "indoor_cricket",
+    label: "Indoor Cricket",
+    structure: "2 × 8-over innings",
+    periods: 2,
+    periodLabel: "INNINGS",
+    clockSeconds: 0,
+    countDown: false,
+    timeoutsPerTeam: 0,
+    defaultPossession: "none",
+    scoreIncrements: [1, 2, 4, 6],
+    matchConfig: [
+      {
+        key: "wicketPenalty",
+        label: "Wicket Penalty",
+        type: "select",
+        options: [
+          { value: "5", label: "-5 runs", description: "Cricket NZ standard" },
+          { value: "2", label: "-2 runs", description: "ICF international" },
+        ],
+        defaultValue: "5",
+      },
+    ],
+  },
+  {
     sport: "custom",
     label: "Custom",
     structure: "2 periods × 10:00",

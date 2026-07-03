@@ -16,7 +16,7 @@ import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { TeamState, Possession, formatClockDisplay } from "../../types";
+import { TeamState, Possession, formatClockDisplay, formatScore } from "../../types";
 import { getTemplate } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
@@ -119,7 +119,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
   return (
     <div className="flex h-full">
       {/* Home side */}
-      <TeamSide team={home} side="home" possession={possession} relayUrl={relayUrl} />
+      <TeamSide team={home} side="home" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "home")} />
 
       {/* Center divider with clock */}
       <div
@@ -130,12 +130,12 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
       </div>
 
       {/* Visitor side */}
-      <TeamSide team={visitor} side="visitor" possession={possession} relayUrl={relayUrl} />
+      <TeamSide team={visitor} side="visitor" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
     </div>
   );
 }
 
-function TeamSide({ team, side, possession, relayUrl }: { team: TeamState; side: "home" | "visitor"; possession: Possession; relayUrl: string }) {
+function TeamSide({ team, side, possession, relayUrl, scoreText }: { team: TeamState; side: "home" | "visitor"; possession: Possession; relayUrl: string; scoreText: string }) {
   const color = team.color || (side === "home" ? "#F59E0B" : "#818CF8");
   const hasPossession = possession === side || possession === "both";
 
@@ -163,7 +163,7 @@ function TeamSide({ team, side, possession, relayUrl }: { team: TeamState; side:
         {team.name}
       </p>
       <p className="score-digit" style={{ fontSize: "calc(12rem * var(--text-scale, 1))", color, textShadow: `0 0 80px ${color}33`, lineHeight: 0.9 }}>
-        {team.score}
+        {scoreText}
       </p>
       {(team.faults > 0 || team.timeouts > 0) && (
         <div className="flex gap-6 text-sm" style={{ color: "var(--text-dim)" }}>
@@ -183,13 +183,13 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex items-center justify-center" style={{ borderBottom: "1px solid var(--border)" }}>
-        <TeamSide team={home} side="home" possession={state.possession} relayUrl={relayUrl} />
+        <TeamSide team={home} side="home" possession={state.possession} relayUrl={relayUrl} scoreText={formatScore(state, "home")} />
       </div>
       <div className="flex items-center justify-center py-6" style={{ borderBottom: "1px solid var(--border)" }}>
         <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
       <div className="flex-1 flex items-center justify-center">
-        <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} />
+        <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
       </div>
     </div>
   );
@@ -213,7 +213,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
       <div className="flex items-center gap-16">
         <div className="text-center">
           <p className="uppercase font-bold tracking-widest mb-2" style={{ fontSize: "1rem", color: "var(--text-secondary)" }}>{home.name}</p>
-          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: homeColor, lineHeight: 0.85 }}>{home.score}</p>
+          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: homeColor, lineHeight: 0.85 }}>{formatScore(state, "home")}</p>
         </div>
         <div className="flex flex-col items-center gap-3">
           <p className="clock-digit" style={{ fontSize: "calc(5rem * var(--text-scale, 1))", color: isRunning ? "#fff" : "var(--text-secondary)" }}>
@@ -225,7 +225,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
         </div>
         <div className="text-center">
           <p className="uppercase font-bold tracking-widest mb-2" style={{ fontSize: "1rem", color: "var(--text-secondary)" }}>{visitor.name}</p>
-          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: visitorColor, lineHeight: 0.85 }}>{visitor.score}</p>
+          <p className="score-digit" style={{ fontSize: "calc(14rem * var(--text-scale, 1))", color: visitorColor, lineHeight: 0.85 }}>{formatScore(state, "visitor")}</p>
         </div>
       </div>
     </div>

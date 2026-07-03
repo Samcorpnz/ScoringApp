@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 import type { SportType } from "../types";
 
-// Every value in the SportType union (minus "indoor_cricket", "softball", "cricket"
-// which are reserved for Phases 2–4 and intentionally have no template yet).
+// Every value in the SportType union (minus "softball", "cricket" which are
+// reserved for Phases 3–4 and intentionally have no template yet).
 const DROP_IN_SPORT_TYPES: SportType[] = [
   "netball", "basketball", "rugby_union", "rugby_league",
   "volleyball", "football", "handball", "hockey", "waterpolo", "tennis",
   "touch_rugby", "futsal", "pickleball", "badminton",
   "table_tennis", "floorball", "squash", "lawn_bowls",
+  "indoor_cricket",
   "custom",
 ];
 
@@ -91,6 +92,29 @@ describe("squash matchConfig", () => {
     const values = field?.options.map(o => o.value) ?? [];
     expect(values).toContain("bo3");
     expect(values).toContain("bo5");
+  });
+});
+
+describe("indoor_cricket matchConfig", () => {
+  const indoorCricket = SPORT_TEMPLATES.find(t => t.sport === "indoor_cricket");
+
+  it("indoor_cricket template has matchConfig", () => {
+    expect(indoorCricket?.matchConfig).toBeDefined();
+    expect(indoorCricket?.matchConfig?.length).toBeGreaterThan(0);
+  });
+
+  it("indoor_cricket matchConfig has a 'wicketPenalty' field defaulting to -5", () => {
+    const field = indoorCricket?.matchConfig?.find(f => f.key === "wicketPenalty");
+    expect(field).toBeDefined();
+    expect(field?.type).toBe("select");
+    expect(field?.defaultValue).toBe("5");
+  });
+
+  it("wicketPenalty options include 2 and 5", () => {
+    const field = indoorCricket?.matchConfig?.find(f => f.key === "wicketPenalty");
+    const values = field?.options.map(o => o.value) ?? [];
+    expect(values).toContain("2");
+    expect(values).toContain("5");
   });
 });
 

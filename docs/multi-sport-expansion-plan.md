@@ -6,11 +6,12 @@
 |-------|-------------|--------|
 | Phase 0 | Refactor + Architecture | ✅ Complete (commit d4cc37f) |
 | Phase 1 | 8 drop-in sports | ✅ Complete (commit d4cc37f) |
-| Phase 2 | Indoor Cricket | ⬜ Not started |
+| Phase 2 | Indoor Cricket | ✅ Complete |
 | Phase 3 | Softball | ⬜ Not started |
 | Phase 4 | Cricket | ⬜ Not started |
 
 Test counts after Phase 0+1: **85 relay tests, 125 frontend tests, all green.**
+Test counts after Phase 2: **85 relay tests, 135 frontend tests, all green.**
 
 ---
 
@@ -166,7 +167,7 @@ Data-layer changes only. No control panel UI work.
 
 ---
 
-## Phase 2: Indoor Cricket (~2 days)
+## Phase 2: Indoor Cricket ✅
 
 Needs a **secondary per-team counter** (wickets) displayed alongside runs, and a wicket button in the control panel.
 
@@ -178,13 +179,15 @@ Needs a **secondary per-team counter** (wickets) displayed alongside runs, and a
 - Boundaries: 4 or 6 runs (some codes require batsman to physically run all boundaries)
 - Overtime: not applicable — innings is fixed overs
 
-### What needs building
-1. `packages/types/sports/indoor_cricket.ts` — `IndoorCricketState` type (already scaffolded)
-2. `packages/types/index.ts` — add `wickets` to `TeamState` (or use `sportState`)
-3. `frontend/app/sport-templates.ts` — indoor cricket template with matchConfig for wicket penalty
-4. `frontend/app/control/components/primitives.tsx` — "Wicket (-N)" button for indoor cricket
-5. Score display components — render "R/W" format when sport is `indoor_cricket`
-6. `relay/src/server.ts` — handle wicket event (decrement runs by penalty, increment wicket count)
+### What was built
+1. `packages/types/sports/indoor_cricket.ts` — `IndoorCricketState` type (was already scaffolded)
+2. `packages/types/index.ts` — wickets live on `sportState` (`homeWickets`/`visitorWickets`), no `TeamState` change needed
+3. `frontend/app/sport-templates.ts` — `indoor_cricket` template with `matchConfig` wicket-penalty selector (-5 Cricket NZ / -2 ICF, default -5)
+4. `frontend/app/control/components/ScoreTab.tsx` — "Wicket (-N) · count" button per team (generic panel, no dedicated `IndoorCricketTab`); pushes a score decrement + `sportState` patch in one `push()` call
+5. `formatScore()` in `frontend/app/types.ts` — renders "R/W" for `indoor_cricket`, plain score otherwise; wired into `ScorePanel`, the control-panel status bar, and all 5 display pages (basic, advanced, fullscreen × 3 layouts, overlay, scorebug)
+6. No new relay event: the existing generic `manualUpdate` socket patch (already schema-validated via `sportState: z.object({}).passthrough()`) carries the wicket decrement + counter update, consistent with how squash's bo3/bo5 format works
+7. `relay/src/server.ts` — added `indoor_cricket: 0` to `SPORT_DEFAULT_CLOCK`
+8. Tests: `frontend/app/__tests__/sportTemplates.test.ts` (matchConfig coverage) and `frontend/app/__tests__/formatScore.test.ts` (new)
 
 ---
 

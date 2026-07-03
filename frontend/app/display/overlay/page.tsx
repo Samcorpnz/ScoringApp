@@ -10,7 +10,7 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
-import { formatClockDisplay } from "../../types";
+import { formatClockDisplay, formatScore } from "../../types";
 import { getTemplate } from "../../sport-templates";
 
 export default function OverlayDisplay() {
@@ -50,7 +50,7 @@ export default function OverlayDisplay() {
         {/* Home team block */}
         <TeamBlock
           name={home.name || "HOME"}
-          score={home.score}
+          score={formatScore(state, "home")}
           color="var(--home-color)"
           hasPossession={possession === "home" || possession === "both"}
           align="right"
@@ -103,7 +103,7 @@ export default function OverlayDisplay() {
         {/* Visitor team block */}
         <TeamBlock
           name={visitor.name || "VISITOR"}
-          score={visitor.score}
+          score={formatScore(state, "visitor")}
           color="var(--visitor-color)"
           hasPossession={possession === "visitor" || possession === "both"}
           align="left"
@@ -117,7 +117,7 @@ function TeamBlock({
   name, score, color, hasPossession, align,
 }: {
   name: string;
-  score: number;
+  score: string;
   color: string;
   hasPossession: boolean;
   align: "left" | "right";

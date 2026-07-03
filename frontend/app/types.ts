@@ -8,7 +8,10 @@ export type {
   NetballMatchStats,
   DisplayTheme,
   MatchState,
+  IndoorCricketState,
 } from "@scorehub/types";
+
+import type { MatchState } from "@scorehub/types";
 
 export { DEFAULT_DISPLAY_THEME } from "@scorehub/types";
 
@@ -42,4 +45,15 @@ export function formatClockDisplay(seconds: number): string {
   const s = Math.floor(seconds);
   const tenths = Math.floor((seconds - s) * 10);
   return `${String(s).padStart(2, "0")}.${tenths}`;
+}
+
+// Indoor cricket displays "runs/wickets" (e.g. "87/6") instead of a plain score.
+export function formatScore(state: MatchState, side: "home" | "visitor"): string {
+  const score = state[side].score;
+  if (state.sport === "indoor_cricket") {
+    const sportState = state.sportState as { homeWickets?: number; visitorWickets?: number } | undefined;
+    const wickets = side === "home" ? sportState?.homeWickets ?? 0 : sportState?.visitorWickets ?? 0;
+    return `${score}/${wickets}`;
+  }
+  return String(score);
 }

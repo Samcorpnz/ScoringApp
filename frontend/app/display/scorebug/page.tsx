@@ -16,7 +16,7 @@ import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
-import { formatClockDisplay } from "../../types";
+import { formatClockDisplay, formatScore } from "../../types";
 import { getTemplate } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
@@ -75,7 +75,7 @@ function Scorebug() {
           {/* Home */}
           <TeamBlock
             name={home.name || "HOME"}
-            score={home.score}
+            score={formatScore(state, "home")}
             color={homeColor}
             hasPossession={possession === "home" || possession === "both"}
             logoSrc={homeLogo}
@@ -125,7 +125,7 @@ function Scorebug() {
           {/* Visitor */}
           <TeamBlock
             name={visitor.name || "VISITOR"}
-            score={visitor.score}
+            score={formatScore(state, "visitor")}
             color={visitorColor}
             hasPossession={possession === "visitor" || possession === "both"}
             logoSrc={visitorLogo}
@@ -138,7 +138,7 @@ function Scorebug() {
 }
 
 function TeamBlock({ name, score, color, hasPossession, logoSrc, side }: {
-  name: string; score: number; color: string;
+  name: string; score: string; color: string;
   hasPossession: boolean; logoSrc: string | null; side: "home" | "visitor";
 }) {
   return (

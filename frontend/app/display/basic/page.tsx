@@ -6,6 +6,7 @@ import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { getTemplate } from "../../sport-templates";
+import { formatScore } from "../../types";
 
 export default function BasicDisplay() {
   const { state, status, relayUnreachable } = useMatchState();
@@ -53,7 +54,7 @@ export default function BasicDisplay() {
 
         {/* Home team */}
         <div className="flex-1 flex justify-center py-10 pl-8">
-          <ScorePanel team={state.home} side="home" possession={state.possession} />
+          <ScorePanel team={state.home} side="home" possession={state.possession} scoreText={formatScore(state, "home")} />
         </div>
 
         {/* Divider + clock */}
@@ -75,7 +76,7 @@ export default function BasicDisplay() {
 
         {/* Visitor team */}
         <div className="flex-1 flex justify-center py-10 pr-8">
-          <ScorePanel team={state.visitor} side="visitor" possession={state.possession} />
+          <ScorePanel team={state.visitor} side="visitor" possession={state.possession} scoreText={formatScore(state, "visitor")} />
         </div>
       </div>
 

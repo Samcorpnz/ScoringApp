@@ -9,9 +9,11 @@ interface Props {
   possession: Possession;
   size?: "full" | "compact" | "scorebug";
   relayUrl?: string;
+  scoreText?: string;
 }
 
-export function ScorePanel({ team, side, possession, size = "full", relayUrl }: Props) {
+export function ScorePanel({ team, side, possession, size = "full", relayUrl, scoreText }: Props) {
+  const displayScore = scoreText ?? String(team.score);
   const color = team.color || (side === "home" ? "#F59E0B" : "#818CF8");
   const hasPossession = possession === side || possession === "both";
   const isCompact  = size === "compact";
@@ -27,7 +29,7 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
     return (
       <div className="flex items-center gap-2">
         {side === "visitor" && (
-          <span className="score-digit" style={{ fontSize: "1.8rem", color, lineHeight: 1 }}>{team.score}</span>
+          <span className="score-digit" style={{ fontSize: "1.8rem", color, lineHeight: 1 }}>{displayScore}</span>
         )}
         <div className="flex flex-col items-center" style={{ minWidth: 60 }}>
           {logoSrc ? (
@@ -45,7 +47,7 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
           </span>
         </div>
         {side === "home" && (
-          <span className="score-digit" style={{ fontSize: "1.8rem", color, lineHeight: 1 }}>{team.score}</span>
+          <span className="score-digit" style={{ fontSize: "1.8rem", color, lineHeight: 1 }}>{displayScore}</span>
         )}
       </div>
     );
@@ -89,7 +91,7 @@ export function ScorePanel({ team, side, possession, size = "full", relayUrl }: 
           textShadow: `0 0 40px ${color}44`,
         }}
       >
-        {team.score}
+        {displayScore}
       </p>
 
       {/* Possession indicator */}
