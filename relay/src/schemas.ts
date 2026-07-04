@@ -118,6 +118,19 @@ export const cricketDeclareEventSchema = z.object({
   battingTeam: battingTeamSchema,
 });
 
+// adjustScore/indoorCricket:wicket — delta-based score mutation events. The
+// relay applies these against its own authoritative in-memory state rather
+// than trusting a client-computed absolute value, closing the rapid-click
+// coalescing race that manualUpdate's absolute-patch model is prone to.
+export const scoreAdjustEventSchema = z.object({
+  side: battingTeamSchema,
+  delta: z.number().int().min(-99).max(99),
+});
+
+export const indoorCricketWicketEventSchema = z.object({
+  side: battingTeamSchema,
+});
+
 // Graphics Operator add-on scene selection. sceneType is a free-form string
 // (not an enum) deliberately — the display route's scene registry
 // (frontend/app/display/graphics/scenes/sceneRegistry.ts) is the single
@@ -135,3 +148,5 @@ export type CricketBallEventPayload = z.infer<typeof cricketBallEventSchema>;
 export type CricketOverCompleteEventPayload = z.infer<typeof cricketOverCompleteEventSchema>;
 export type CricketInningsChangeEventPayload = z.infer<typeof cricketInningsChangeEventSchema>;
 export type CricketDeclareEventPayload = z.infer<typeof cricketDeclareEventSchema>;
+export type ScoreAdjustEventPayload = z.infer<typeof scoreAdjustEventSchema>;
+export type IndoorCricketWicketEventPayload = z.infer<typeof indoorCricketWicketEventSchema>;

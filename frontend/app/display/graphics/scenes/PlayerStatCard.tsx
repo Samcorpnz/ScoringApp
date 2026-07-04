@@ -1,10 +1,12 @@
 "use client";
 
 import type { SceneProps } from "./LowerThird";
+import { formatStatLabel, orderStats } from "../../../sport-graphics-templates";
 
-// Phase A generic player stat card: resolves payload.playerId against the
-// live graphicsFeed's flattened player stats (bridge/src/graphics/feedTransform.ts).
-// No Player/roster lookup yet (Phase C) — no photo, just name + raw stats.
+// Generic player stat card: resolves payload.playerId against the live
+// graphicsFeed's flattened player stats (bridge/src/graphics/feedTransform.ts),
+// ordered/labeled per sport-graphics-templates.ts where one exists.
+// No Player/roster lookup yet (Phase C) — no photo, just name + stats.
 export function PlayerStatCard({ payload, state }: SceneProps) {
   const playerId = typeof payload?.playerId === "string" || typeof payload?.playerId === "number"
     ? String(payload.playerId)
@@ -20,7 +22,7 @@ export function PlayerStatCard({ payload, state }: SceneProps) {
   }
 
   const teamColor = player.team === "home" ? "var(--home-color)" : "var(--visitor-color)";
-  const statEntries = Object.entries(player.stats).filter(([key]) => !["firstName", "lastName"].includes(key));
+  const statEntries = orderStats(state.sport, player.stats, "playerCardStats", ["firstName", "lastName"]);
 
   return (
     <Card>
@@ -36,7 +38,7 @@ export function PlayerStatCard({ payload, state }: SceneProps) {
           {statEntries.map(([key, value]) => (
             <div key={key} style={{ display: "flex", flexDirection: "column" }}>
               <span style={{ fontSize: "0.5rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {formatStatLabel(key)}
+                {formatStatLabel(state.sport, key)}
               </span>
               <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)" }}>{value}</span>
             </div>
@@ -63,8 +65,4 @@ function Card({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
-}
-
-function formatStatLabel(key: string): string {
-  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, c => c.toUpperCase());
 }

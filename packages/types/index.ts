@@ -18,6 +18,19 @@ export interface TeamState {
 
 export type Possession = "home" | "visitor" | "both" | "none";
 
+// Delta-based score mutation events — the relay applies these against its
+// own authoritative current state rather than trusting a client-computed
+// absolute value, so rapid-fire clicks/keypresses can't coalesce into fewer
+// net increments than were actually performed.
+export interface ScoreAdjustEvent {
+  side: "home" | "visitor";
+  delta: number;
+}
+
+export interface IndoorCricketWicketEvent {
+  side: "home" | "visitor";
+}
+
 export type SportType =
   | "netball" | "basketball"
   | "rugby_union" | "rugby_league"

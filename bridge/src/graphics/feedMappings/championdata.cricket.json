@@ -1,0 +1,32 @@
+{
+  "provider": "championdata",
+  "sport": "cricket",
+  "teamsPath": "sport.cricketMatchStats.team",
+  "playersPath": "player",
+  "playerIdField": "playerId",
+  "playerNameField": "playerName",
+  "teamFields": [
+    { "path": "squadName", "statKey": "squadName" },
+    { "path": "runs", "statKey": "runs" },
+    { "path": "wickets", "statKey": "wickets" },
+    { "path": "overs", "statKey": "overs" },
+    { "path": "runRate", "statKey": "runRate" },
+    { "path": "extras", "statKey": "extras" },
+    { "path": "fours", "statKey": "fours" },
+    { "path": "sixes", "statKey": "sixes" }
+  ],
+  "playerFields": [
+    { "path": "playerFirstname", "statKey": "firstName" },
+    { "path": "playerSurname", "statKey": "lastName" },
+    { "path": "battingRuns", "statKey": "battingRuns" },
+    { "path": "ballsFaced", "statKey": "ballsFaced" },
+    { "path": "battingFours", "statKey": "battingFours" },
+    { "path": "battingSixes", "statKey": "battingSixes" },
+    { "path": "strikeRate", "statKey": "strikeRate" },
+    { "path": "bowlingOvers", "statKey": "bowlingOvers" },
+    { "path": "bowlingWickets", "statKey": "bowlingWickets" },
+    { "path": "bowlingRuns", "statKey": "bowlingRuns" },
+    { "path": "economyRate", "statKey": "economyRate" },
+    { "path": "catches", "statKey": "catches" }
+  ]
+}

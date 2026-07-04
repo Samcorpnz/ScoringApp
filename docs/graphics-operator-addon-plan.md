@@ -163,6 +163,15 @@ hardcoded React components per type through Phase B).
       /display/graphics (lowerThird + playerStatCard scenes, upgrade-prompt soft-degrade), minimal
       /control/graphics scene picker. Not yet done: manual docker-compose end-to-end smoke test
       (automated tsc/eslint/jest/vitest all pass; browser verification still pending).
-- [ ] Phase B — generalize
+- [x] Phase B — generalize (2026-07-04): best-guess championdata.basketball.json and
+      championdata.cricket.json feed mappings (no real sample payload for these two providers yet,
+      unlike netball — field paths follow Champion Data's usual conventions but are unverified;
+      correcting them once a real feed is seen is a JSON edit, proving the no-redeploy thesis).
+      frontend/app/sport-graphics-templates.ts adds per-sport stat labels + display ordering for
+      netball/basketball/cricket, wired into LowerThird and PlayerStatCard (falls back to a generic
+      camelCase-split label for sports with no template). Added the playerHeadshotBio scene
+      (initials-avatar placeholder — real photos are Phase C) and scene preview thumbnails in
+      control/graphics. All new/updated tests passing (bridge 57/57, frontend tsc/eslint clean,
+      155 relevant vitest tests).
 - [ ] Phase C — player photo/bio management
 - [ ] Phase D — additional providers

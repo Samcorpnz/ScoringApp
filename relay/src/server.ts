@@ -7,7 +7,7 @@ import { Server, Socket } from "socket.io";
 import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { MatchState, DEFAULT_MATCH_STATE, IndoorCricketState } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
 import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, LEGACY_ROOM_ID } from "./auth";
@@ -17,6 +17,7 @@ import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import {
   matchStatePatchSchema, matchStateSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
+  scoreAdjustEventSchema, indoorCricketWicketEventSchema,
   graphicsSceneSchema, GraphicsScenePayload,
 } from "./schemas";
 import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
@@ -926,6 +927,81 @@ export function createServer(options: ServerOptions = {}) {
         io.to(room).emit("matchStateChange", restored);
         getMatchStore(orgId, matchId)?.save(restored);
         publishStateUpdate(room, restored);
+      });
+
+      // Delta-based score mutations. Unlike manualUpdate (which trusts a
+      // client-computed absolute value and merges via applyManualUpdate's
+      // `await getState(...)`), these apply a delta against the relay's own
+      // authoritative state and are kept fully synchronous — no `await`
+      // anywhere in the handler body. That's deliberate: even an
+      // already-resolved `await getState(...)` still defers its continuation
+      // by a microtask tick, and if two rapid clicks dispatch their socket
+      // events back-to-back in the same synchronous frame-parsing pass, both
+      // handlers' reads could land before either write — reproducing the
+      // exact stale-base-score coalescing bug this event exists to fix, just
+      // moved server-side. Direct, synchronous matchStates access (matching
+      // resetMatch/undo above, not applyManualUpdate) closes that window.
+      socket.on("adjustScore", (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = scoreAdjustEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed adjustScore from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const { side, delta } = parsed.data;
+        const entry = matchStates.get(room);
+        if (!entry) return; // room is expected to always be warm by this point
+        const current = entry.state;
+        const stack = undoStacks.get(room) ?? [];
+        stack.push(current);
+        if (stack.length > UNDO_STACK_SIZE) stack.shift();
+        undoStacks.set(room, stack);
+        const next: MatchState = {
+          ...current,
+          sequenceId: current.sequenceId + 1,
+          [side]: { ...current[side], score: Math.max(0, current[side].score + delta) },
+        };
+        setState(orgId, next, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { [side]: next[side] });
+      });
+
+      // Indoor cricket's "take a wicket" action atomically combines a score
+      // decrement (by the configured wicketPenalty) with a wicket-count
+      // increment on the same side — same synchronous-only requirement as
+      // adjustScore above, and for the same reason.
+      socket.on("indoorCricket:wicket", (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = indoorCricketWicketEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed indoorCricket:wicket from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const { side } = parsed.data;
+        const entry = matchStates.get(room);
+        if (!entry) return;
+        const current = entry.state;
+        const cricketState = current.sportState as IndoorCricketState | undefined;
+        const wicketPenalty = Number(current.sportConfig?.wicketPenalty ?? 5);
+        const stack = undoStacks.get(room) ?? [];
+        stack.push(current);
+        if (stack.length > UNDO_STACK_SIZE) stack.shift();
+        undoStacks.set(room, stack);
+        const next: MatchState = {
+          ...current,
+          sequenceId: current.sequenceId + 1,
+          [side]: { ...current[side], score: Math.max(0, current[side].score - wicketPenalty) },
+          sportState: {
+            sport: "indoor_cricket",
+            wicketPenalty: wicketPenalty === 2 ? 2 : 5,
+            oversPerInnings: cricketState?.oversPerInnings ?? 8,
+            homeWickets: side === "home" ? (cricketState?.homeWickets ?? 0) + 1 : (cricketState?.homeWickets ?? 0),
+            visitorWickets: side === "visitor" ? (cricketState?.visitorWickets ?? 0) + 1 : (cricketState?.visitorWickets ?? 0),
+          },
+        };
+        setState(orgId, next, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { [side]: next[side], sportState: next.sportState });
       });
     }
 

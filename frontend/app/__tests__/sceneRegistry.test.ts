@@ -5,6 +5,7 @@ describe("Graphics Operator add-on scene registry", () => {
   it("resolves known scene types", () => {
     expect(getSceneComponent("lowerThird")).toBeDefined();
     expect(getSceneComponent("playerStatCard")).toBeDefined();
+    expect(getSceneComponent("playerHeadshotBio")).toBeDefined();
   });
 
   it("returns undefined for an unknown scene type rather than throwing", () => {

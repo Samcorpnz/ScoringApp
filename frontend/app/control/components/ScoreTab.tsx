@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MatchState, IndoorCricketState, formatClockDisplay, formatScore } from "../../types";
+import { IndoorCricketState, formatClockDisplay, formatScore } from "../../types";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { parseClock } from "../lib/parseClock";
 import { getTemplate, ControlPanelProps } from "../../sport-templates";
@@ -10,6 +10,7 @@ import { ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } f
 export function ScoreTab({
   state, push, sendReset, sendUndo,
   sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+  sendScoreAdjust, sendIndoorCricketWicket,
 }: ControlPanelProps) {
   const [homeName,   setHomeName]   = useState("");
   const [visName,    setVisName]    = useState("");
@@ -25,6 +26,8 @@ export function ScoreTab({
   pushRef.current = push;
   const undoRef = useRef(sendUndo);
   undoRef.current = sendUndo;
+  const adjustRef = useRef(sendScoreAdjust);
+  adjustRef.current = sendScoreAdjust;
 
   const isBasketball = state.sport === "basketball";
   const faultLabel = isBasketball ? "Fouls" : "Faults";
@@ -38,17 +41,7 @@ export function ScoreTab({
   const visitorWickets = indoorCricketState?.visitorWickets ?? 0;
 
   function takeWicket(side: "home" | "visitor") {
-    const team = state[side];
-    push({
-      [side]: { ...team, score: Math.max(0, team.score - wicketPenalty) },
-      sportState: {
-        sport: "indoor_cricket",
-        wicketPenalty: (wicketPenalty === 2 ? 2 : 5),
-        oversPerInnings: indoorCricketState?.oversPerInnings ?? 8,
-        homeWickets: side === "home" ? homeWickets + 1 : homeWickets,
-        visitorWickets: side === "visitor" ? visitorWickets + 1 : visitorWickets,
-      },
-    } as Partial<MatchState>);
+    sendIndoorCricketWicket({ side });
   }
 
   useEffect(() => {
@@ -83,21 +76,22 @@ export function ScoreTab({
         case "]":
           { const n = parseInt(s.period, 10); p({ period: String(isNaN(n) ? 2 : n + 1) }); break; }
         default: {
+          const adjust = adjustRef.current;
           for (const [key, idx] of homeKeys) {
             if (e.key === key && inc[idx] !== undefined)
-              { p({ home: { ...s.home, score: Math.max(0, s.home.score + inc[idx]) } }); return; }
+              { adjust({ side: "home", delta: inc[idx] }); return; }
           }
           for (const [key, idx] of homeNegKeys) {
             if (e.key === key && inc[idx] !== undefined)
-              { p({ home: { ...s.home, score: Math.max(0, s.home.score - inc[idx]) } }); return; }
+              { adjust({ side: "home", delta: -inc[idx] }); return; }
           }
           for (const [key, idx] of visKeys) {
             if (e.key === key && inc[idx] !== undefined)
-              { p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score + inc[idx]) } }); return; }
+              { adjust({ side: "visitor", delta: inc[idx] }); return; }
           }
           for (const [key, idx] of visNegKeys) {
             if (e.key === key && inc[idx] !== undefined)
-              { p({ visitor: { ...s.visitor, score: Math.max(0, s.visitor.score - inc[idx]) } }); return; }
+              { adjust({ side: "visitor", delta: -inc[idx] }); return; }
           }
         }
       }
@@ -113,6 +107,7 @@ export function ScoreTab({
       state={state} push={push} sendReset={sendReset} sendUndo={sendUndo}
       sendCricketBall={sendCricketBall} sendCricketOverComplete={sendCricketOverComplete}
       sendCricketInningsChange={sendCricketInningsChange} sendCricketDeclare={sendCricketDeclare}
+      sendScoreAdjust={sendScoreAdjust} sendIndoorCricketWicket={sendIndoorCricketWicket}
     />
   );
 
@@ -233,7 +228,7 @@ export function ScoreTab({
             {state.home.name || "Home"}
           </p>
           <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.home.score} testIdPrefix="score-home"
-            onAdjust={d => push({ home: { ...state.home, score: Math.max(0, state.home.score + d) } })} />
+            onAdjust={d => sendScoreAdjust({ side: "home", delta: d })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.home.faults}`}
               onClick={() => push({ home: { ...state.home, faults: state.home.faults + 1 } })} />
@@ -252,7 +247,7 @@ export function ScoreTab({
             {state.visitor.name || "Visitor"}
           </p>
           <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.visitor.score} testIdPrefix="score-visitor"
-            onAdjust={d => push({ visitor: { ...state.visitor, score: Math.max(0, state.visitor.score + d) } })} />
+            onAdjust={d => sendScoreAdjust({ side: "visitor", delta: d })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.visitor.faults}`}
               onClick={() => push({ visitor: { ...state.visitor, faults: state.visitor.faults + 1 } })} />
