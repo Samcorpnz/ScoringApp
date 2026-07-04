@@ -141,11 +141,12 @@ function ControlPanelInner() {
 
       {/* Controller conflict banner */}
       {controllerStatus === "conflict" && (
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,160,0,0.12)", borderBottom: "1px solid rgba(255,160,0,0.3)" }}>
+        <div data-testid="controller-conflict-banner" className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,160,0,0.12)", borderBottom: "1px solid rgba(255,160,0,0.3)" }}>
           <span className="text-sm font-bold" style={{ color: "#ffa000" }}>
             Another control panel is already connected to this match.
           </span>
           <button
+            data-testid="take-control"
             onClick={takeControl}
             className="rounded-lg px-4 py-1.5 text-xs font-bold"
             style={{ background: "#ffa000", color: "#000" }}
@@ -157,11 +158,12 @@ function ControlPanelInner() {
 
       {/* Revoked banner */}
       {controllerStatus === "revoked" && (
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,60,60,0.12)", borderBottom: "1px solid rgba(255,60,60,0.3)" }}>
+        <div data-testid="controller-revoked-banner" className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,60,60,0.12)", borderBottom: "1px solid rgba(255,60,60,0.3)" }}>
           <span className="text-sm font-bold" style={{ color: "#ff3c3c" }}>
             Control was taken by another operator. You are now viewing only.
           </span>
           <button
+            data-testid="reclaim-control"
             onClick={takeControl}
             className="rounded-lg px-4 py-1.5 text-xs font-bold"
             style={{ background: "#ff3c3c", color: "#fff" }}

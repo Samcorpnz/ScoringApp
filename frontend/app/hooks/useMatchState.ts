@@ -18,7 +18,14 @@ const FEED_STALE_CHECK_MS = 1_000;
 const RELAY_UNREACHABLE_MS = 10_000;
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
-export type ControllerStatus = "granted" | "conflict" | "revoked" | "viewer";
+export type ControllerStatus = "connecting" | "granted" | "conflict" | "revoked" | "viewer";
+
+// How long to wait for the relay to resolve a requestControl before retrying
+// — the grant/conflict decision is a single fire-and-forget emit server-side
+// (relay/src/server.ts), so a lost packet or a race with another socket's
+// disconnect cleanup on the same room can otherwise leave the client stuck
+// with neither controllerGranted nor controllerConflict, indefinitely.
+const CONTROL_REQUEST_RETRY_DELAYS_MS = [1_500, 3_000, 6_000];
 
 export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
@@ -26,13 +33,15 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const [feedStale, setFeedStale] = useState(false);
   const [relayUnreachable, setRelayUnreachable] = useState(false);
   const [controllerStatus, setControllerStatus] = useState<ControllerStatus>(
-    auth?.role === "control" ? "connecting" as unknown as ControllerStatus : "viewer"
+    auth?.role === "control" ? "connecting" : "viewer"
   );
   const socketRef = useRef<Socket | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const disconnectedSinceRef = useRef<number | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const controllerStatusRef = useRef(controllerStatus);
+  controllerStatusRef.current = controllerStatus;
   const secret = auth?.secret;
   const role = auth?.role;
 
@@ -55,12 +64,36 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     });
     socketRef.current = socket;
 
+    const controlRetryTimers: ReturnType<typeof setTimeout>[] = [];
+    const clearControlRetries = () => {
+      controlRetryTimers.forEach(clearTimeout);
+      controlRetryTimers.length = 0;
+    };
+
     socket.on("connect", () => {
       setStatus("connected");
       lastUpdateRef.current = Date.now();
       setFeedStale(false);
       disconnectedSinceRef.current = null;
       setRelayUnreachable(false);
+
+      if (role === "control") {
+        setControllerStatus("connecting");
+        clearControlRetries();
+        const requestControl = () => {
+          socket.timeout(3000).emit("requestControl", () => {
+            // Ack received — resolveController on the relay has already
+            // emitted controllerGranted/controllerConflict by this point.
+          });
+        };
+        requestControl();
+        CONTROL_REQUEST_RETRY_DELAYS_MS.forEach(delay => {
+          controlRetryTimers.push(setTimeout(() => {
+            if (controllerStatusRef.current !== "connecting") return;
+            requestControl();
+          }, delay));
+        });
+      }
     });
     socket.on("disconnect", () => {
       setStatus("disconnected");
@@ -81,11 +114,11 @@ export function useMatchState(auth?: { secret: string; role: string }) {
       );
     });
 
-    socket.on("controllerGranted", () => setControllerStatus("granted"));
-    socket.on("controllerConflict", () => setControllerStatus("conflict"));
+    socket.on("controllerGranted", () => { clearControlRetries(); setControllerStatus("granted"); });
+    socket.on("controllerConflict", () => { clearControlRetries(); setControllerStatus("conflict"); });
     socket.on("controllerRevoked",  () => setControllerStatus("revoked"));
 
-    return () => { socket.disconnect(); };
+    return () => { clearControlRetries(); socket.disconnect(); };
   }, [secret, role]);
 
   useEffect(() => {
@@ -105,8 +138,17 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     return () => clearInterval(interval);
   }, [status]);
 
-  const sendManualUpdate = (patch: Partial<MatchState>) => {
-    socketRef.current?.emit("manualUpdate", patch);
+  // Resolves once the relay has actually applied the patch (or after a
+  // timeout/error) — callers that navigate right after sending an update
+  // (e.g. the /setup wizard routing into /control) must await this, or the
+  // navigation can unmount this hook and disconnect the socket before the
+  // fire-and-forget emit ever reaches the relay, silently dropping the patch.
+  const sendManualUpdate = (patch: Partial<MatchState>): Promise<void> => {
+    return new Promise(resolve => {
+      const socket = socketRef.current;
+      if (!socket) { resolve(); return; }
+      socket.timeout(3000).emit("manualUpdate", patch, () => resolve());
+    });
   };
 
   const sendReset = () => {

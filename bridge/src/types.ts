@@ -117,6 +117,32 @@ export const DEFAULT_DISPLAY_THEME: DisplayTheme = {
   competitionLogoUrl: "",
 };
 
+export interface GraphicsStatBag {
+  team: {
+    home: Record<string, number | string>;
+    visitor: Record<string, number | string>;
+  };
+  players: Array<{
+    id: string;
+    name: string;
+    team: "home" | "visitor";
+    stats: Record<string, number | string>;
+  }>;
+}
+
+// Graphics-only stats feed (Graphics Operator add-on). Deliberately loose
+// (flattened key/value bags, not per-sport typed fields) — see
+// bridge/src/graphics/feedTransform.ts for why. Must never gate or block
+// score-critical state above; a missing/stale graphicsFeed only affects the
+// separate graphics scene output, not the scoreboard.
+export interface GraphicsFeed {
+  provider: string;
+  sport: string;
+  version: number;
+  capturedAt: string;
+  stats: GraphicsStatBag;
+}
+
 export interface MatchState {
   sequenceId: number;
   clockSeconds: number;
@@ -131,6 +157,7 @@ export interface MatchState {
   home: TeamState;
   visitor: TeamState;
   netballStats?: NetballMatchStats;
+  graphicsFeed?: GraphicsFeed;
   displayTheme: DisplayTheme;
 }
 

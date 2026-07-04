@@ -10,13 +10,14 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
-import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, LEGACY_ROOM_ID } from "./auth";
+import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
-import { requirePlan, ConcurrentMatchLimitError } from "./entitlements";
+import { requirePlan, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import {
   matchStatePatchSchema, matchStateSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
+  graphicsSceneSchema, GraphicsScenePayload,
 } from "./schemas";
 import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
 import { captureException } from "./sentry";
@@ -24,6 +25,7 @@ import { captureException } from "./sentry";
 export interface ServerOptions {
   bridgeSecret?: string;
   controlSecret?: string;
+  graphicsSecret?: string;
   uploadDir?: string;
   allowedOrigins?: string | string[];
   controlRateLimit?: number;
@@ -64,6 +66,12 @@ function requireAllowedOrigins(value: string | string[] | undefined): string[] {
 export function createServer(options: ServerOptions = {}) {
   const BRIDGE_SECRET  = requireSecret("BRIDGE_SECRET", options.bridgeSecret || process.env.BRIDGE_SECRET);
   const CONTROL_SECRET = requireSecret("CONTROL_SECRET", options.controlSecret || process.env.CONTROL_SECRET);
+  // Unlike BRIDGE_SECRET/CONTROL_SECRET, not startup-mandatory: the Graphics
+  // Operator add-on is opt-in, and requiring this would break every existing
+  // deployment/test that predates it. Left unset (""), legacy-mode graphics
+  // auth simply always fails closed — the add-on isn't usable until an
+  // operator explicitly configures it, which is the correct default.
+  const GRAPHICS_SECRET = options.graphicsSecret || process.env.GRAPHICS_SECRET || "";
   const UPLOAD_DIR     = options.uploadDir     ?? process.env.UPLOAD_DIR     ?? path.join(process.cwd(), "uploads");
   const ALLOWED_ORIGINS: string[] = requireAllowedOrigins(
     options.allowedOrigins ?? process.env.ALLOWED_ORIGINS?.split(",").map(o => o.trim())
@@ -117,6 +125,11 @@ export function createServer(options: ServerOptions = {}) {
   // Token expires after TTL on ungraceful disconnect to allow page refresh.
   const controllerTokens = new Map<string, { socketId: string; expiresAt: number }>();
   const CONTROLLER_TOKEN_TTL_MS = options.controllerTokenTtlMs ?? 30_000;
+  // Graphics Operator add-on: which scene is currently live per room.
+  // In-memory only for Phase A (like controllerTokens/undoStacks above) — a
+  // relay restart resets to no active scene, same as those. No mutex: last
+  // write wins, matching matchStateChange's own concurrency model.
+  const sceneStates = new Map<string, GraphicsScenePayload & { updatedAt: string }>();
 
   async function getState(orgId: string, matchId?: string): Promise<MatchState> {
     const room = roomFor(orgId, matchId);
@@ -460,11 +473,21 @@ export function createServer(options: ServerOptions = {}) {
 
   app.get("/state", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    const matchId = typeof req.query.matchId === "string" ? req.query.matchId : undefined;
     try {
-      res.json(await getState(orgId));
+      res.json(await getState(orgId, matchId));
     } catch (err) {
       respondToStateError(res, err);
     }
+  });
+
+  // Public (no secret) — the /display/graphics Browser Source has no
+  // session, so it needs a way to know whether to render the ScoreHub-logo
+  // upgrade-prompt state versus the live scene tree. Only exposes a
+  // boolean, same trust level as /state itself.
+  app.get("/api/graphics/entitlement", async (req, res) => {
+    const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    res.json({ entitled: await orgHasAddOn(orgId, "graphics-operator") });
   });
 
   app.post("/manual", controlRateLimit, async (req, res) => {
@@ -679,6 +702,17 @@ export function createServer(options: ServerOptions = {}) {
         matchId = result.matchId;
         (socket as any).isControl = true;
       }
+    } else if (role === "graphics") {
+      const result = await verifyGraphicsSecret(secret, GRAPHICS_SECRET);
+      // Entitlement check happens here, at the handshake, rather than lazily
+      // in the setScene handler — fail fast, and a non-entitled connection
+      // never gets isGraphics=true, so it just falls through to a normal
+      // (control-mutation-less) viewer connection rather than a hard error.
+      if (result && (await orgHasAddOn(result.orgId, "graphics-operator"))) {
+        orgId = result.orgId;
+        matchId = result.matchId;
+        (socket as any).isGraphics = true;
+      }
     }
 
     orgId = orgId ?? requestedOrgId ?? LEGACY_ROOM_ID;
@@ -699,9 +733,10 @@ export function createServer(options: ServerOptions = {}) {
   io.on("connection", (socket) => {
     const orgId = (socket as any).orgId as string;
     const matchId = (socket as any).matchId as string | undefined;
-    const isBridge  = (socket as any).isBridge  === true;
-    const isControl = (socket as any).isControl === true;
-    const role = isBridge ? "bridge" : isControl ? "control" : "viewer";
+    const isBridge   = (socket as any).isBridge   === true;
+    const isControl  = (socket as any).isControl  === true;
+    const isGraphics = (socket as any).isGraphics === true;
+    const role = isBridge ? "bridge" : isControl ? "control" : isGraphics ? "graphics" : "viewer";
 
     const room = roomFor(orgId, matchId);
     socket.join(room);
@@ -740,19 +775,32 @@ export function createServer(options: ServerOptions = {}) {
 
     if (isControl) {
       // Controller mutex: check if another controller already holds the token for this room.
-      const now = Date.now();
-      const existing = controllerTokens.get(room);
-      const existingIsActive = existing && existing.socketId !== socket.id && existing.expiresAt > now;
+      function resolveController(): void {
+        const now = Date.now();
+        const existing = controllerTokens.get(room);
+        const existingIsActive = existing && existing.socketId !== socket.id && existing.expiresAt > now;
 
-      if (existingIsActive) {
-        // Another controller is active — notify this socket so the UI can show a "take control?" prompt
-        socket.emit("controllerConflict", { activeControllerId: existing.socketId });
-        // Don't grant control yet; the client can send "takeControl" to revoke the existing token
-      } else {
-        // Grant control (either no existing token, expired token, or same socket reconnecting)
-        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
-        socket.emit("controllerGranted");
+        if (existingIsActive) {
+          // Another controller is active — notify this socket so the UI can show a "take control?" prompt
+          socket.emit("controllerConflict", { activeControllerId: existing.socketId });
+          // Don't grant control yet; the client can send "takeControl" to revoke the existing token
+        } else {
+          // Grant control (either no existing token, expired token, or same socket reconnecting)
+          controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
+          socket.emit("controllerGranted");
+        }
       }
+
+      resolveController();
+
+      // Explicit, retryable version of the connect-time resolution above —
+      // the client uses this (with an ack) when the initial emit is lost or
+      // races another socket's disconnect cleanup on the same room, leaving
+      // it stuck with neither controllerGranted nor controllerConflict.
+      socket.on("requestControl", (ack?: () => void) => {
+        resolveController();
+        ack?.();
+      });
 
       // Client requests to take control from an existing controller
       socket.on("takeControl", () => {
@@ -771,17 +819,19 @@ export function createServer(options: ServerOptions = {}) {
         return token?.socketId === socket.id;
       }
 
-      socket.on("manualUpdate", async (rawPatch: unknown) => {
-        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+      socket.on("manualUpdate", async (rawPatch: unknown, ack?: () => void) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); ack?.(); return; }
         const parsed = matchStatePatchSchema.safeParse(rawPatch);
         if (!parsed.success) {
           console.warn(`[relay] rejected malformed manualUpdate from room ${room}:`, parsed.error.issues);
+          ack?.();
           return;
         }
         const patch = parsed.data as Partial<MatchState>;
         await applyManualUpdate(orgId, patch, matchId);
         const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", patch);
+        ack?.();
       });
 
       socket.on("resetMatch", async () => {
@@ -879,6 +929,28 @@ export function createServer(options: ServerOptions = {}) {
       });
     }
 
+    // Graphics Operator add-on scene switching. Deliberately its own block,
+    // separate from the isControl block above: scene selection has no
+    // controller mutex (last-write-wins, see sceneStates comment) and must
+    // be reachable by isGraphics sockets, which never enter the isControl
+    // block at all — this is the structural half of keeping graphics-scoped
+    // connections away from scoring-mutation handlers (manualUpdate,
+    // stateUpdate, cricket:*, undo, resetMatch all live inside isControl/
+    // isBridge blocks only). Per product decision, a control-role operator
+    // may also drive scenes solo (small venues), hence isControl is included.
+    if (isControl || isGraphics) {
+      socket.on("setScene", (rawScene: unknown) => {
+        const parsed = graphicsSceneSchema.safeParse(rawScene);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed setScene from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const scene = { ...parsed.data, updatedAt: new Date().toISOString() };
+        sceneStates.set(room, scene);
+        io.to(room).emit("graphicsSceneUpdate", scene);
+      });
+    }
+
     socket.on("disconnect", () => {
       if (isBridge && bridgeSockets.get(room) === socket) bridgeSockets.delete(room);
       // Start controller token TTL on disconnect so a page refresh doesn't lose control,
@@ -898,6 +970,7 @@ export function createServer(options: ServerOptions = {}) {
           matchStates.delete(room);
           undoStacks.delete(room);
           controllerTokens.delete(room);
+          sceneStates.delete(room);
           evictMatchStore(orgId, matchId).catch(err =>
             console.error("[relay] failed to evict match store on last disconnect:", room, err)
           );
@@ -921,6 +994,9 @@ export function createServer(options: ServerOptions = {}) {
         }
         console.error("[relay] failed to load initial state for room:", room, err);
       });
+
+    const scene = sceneStates.get(room);
+    if (scene) socket.emit("graphicsSceneUpdate", scene);
   });
 
   function close(cb?: (err?: Error) => void) {

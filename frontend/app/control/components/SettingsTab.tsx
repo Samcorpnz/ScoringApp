@@ -512,6 +512,7 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
             <p className="text-xs mb-3 font-semibold" style={{ color: "var(--danger)" }}>{endError}</p>
           )}
           <button
+            data-testid="end-match"
             className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold"
             style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
             disabled={ending}

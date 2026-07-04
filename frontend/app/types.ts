@@ -19,6 +19,9 @@ export type {
   WicketType,
   CricketBallEvent,
   CricketSession,
+  GraphicsFeed,
+  GraphicsStatBag,
+  GraphicsPlayerStats,
 } from "@scorehub/types";
 
 import type { MatchState, CricketState } from "@scorehub/types";

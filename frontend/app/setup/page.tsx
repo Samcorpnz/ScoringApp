@@ -49,6 +49,9 @@ export default function SetupPage() {
   // Once the socket is connected (only mounted once the form is submitted),
   // push the chosen sport/names and move on — the relay's manualUpdate
   // patch is the only way to set match fields, there's no REST write path.
+  // We must await the relay's ack before navigating: router.push unmounts
+  // this page, which disconnects the socket, and a fire-and-forget emit can
+  // be dropped if that happens before the relay finishes applying it.
   useEffect(() => {
     if (state !== "applying" || connStatus !== "connected") return;
     const template = getTemplate(sport);
@@ -78,8 +81,9 @@ export default function SetupPage() {
           visitorSquad: visitorSquad.filter(n => n.trim()).map((name, id) => ({ id, name: name.trim() })),
         },
       }),
+    }).then(() => {
+      router.push(`/control?matchId=${matchId}`);
     });
-    router.push(`/control?matchId=${matchId}`);
   }, [state, connStatus]);
 
   async function handleSubmit() {
@@ -169,6 +173,7 @@ export default function SetupPage() {
                 {SPORT_TEMPLATES.map(t => (
                   <button
                     key={t.sport}
+                    data-testid={`sport-tile-${t.sport}`}
                     className="rounded-lg px-3 py-2 text-left"
                     style={{
                       background: sport === t.sport ? "var(--accent-dim)" : "var(--bg-elevated)",
@@ -192,6 +197,7 @@ export default function SetupPage() {
                   {field.options.map(opt => (
                     <button
                       key={opt.value}
+                      data-testid={`match-config-${field.key}-${opt.value}`}
                       className="rounded-lg px-4 py-2 text-left"
                       style={{
                         background: sportConfig[field.key] === opt.value ? "var(--accent-dim)" : "var(--bg-elevated)",
@@ -209,12 +215,13 @@ export default function SetupPage() {
             ))}
 
             <div className="rounded-xl p-5 space-y-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
-              <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} />
-              <SetupField label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} />
-              <SetupField label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} />
+              <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} testId="setup-match-name" />
+              <SetupField label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} testId="setup-home-name" />
+              <SetupField label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} testId="setup-visitor-name" />
             </div>
 
             <button
+              data-testid="setup-submit"
               className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
               onClick={() => sport === "cricket" ? setState("squad-entry") : handleSubmit()}
@@ -242,13 +249,14 @@ export default function SetupPage() {
   );
 }
 
-function SetupField({ label, placeholder, value, onChange }: {
-  label: string; placeholder: string; value: string; onChange: (v: string) => void;
+function SetupField({ label, placeholder, value, onChange, testId }: {
+  label: string; placeholder: string; value: string; onChange: (v: string) => void; testId?: string;
 }) {
   return (
     <div>
       <p className="text-xs mb-1" style={{ color: "var(--text-dim)" }}>{label}</p>
       <input
+        data-testid={testId}
         className="w-full rounded-lg px-3 py-2 text-sm font-semibold"
         style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
         placeholder={placeholder}

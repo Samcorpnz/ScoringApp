@@ -2,6 +2,10 @@ import type { ComponentType } from "react";
 import type { SportType, Possession, MatchState, SoftballState, CricketState, CricketBallEvent } from "./types";
 import { SoftballTab } from "./control/components/SoftballTab";
 import { CricketTab } from "./control/components/CricketTab";
+import { CricketDisplayStats } from "./display/components/CricketDisplayStats";
+import { NetballDisplayStats } from "./display/components/NetballDisplayStats";
+import { SoftballDisplayStats } from "./display/components/SoftballDisplayStats";
+import { IndoorCricketDisplayStats } from "./display/components/IndoorCricketDisplayStats";
 
 export interface ControlPanelProps {
   state: MatchState;
@@ -12,6 +16,11 @@ export interface ControlPanelProps {
   sendCricketOverComplete: (payload: { nextBowlerIndex?: number }) => void;
   sendCricketInningsChange: (payload: { battingTeam: "home" | "visitor"; target?: number }) => void;
   sendCricketDeclare: (payload: { battingTeam: "home" | "visitor" }) => void;
+}
+
+export interface DisplayStatsProps {
+  state: MatchState;
+  variant?: "full" | "compact";
 }
 
 export interface ConfigFieldOption {
@@ -42,6 +51,7 @@ export interface SportTemplate {
   scoreLabels?: string[];
   resetScoreOnPeriod?: boolean;
   controlPanel?: ComponentType<ControlPanelProps>;
+  displayStats?: ComponentType<DisplayStatsProps>;
   matchConfig?: ConfigField[];
 }
 
@@ -57,6 +67,7 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     timeoutsPerTeam: 1,
     defaultPossession: "none",
     scoreIncrements: [1, 2],
+    displayStats: NetballDisplayStats,
   },
   {
     sport: "basketball",
@@ -294,6 +305,7 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     timeoutsPerTeam: 0,
     defaultPossession: "none",
     scoreIncrements: [1, 2, 4, 6],
+    displayStats: IndoorCricketDisplayStats,
     matchConfig: [
       {
         key: "wicketPenalty",
@@ -319,6 +331,7 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     defaultPossession: "none",
     scoreIncrements: [1],
     controlPanel: SoftballTab,
+    displayStats: SoftballDisplayStats,
     matchConfig: [
       {
         key: "format",
@@ -344,6 +357,7 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
     defaultPossession: "none",
     scoreIncrements: [1, 2, 3, 4, 6],
     controlPanel: CricketTab,
+    displayStats: CricketDisplayStats,
     matchConfig: [
       {
         key: "format",

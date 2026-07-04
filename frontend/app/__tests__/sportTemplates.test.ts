@@ -173,6 +173,27 @@ describe("lawn_bowls scoreIncrements", () => {
   });
 });
 
+describe("displayStats overrides", () => {
+  const SPORTS_WITH_DISPLAY_STATS: SportType[] = ["cricket", "netball", "softball", "indoor_cricket"];
+
+  it.each(SPORTS_WITH_DISPLAY_STATS)("%s template has a displayStats override", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.displayStats).toBeDefined();
+  });
+
+  const SPORTS_WITHOUT_DISPLAY_STATS: SportType[] = [
+    "basketball", "rugby_union", "rugby_league", "volleyball", "football",
+    "handball", "hockey", "waterpolo", "tennis", "touch_rugby", "futsal",
+    "pickleball", "badminton", "table_tennis", "floorball", "squash",
+    "lawn_bowls", "custom",
+  ];
+
+  it.each(SPORTS_WITHOUT_DISPLAY_STATS)("%s template has no displayStats override", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.displayStats).toBeUndefined();
+  });
+});
+
 describe("getTemplate fallback", () => {
   it("returns the custom template for an unknown sport string", () => {
     const result = getTemplate("underwater_hockey" as SportType);

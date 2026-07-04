@@ -98,6 +98,33 @@ export interface NetballMatchStats {
   visitor: NetballTeamStats;
 }
 
+// Graphics Operator add-on — deliberately loose/generic (flattened key/value
+// stat bags, not per-sport typed fields). See bridge/src/graphics/feedTransform.ts
+// for the rationale: provider payload shape changes per sport/provider and
+// must be adjustable via a config edit, not a shared-type change + redeploy.
+export interface GraphicsPlayerStats {
+  id: string;
+  name: string;
+  team: "home" | "visitor";
+  stats: Record<string, number | string>;
+}
+
+export interface GraphicsStatBag {
+  team: {
+    home: Record<string, number | string>;
+    visitor: Record<string, number | string>;
+  };
+  players: GraphicsPlayerStats[];
+}
+
+export interface GraphicsFeed {
+  provider: string;
+  sport: string;
+  version: number;
+  capturedAt: string;
+  stats: GraphicsStatBag;
+}
+
 export interface DisplayTheme {
   primaryColor: string;
   backgroundColor: string;
@@ -150,5 +177,6 @@ export interface MatchState {
   netballStats?: NetballMatchStats;
   sportState?: SportState;
   sportConfig?: Record<string, unknown>;
+  graphicsFeed?: GraphicsFeed;
   displayTheme: DisplayTheme;
 }

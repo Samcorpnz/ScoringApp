@@ -134,7 +134,7 @@ export function CricketTab({
           {battingTeamState.name || inn.battingTeam} batting · innings {cricket.inningsNumber} · {cricket.format.toUpperCase()}
           {cricket.format === "test" && cricket.dayNumber !== undefined && ` · Day ${cricket.dayNumber} (${cricket.session ?? "morning"})`}
         </p>
-        <p className="score-digit text-5xl" style={{ color: "var(--accent)" }}>
+        <p data-testid="cricket-score" className="score-digit text-5xl" style={{ color: "var(--accent)" }}>
           {inn.runs}/{inn.wickets} <span className="text-2xl" style={{ color: "var(--text-secondary)" }}>({oversLabel(inn)} ov)</span>
         </p>
         {inn.target !== undefined && (
@@ -159,7 +159,7 @@ export function CricketTab({
               Enter squads before play starts (Settings → Cricket squads), or the setup wizard will do this automatically.
             </p>
           ) : (
-            <SmallBtn primary label={`Start innings — ${battingTeamState.name || inn.battingTeam} batting`} onClick={startInnings} />
+            <SmallBtn primary testId="cricket-start-innings" label={`Start innings — ${battingTeamState.name || inn.battingTeam} batting`} onClick={startInnings} />
           )}
         </Card>
       ) : (
@@ -184,7 +184,7 @@ export function CricketTab({
                 </div>
               )}
               <div className="flex gap-2 mt-3">
-                <select className="flex-1 rounded-lg px-2 py-1.5 text-xs"
+                <select data-testid="cricket-bowler-select" className="flex-1 rounded-lg px-2 py-1.5 text-xs"
                   style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                   value={nextBowlerIdx} onChange={e => setNextBowlerIdx(e.target.value === "" ? "" : Number(e.target.value))}>
                   <option value="">Change bowler…</option>
@@ -192,7 +192,7 @@ export function CricketTab({
                     <option key={bw.playerId} value={idx}>{bw.name}</option>
                   ))}
                 </select>
-                <SmallBtn label="Set" onClick={changeBowler} />
+                <SmallBtn testId="cricket-bowler-set" label="Set" onClick={changeBowler} />
               </div>
             </div>
           </div>
@@ -203,13 +203,14 @@ export function CricketTab({
             <div className="flex gap-2 flex-wrap">
               {(["none", "wide", "noBall", "bye", "legBye"] as Modifier[]).map(m => (
                 <SmallBtn key={m}
+                  testId={`cricket-modifier-${m}`}
                   label={m === "none" ? "Normal" : m === "wide" ? "Wide" : m === "noBall" ? "No-ball" : m === "bye" ? "Bye" : "Leg-bye"}
                   active={modifier === m} onClick={() => setModifier(m)} />
               ))}
             </div>
             <div className="grid grid-cols-6 gap-2">
               {RUN_BUTTONS.map(r => (
-                <button key={r} className="rounded-xl py-4 text-lg font-black"
+                <button key={r} data-testid={`cricket-runs-${r}`} className="rounded-xl py-4 text-lg font-black"
                   style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
                   onClick={() => sendBall(r)}>
                   {r === 0 ? "•" : r}
@@ -217,7 +218,7 @@ export function CricketTab({
               ))}
             </div>
             {!wicketOpen ? (
-              <button className="w-full rounded-xl py-4 text-lg font-black tracking-widest uppercase"
+              <button data-testid="cricket-wicket-open" className="w-full rounded-xl py-4 text-lg font-black tracking-widest uppercase"
                 style={{ background: "rgba(239,68,68,0.1)", border: "2px solid rgba(239,68,68,0.4)", color: "var(--danger)" }}
                 onClick={() => setWicketOpen(true)}>
                 Wicket
@@ -226,10 +227,10 @@ export function CricketTab({
               <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
                 <div className="flex gap-2 flex-wrap">
                   {WICKET_TYPES.map(t => (
-                    <SmallBtn key={t} label={t.replace("_", " ")} active={wicketType === t} onClick={() => setWicketType(t)} />
+                    <SmallBtn key={t} testId={`cricket-wicket-type-${t}`} label={t.replace("_", " ")} active={wicketType === t} onClick={() => setWicketType(t)} />
                   ))}
                 </div>
-                <select className="w-full rounded-lg px-2 py-1.5 text-xs"
+                <select data-testid="cricket-next-batter-select" className="w-full rounded-lg px-2 py-1.5 text-xs"
                   style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                   value={nextBatterIdx} onChange={e => setNextBatterIdx(e.target.value === "" ? "" : Number(e.target.value))}>
                   <option value="">Next batter…</option>
@@ -238,8 +239,8 @@ export function CricketTab({
                   ))}
                 </select>
                 <div className="flex gap-2">
-                  <SmallBtn label="Cancel" onClick={() => setWicketOpen(false)} />
-                  <SmallBtn primary label="Confirm Wicket" onClick={confirmWicket} />
+                  <SmallBtn testId="cricket-wicket-cancel" label="Cancel" onClick={() => setWicketOpen(false)} />
+                  <SmallBtn primary testId="cricket-wicket-confirm" label="Confirm Wicket" onClick={confirmWicket} />
                 </div>
               </div>
             )}
@@ -264,13 +265,13 @@ export function CricketTab({
       {inningsComplete && !followOnEligible && (
         <div className="rounded-xl p-4 text-center" style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.4)" }}>
           <p className="text-sm font-bold mb-2" style={{ color: "rgb(251,146,60)" }}>Innings complete</p>
-          <SmallBtn primary label={`Start next innings — ${bowlingTeamState.name || "next team"} batting`} onClick={() => startNextInnings()} />
+          <SmallBtn primary testId="cricket-start-next-innings" label={`Start next innings — ${bowlingTeamState.name || "next team"} batting`} onClick={() => startNextInnings()} />
         </div>
       )}
 
       {cricket.format === "test" && (
         <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
-          <SmallBtn label={`Declare ${battingTeamState.name || inn.battingTeam} innings`}
+          <SmallBtn testId="cricket-declare" label={`Declare ${battingTeamState.name || inn.battingTeam} innings`}
             onClick={() => sendCricketDeclare({ battingTeam: inn.battingTeam })} />
           <div className="flex gap-2 items-center flex-wrap">
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>Day/session:</span>
@@ -290,7 +291,7 @@ export function CricketTab({
       <div className="rounded-2xl p-5 space-y-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
         <SectionLabel>Match Controls</SectionLabel>
 
-        <button className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
+        <button data-testid="score-undo" className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           onClick={sendUndo}>
           ↩ UNDO  <span style={{ fontSize: 10, opacity: 0.6 }}>⌘Z</span>
@@ -309,7 +310,7 @@ export function CricketTab({
         </div>
 
         <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <button className="w-full rounded-lg py-2 text-sm font-bold tracking-wide uppercase"
+          <button data-testid="score-reset-match" className="w-full rounded-lg py-2 text-sm font-bold tracking-wide uppercase"
             style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
             onClick={() => { if (confirm("Reset scores to 0? (Names and colours are kept)")) sendReset(); }}>
             Reset Match

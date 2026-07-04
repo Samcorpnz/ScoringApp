@@ -122,6 +122,7 @@ export function ScoreTab({
 
       {/* Start / Stop — full-width, very tall */}
       <button
+        data-testid="score-start-stop"
         className="w-full rounded-2xl py-8 text-3xl font-black tracking-widest uppercase transition-all"
         style={state.isRunning
           ? { background: "rgba(239,68,68,0.12)", border: "2px solid rgba(239,68,68,0.5)", color: "var(--danger)" }
@@ -134,6 +135,7 @@ export function ScoreTab({
 
       {/* Undo last action */}
       <button
+        data-testid="score-undo"
         className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
         style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         onClick={sendUndo}
@@ -144,6 +146,7 @@ export function ScoreTab({
       {/* End Period / Reopen Period */}
       <div className="flex gap-3">
         <button
+          data-testid="score-end-period"
           className="flex-1 rounded-xl py-4 text-lg font-black tracking-widest uppercase transition-all"
           style={{ background: "rgba(251,146,60,0.1)", border: "2px solid rgba(251,146,60,0.4)", color: "rgb(251,146,60)" }}
           onClick={() => {
@@ -172,6 +175,7 @@ export function ScoreTab({
           ⏭  END {template.periodLabel}
         </button>
         <button
+          data-testid="score-reopen-period"
           className="rounded-xl px-5 py-4 text-sm font-black tracking-widest uppercase transition-all"
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           onClick={() => {
@@ -195,12 +199,12 @@ export function ScoreTab({
           <p className="text-xs mb-1 font-bold tracking-widest uppercase" style={{ color: "var(--text-dim)" }}>
             {state.home.name || "HOME"}
           </p>
-          <p className="score-digit text-5xl" style={{ color: state.home.color || "var(--home-color)" }}>
+          <p data-testid="score-home-value" className="score-digit text-5xl" style={{ color: state.home.color || "var(--home-color)" }}>
             {formatScore(state, "home")}
           </p>
         </div>
         <div className="text-center">
-          <p className="clock-digit text-4xl" style={{ color: state.isRunning ? "#fff" : "var(--text-secondary)" }}>
+          <p data-testid="score-clock" className="clock-digit text-4xl" style={{ color: state.isRunning ? "#fff" : "var(--text-secondary)" }}>
             {formatClockDisplay(displayClock)}
           </p>
           <p className="text-xs mt-1 font-black tracking-widest" style={{ color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}>
@@ -216,7 +220,7 @@ export function ScoreTab({
           <p className="text-xs mb-1 font-bold tracking-widest uppercase" style={{ color: "var(--text-dim)" }}>
             {state.visitor.name || "VISITOR"}
           </p>
-          <p className="score-digit text-5xl" style={{ color: state.visitor.color || "var(--visitor-color)" }}>
+          <p data-testid="score-visitor-value" className="score-digit text-5xl" style={{ color: state.visitor.color || "var(--visitor-color)" }}>
             {formatScore(state, "visitor")}
           </p>
         </div>
@@ -228,7 +232,7 @@ export function ScoreTab({
           <p className="text-sm font-black tracking-widest uppercase mb-1" style={{ color: state.home.color || "var(--home-color)" }}>
             {state.home.name || "Home"}
           </p>
-          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.home.score}
+          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.home.score} testIdPrefix="score-home"
             onAdjust={d => push({ home: { ...state.home, score: Math.max(0, state.home.score + d) } })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.home.faults}`}
@@ -238,7 +242,7 @@ export function ScoreTab({
           </div>
           {isIndoorCricket && (
             <div className="mt-2">
-              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${homeWickets}`} onClick={() => takeWicket("home")} />
+              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${homeWickets}`} onClick={() => takeWicket("home")} testId="score-home-wicket" />
             </div>
           )}
         </div>
@@ -247,7 +251,7 @@ export function ScoreTab({
           <p className="text-sm font-black tracking-widest uppercase mb-1" style={{ color: state.visitor.color || "var(--visitor-color)" }}>
             {state.visitor.name || "Visitor"}
           </p>
-          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.visitor.score}
+          <ScoreButtons scoreIncrements={scoreIncrements} scoreLabels={scoreLabels} score={state.visitor.score} testIdPrefix="score-visitor"
             onAdjust={d => push({ visitor: { ...state.visitor, score: Math.max(0, state.visitor.score + d) } })} />
           <div className="flex gap-2 mt-3">
             <SmallBtn label={`${faultLabel}: ${state.visitor.faults}`}
@@ -257,7 +261,7 @@ export function ScoreTab({
           </div>
           {isIndoorCricket && (
             <div className="mt-2">
-              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${visitorWickets}`} onClick={() => takeWicket("visitor")} />
+              <SmallBtn label={`Wicket (-${wicketPenalty})  ·  ${visitorWickets}`} onClick={() => takeWicket("visitor")} testId="score-visitor-wicket" />
             </div>
           )}
         </div>
@@ -372,7 +376,7 @@ export function ScoreTab({
 
         {/* Reset */}
         <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <button className="w-full rounded-lg py-2 text-sm font-bold tracking-wide uppercase"
+          <button data-testid="score-reset-match" className="w-full rounded-lg py-2 text-sm font-bold tracking-wide uppercase"
             style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--danger)" }}
             onClick={() => { if (confirm("Reset scores to 0? (Names and colours are kept)")) sendReset(); }}>
             Reset Match

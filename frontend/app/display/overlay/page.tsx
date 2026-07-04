@@ -11,12 +11,13 @@ import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { formatClockDisplay, formatScore } from "../../types";
-import { getPeriodLabel } from "../../sport-templates";
+import { getPeriodLabel, getTemplate } from "../../sport-templates";
 
 export default function OverlayDisplay() {
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const periodLabel = getPeriodLabel(state);
+  const DisplayStats = getTemplate(state.sport).displayStats;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 
@@ -34,7 +35,8 @@ export default function OverlayDisplay() {
         pointerEvents: "none",
       }}
     >
-      {/* Lower-third bar */}
+      {/* Lower-third bar + optional sport-specific strip */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
       <div
         style={{
           display: "flex",
@@ -108,6 +110,9 @@ export default function OverlayDisplay() {
           hasPossession={possession === "visitor" || possession === "both"}
           align="left"
         />
+      </div>
+
+      {DisplayStats && <DisplayStats state={state} variant="compact" />}
       </div>
     </div>
   );

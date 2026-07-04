@@ -84,3 +84,42 @@ export async function verifyControlSecret(
     return null;
   }
 }
+
+// Graphics Operator add-on persona. Deliberately separate from
+// verifyControlSecret even though it accepts the same two credential shapes
+// (long-lived GRAPHICS ScopedToken, or a short-lived JWT minted by the
+// frontend's /api/graphics-token route) — a graphics-scoped connection must
+// NEVER be treated as a control connection by server.ts's socket handlers.
+// This is the auth-layer half of that boundary; server.ts additionally never
+// registers scoring-mutation listeners (manualUpdate, stateUpdate,
+// cricket:*, undo, resetMatch) for a socket authenticated via this function.
+export async function verifyGraphicsSecret(
+  secret: string | undefined,
+  legacySecret: string
+): Promise<AuthResult | null> {
+  if (!secret) return null;
+
+  if (!process.env.DATABASE_URL) {
+    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+  }
+
+  const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
+  if (token && token.type === "GRAPHICS" && !token.revokedAt) {
+    return { orgId: token.orgId, matchId: token.matchId ?? undefined };
+  }
+
+  const authSecret = process.env.AUTH_SECRET;
+  if (!authSecret) return null;
+
+  try {
+    const key = new TextEncoder().encode(authSecret);
+    const { payload } = await jwtVerify(secret, key);
+    const orgId = payload.orgId as string | undefined;
+    const role = payload.role as string | undefined;
+    const matchId = payload.matchId as string | undefined;
+    if (!orgId || role !== "graphics") return null;
+    return { orgId, matchId };
+  } catch {
+    return null;
+  }
+}

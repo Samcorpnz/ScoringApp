@@ -17,7 +17,7 @@ import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatClockDisplay, formatScore } from "../../types";
-import { getPeriodLabel } from "../../sport-templates";
+import { getPeriodLabel, getTemplate } from "../../sport-templates";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -115,22 +115,31 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
   const periodLabel  = getPeriodLabel(state);
+  const DisplayStats = getTemplate(state.sport).displayStats;
 
   return (
-    <div className="flex h-full">
-      {/* Home side */}
-      <TeamSide team={home} side="home" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "home")} />
+    <div className="flex flex-col h-full">
+      <div className="flex flex-1 min-h-0">
+        {/* Home side */}
+        <TeamSide team={home} side="home" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "home")} />
 
-      {/* Center divider with clock */}
-      <div
-        className="flex flex-col items-center justify-center px-12"
-        style={{ flexShrink: 0, borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
-      >
-        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        {/* Center divider with clock */}
+        <div
+          className="flex flex-col items-center justify-center px-12"
+          style={{ flexShrink: 0, borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
+        >
+          <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        </div>
+
+        {/* Visitor side */}
+        <TeamSide team={visitor} side="visitor" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
       </div>
 
-      {/* Visitor side */}
-      <TeamSide team={visitor} side="visitor" possession={possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
+      {DisplayStats && (
+        <div className="flex justify-center pb-6 flex-shrink-0">
+          <DisplayStats state={state} variant="compact" />
+        </div>
+      )}
     </div>
   );
 }
@@ -180,6 +189,7 @@ function TeamSide({ team, side, possession, relayUrl, scoreText }: { team: TeamS
 function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchState>["state"]; relayUrl: string }) {
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName } = state;
   const periodLabel = getPeriodLabel(state);
+  const DisplayStats = getTemplate(state.sport).displayStats;
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex items-center justify-center" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -188,9 +198,14 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
       <div className="flex items-center justify-center py-6" style={{ borderBottom: "1px solid var(--border)" }}>
         <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
       </div>
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center" style={{ borderBottom: DisplayStats ? "1px solid var(--border)" : undefined }}>
         <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
       </div>
+      {DisplayStats && (
+        <div className="flex justify-center py-4 flex-shrink-0">
+          <DisplayStats state={state} variant="compact" />
+        </div>
+      )}
     </div>
   );
 }

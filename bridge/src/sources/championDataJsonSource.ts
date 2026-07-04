@@ -15,12 +15,33 @@ import https from "https";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
+import { buildGraphicsFeed, GraphicsFeed } from "../graphics/feedTransform";
+import { findFeedMapping } from "../graphics/feedMappingRegistry";
+
+// Never throws — a graphics-mapping failure must never affect score state
+// (the caller merges the result onto an already-parsed MatchState).
+function buildGraphicsFeedSafely(
+  raw: unknown,
+  state: MatchState,
+  provider: string
+): GraphicsFeed | undefined {
+  try {
+    const mapping = findFeedMapping(provider, state.sport);
+    if (!mapping) return state.graphicsFeed;
+    return buildGraphicsFeed(raw, mapping, state.graphicsFeed?.version ?? 0) ?? state.graphicsFeed;
+  } catch (err) {
+    console.error(`[cd-json] graphics feed mapping error: ${(err as Error).message}`);
+    return state.graphicsFeed;
+  }
+}
 
 export interface JsonSourceOptions {
   url: string;
   username?: string;
   password?: string;
   pollMs?: number;
+  /** Provider id used to look up a graphics feed-mapping (default "championdata"). */
+  provider?: string;
 }
 
 // Restricts outgoing requests to http/https and rejects private-network targets
@@ -106,6 +127,7 @@ export function startJsonSource(
   options: JsonSourceOptions
 ): () => void {
   const { url, username, password } = options;
+  const provider = options.provider ?? "championdata";
   const pollMs = clampPollMs(options.pollMs, 2000);
   validateRemoteUrl(url);
 
@@ -126,7 +148,8 @@ export function startJsonSource(
         console.warn(`[cd-json] HTTP ${res.status} from ${url}`);
       } else {
         const json = await res.json();
-        const next = parseChampionDataJson(json, getState());
+        const parsed = parseChampionDataJson(json, getState());
+        const next = { ...parsed, graphicsFeed: buildGraphicsFeedSafely(json, parsed, provider) };
         setState(next);
         if (socket.connected) socket.emit("stateUpdate", next);
       }
@@ -153,5 +176,6 @@ export function jsonSourceOptionsFromEnv(): JsonSourceOptions {
     username: process.env.CD_USERNAME,
     password: process.env.CD_PASSWORD,
     pollMs: parseInt(process.env.CD_POLL_MS ?? "2000", 10),
+    provider: process.env.CD_PROVIDER ?? "championdata",
   };
 }

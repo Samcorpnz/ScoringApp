@@ -14,6 +14,7 @@ export class ConcurrentMatchLimitError extends Error {
 interface OrgAccount {
   accountId: string;
   plan: string;
+  addOns: string[];
 }
 
 // In legacy single-tenant mode (no DATABASE_URL — self-hosted, no billing
@@ -23,15 +24,29 @@ export async function getOrgAccount(orgId: string): Promise<OrgAccount | null> {
   if (!process.env.DATABASE_URL) return null;
   const org = await prisma.org.findUnique({
     where: { id: orgId },
-    select: { accountId: true, account: { select: { plan: true } } },
+    select: { accountId: true, account: { select: { plan: true, addOns: true } } },
   });
   if (!org) return null;
-  return { accountId: org.accountId, plan: org.account.plan };
+  return { accountId: org.accountId, plan: org.account.plan, addOns: org.account.addOns };
+}
+
+// Used both by requireAddOn (HTTP) and directly at socket-auth time (the
+// graphics token/socket handshake can't run Express middleware) — legacy
+// single-tenant mode has no add-on concept, so it's unrestricted there too,
+// same as requirePlan.
+export async function orgHasAddOn(orgId: string, name: string): Promise<boolean> {
+  if (!process.env.DATABASE_URL) return true;
+  const account = await getOrgAccount(orgId);
+  return account?.addOns.includes(name) ?? false;
 }
 
 function upgradeMessage(allowed: string[]): string {
   const names = allowed.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" or ");
   return `This feature requires the ${names} plan — upgrade at /account/billing`;
+}
+
+function addOnUpgradeMessage(name: string): string {
+  return `This feature requires the ${name} add-on — upgrade at /account/billing`;
 }
 
 // Express middleware factory gating a route behind one or more plans. Must
@@ -52,6 +67,28 @@ export function requirePlan(allowed: string[]) {
     const account = await getOrgAccount(orgId);
     if (!account || !allowed.includes(account.plan)) {
       res.status(403).json({ error: upgradeMessage(allowed) });
+      return;
+    }
+    next();
+  };
+}
+
+// Express middleware factory gating a route behind a named add-on (orthogonal
+// to `plan` — see Account.addOns). Same ordering requirement as requirePlan:
+// after controlAuth (needs req.orgId) and controlRateLimit.
+export function requireAddOn(name: string) {
+  return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (!process.env.DATABASE_URL) {
+      next();
+      return;
+    }
+    const orgId = (req as any).orgId as string | undefined;
+    if (!orgId) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!(await orgHasAddOn(orgId, name))) {
+      res.status(403).json({ error: addOnUpgradeMessage(name) });
       return;
     }
     next();

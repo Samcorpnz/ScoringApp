@@ -33,12 +33,13 @@ export function CricketSquadSetup({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SquadColumn label={homeTeamName || "Home"} squad={homeSquad} onChange={onChangeHome} />
-        <SquadColumn label={visitorTeamName || "Visitor"} squad={visitorSquad} onChange={onChangeVisitor} />
+        <SquadColumn label={homeTeamName || "Home"} squad={homeSquad} onChange={onChangeHome} testIdPrefix="squad-home" />
+        <SquadColumn label={visitorTeamName || "Visitor"} squad={visitorSquad} onChange={onChangeVisitor} testIdPrefix="squad-visitor" />
       </div>
 
       <div className="flex gap-3">
         <button
+          data-testid="squad-back"
           className="rounded-xl px-5 py-3 text-sm font-black tracking-widest uppercase"
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           onClick={onBack}
@@ -46,6 +47,7 @@ export function CricketSquadSetup({
           ↩ Back
         </button>
         <button
+          data-testid="squad-submit"
           className="flex-1 rounded-xl py-3 text-sm font-black tracking-widest uppercase"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
           onClick={onSubmit}
@@ -58,7 +60,7 @@ export function CricketSquadSetup({
   );
 }
 
-function SquadColumn({ label, squad, onChange }: { label: string; squad: string[]; onChange: (idx: number, name: string) => void }) {
+function SquadColumn({ label, squad, onChange, testIdPrefix }: { label: string; squad: string[]; onChange: (idx: number, name: string) => void; testIdPrefix: string }) {
   return (
     <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
       <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--text-dim)" }}>{label}</p>
@@ -66,6 +68,7 @@ function SquadColumn({ label, squad, onChange }: { label: string; squad: string[
         {squad.map((name, idx) => (
           <input
             key={idx}
+            data-testid={`${testIdPrefix}-player-${idx}`}
             className="w-full rounded-lg px-3 py-1.5 text-sm font-semibold"
             style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
             placeholder={`Player ${idx + 1}`}
