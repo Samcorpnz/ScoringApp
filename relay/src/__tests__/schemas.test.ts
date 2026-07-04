@@ -1,5 +1,5 @@
 import {
-  matchStatePatchSchema, matchStateSchema,
+  matchStatePatchSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
 } from "../schemas";
 
