@@ -15,7 +15,7 @@ export const test = base.extend<{}, { workerStorageState: string }>({
       `../.auth/worker-${workerInfo.workerIndex}.json`
     );
 
-    const page = await browser.newPage({ storageState: undefined, baseURL: "http://localhost:3000" });
+    const page = await browser.newPage({ storageState: undefined, baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000" });
     const email = `e2e-w${workerInfo.workerIndex}-${Date.now()}@example.test`;
     const password = "TestPass1234!";
 

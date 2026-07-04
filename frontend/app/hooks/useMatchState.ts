@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { MatchState, DEFAULT_MATCH_STATE, CricketBallEvent } from "../types";
+import { MatchState, DEFAULT_MATCH_STATE, CricketBallEvent, ScoreAdjustEvent, IndoorCricketWicketEvent } from "../types";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -179,8 +179,17 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     socketRef.current?.emit("cricket:declare", payload);
   };
 
+  const sendScoreAdjust = (payload: ScoreAdjustEvent) => {
+    socketRef.current?.emit("adjustScore", payload);
+  };
+
+  const sendIndoorCricketWicket = (payload: IndoorCricketWicketEvent) => {
+    socketRef.current?.emit("indoorCricket:wicket", payload);
+  };
+
   return {
     state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
     sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+    sendScoreAdjust, sendIndoorCricketWicket,
   };
 }

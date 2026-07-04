@@ -22,7 +22,7 @@ function getSoftballState(state: ControlPanelProps["state"]): SoftballState {
   };
 }
 
-export function SoftballTab({ state, push, sendReset, sendUndo }: ControlPanelProps) {
+export function SoftballTab({ state, push, sendReset, sendUndo, sendScoreAdjust }: ControlPanelProps) {
   const [homeName, setHomeName] = useState("");
   const [visName, setVisName] = useState("");
   const [matchName, setMatchName] = useState("");
@@ -181,10 +181,10 @@ export function SoftballTab({ state, push, sendReset, sendUndo }: ControlPanelPr
           <div className="flex items-center gap-2 mt-3">
             <button data-testid="softball-home-run-dec" className="rounded-xl py-4 flex-1 text-xl font-black"
               style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-              onClick={() => push({ home: { ...state.home, score: Math.max(0, state.home.score - 1) } })}>−1 run</button>
+              onClick={() => sendScoreAdjust({ side: "home", delta: -1 })}>−1 run</button>
             <button data-testid="softball-home-run-inc" className="rounded-xl py-4 flex-1 text-xl font-black"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={() => push({ home: { ...state.home, score: state.home.score + 1 } })}>+1 run</button>
+              onClick={() => sendScoreAdjust({ side: "home", delta: 1 })}>+1 run</button>
           </div>
         </div>
         <div className="rounded-2xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
@@ -194,10 +194,10 @@ export function SoftballTab({ state, push, sendReset, sendUndo }: ControlPanelPr
           <div className="flex items-center gap-2 mt-3">
             <button data-testid="softball-visitor-run-dec" className="rounded-xl py-4 flex-1 text-xl font-black"
               style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-              onClick={() => push({ visitor: { ...state.visitor, score: Math.max(0, state.visitor.score - 1) } })}>−1 run</button>
+              onClick={() => sendScoreAdjust({ side: "visitor", delta: -1 })}>−1 run</button>
             <button data-testid="softball-visitor-run-inc" className="rounded-xl py-4 flex-1 text-xl font-black"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={() => push({ visitor: { ...state.visitor, score: state.visitor.score + 1 } })}>+1 run</button>
+              onClick={() => sendScoreAdjust({ side: "visitor", delta: 1 })}>+1 run</button>
           </div>
         </div>
       </div>

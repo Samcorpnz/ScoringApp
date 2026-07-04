@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { SportType, Possession, MatchState, SoftballState, CricketState, CricketBallEvent } from "./types";
+import type { SportType, Possession, MatchState, SoftballState, CricketState, CricketBallEvent, ScoreAdjustEvent, IndoorCricketWicketEvent } from "./types";
 import { SoftballTab } from "./control/components/SoftballTab";
 import { CricketTab } from "./control/components/CricketTab";
 import { CricketDisplayStats } from "./display/components/CricketDisplayStats";
@@ -16,6 +16,8 @@ export interface ControlPanelProps {
   sendCricketOverComplete: (payload: { nextBowlerIndex?: number }) => void;
   sendCricketInningsChange: (payload: { battingTeam: "home" | "visitor"; target?: number }) => void;
   sendCricketDeclare: (payload: { battingTeam: "home" | "visitor" }) => void;
+  sendScoreAdjust: (payload: ScoreAdjustEvent) => void;
+  sendIndoorCricketWicket: (payload: IndoorCricketWicketEvent) => void;
 }
 
 export interface DisplayStatsProps {
