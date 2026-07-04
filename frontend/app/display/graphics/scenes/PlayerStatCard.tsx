@@ -2,12 +2,14 @@
 
 import type { SceneProps } from "./LowerThird";
 import { formatStatLabel, orderStats } from "../../../sport-graphics-templates";
+import { findRosterMatch } from "../../../hooks/useRoster";
 
 // Generic player stat card: resolves payload.playerId against the live
 // graphicsFeed's flattened player stats (bridge/src/graphics/feedTransform.ts),
-// ordered/labeled per sport-graphics-templates.ts where one exists.
-// No Player/roster lookup yet (Phase C) — no photo, just name + stats.
-export function PlayerStatCard({ payload, state }: SceneProps) {
+// ordered/labeled per sport-graphics-templates.ts where one exists. Prefers a
+// matched roster entry's photo/display name when available (Phase C), falling
+// back to the feed's own name and no photo when unmatched.
+export function PlayerStatCard({ payload, state, roster }: SceneProps) {
   const playerId = typeof payload?.playerId === "string" || typeof payload?.playerId === "number"
     ? String(payload.playerId)
     : undefined;
@@ -21,6 +23,8 @@ export function PlayerStatCard({ payload, state }: SceneProps) {
     );
   }
 
+  const rosterMatch = findRosterMatch(roster ?? [], player.id);
+  const displayName = rosterMatch?.displayName || player.name;
   const teamColor = player.team === "home"
     ? (state.home.color || "var(--home-color)")
     : (state.visitor.color || "var(--visitor-color)");
@@ -29,9 +33,13 @@ export function PlayerStatCard({ payload, state }: SceneProps) {
   return (
     <Card>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ width: 4, height: 20, background: teamColor, borderRadius: 2, display: "inline-block" }} />
-          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)" }}>{player.name}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {rosterMatch?.photoUrl ? (
+            <img src={rosterMatch.photoUrl} alt={displayName} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `2px solid ${teamColor}` }} />
+          ) : (
+            <span style={{ width: 4, height: 20, background: teamColor, borderRadius: 2, display: "inline-block" }} />
+          )}
+          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)" }}>{displayName}</span>
           <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
             {player.team}
           </span>

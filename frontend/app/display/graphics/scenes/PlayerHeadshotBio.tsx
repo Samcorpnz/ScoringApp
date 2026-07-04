@@ -1,12 +1,13 @@
 "use client";
 
 import type { SceneProps } from "./LowerThird";
+import { findRosterMatch } from "../../../hooks/useRoster";
 
-// Headshot+bio scene. No Player/roster model wired yet (that's Phase C:
-// packages/db's Player model + roster admin UI) so this renders an initials
-// avatar in place of a photo — swapping in a real photoUrl later is a
-// one-line change here, not a new scene type.
-export function PlayerHeadshotBio({ payload, state }: SceneProps) {
+// Headshot+bio scene. Prefers a matched roster entry's photo/bio (Phase C:
+// packages/db's Player model + /control/roster) and falls back to an
+// initials avatar/no-bio when the live feed player has no roster match —
+// additive, so a scene selected before any roster data exists still renders.
+export function PlayerHeadshotBio({ payload, state, roster }: SceneProps) {
   const playerId = typeof payload?.playerId === "string" || typeof payload?.playerId === "number"
     ? String(payload.playerId)
     : undefined;
@@ -19,6 +20,9 @@ export function PlayerHeadshotBio({ payload, state }: SceneProps) {
       </Card>
     );
   }
+
+  const rosterMatch = findRosterMatch(roster ?? [], player.id);
+  const displayName = rosterMatch?.displayName || player.name;
 
   const teamColor = player.team === "home"
     ? (state.home.color || "var(--home-color)")
@@ -34,29 +38,49 @@ export function PlayerHeadshotBio({ payload, state }: SceneProps) {
   return (
     <Card>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            background: "var(--bg-elevated)",
-            border: `2px solid ${teamColor}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "1.2rem",
-            fontWeight: 800,
-            color: teamColor,
-            flexShrink: 0,
-          }}
-        >
-          {initials || "?"}
-        </div>
+        {rosterMatch?.photoUrl ? (
+          <img
+            src={rosterMatch.photoUrl}
+            alt={displayName}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: `2px solid ${teamColor}`,
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "var(--bg-elevated)",
+              border: `2px solid ${teamColor}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1.2rem",
+              fontWeight: 800,
+              color: teamColor,
+              flexShrink: 0,
+            }}
+          >
+            {initials || "?"}
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--text-primary)" }}>{player.name}</span>
+          <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--text-primary)" }}>{displayName}</span>
           <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
             {[player.team, position].filter(Boolean).join(" · ")}
           </span>
+          {rosterMatch?.bio && (
+            <span style={{ fontSize: "0.65rem", color: "var(--text-secondary)", maxWidth: 240, marginTop: 4 }}>
+              {rosterMatch.bio}
+            </span>
+          )}
         </div>
       </div>
     </Card>

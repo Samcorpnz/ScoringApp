@@ -206,5 +206,18 @@ way `ScoreTab.tsx` already does.
       `SoftballTab.tsx` (missing `sendScoreAdjust` prop destructure) found while verifying this
       branch's build is clean. New `graphicsSceneTheme.test.tsx` (4 tests); full frontend suite
       192/192 passing, tsc/eslint clean.
-- [ ] Phase C — player photo/bio management
+- [x] Phase C — player photo/bio management (2026-07-04): `Player` CRUD routes
+      (`frontend/app/api/orgs/[orgId]/players[/[playerId]]`, gated by ADMIN/MANAGER/OPERATOR + the
+      graphics-operator add-on, mirroring the invitations/graphics-token route patterns); relay
+      `POST/DELETE /api/player-photo/:playerId` (dual R2/disk storage, `requireAddOn` instead of
+      `requirePlan`, copies the logo-upload multer pattern) and a public
+      `GET /api/graphics/roster?org=` read route (same trust level as `/api/graphics/entitlement`);
+      new standalone `/control/roster` page (create/edit/delete players, photo upload, plus a "Live
+      match — unmatched players" section for manual-only linking of a live feed player's
+      provider/externalId to a roster entry, no fuzzy matching); `useRoster`/`findRosterMatch` hook
+      wired into `PlayerStatCard`/`PlayerHeadshotBio` (shows roster photo/displayName/bio when
+      matched, falls back to the existing initials-avatar/feed-name rendering when not — additive,
+      non-breaking). No new migration needed (the `Player` model already existed from Phase A).
+      New tests: `graphics-roster.test.ts` (relay, 3 tests) and `useRoster.test.ts` (frontend, 3
+      tests). Full suites passing: relay 144/144, frontend 195/195, both tsc-clean.
 - [ ] Phase D — additional providers

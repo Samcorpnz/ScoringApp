@@ -2,10 +2,12 @@
 
 import { MatchState, formatScore } from "../../../types";
 import { formatStatLabel, orderStats } from "../../../sport-graphics-templates";
+import { RosterPlayer } from "../../../hooks/useRoster";
 
 export interface SceneProps {
   payload?: Record<string, unknown>;
   state: MatchState;
+  roster?: RosterPlayer[];
 }
 
 // Generic lower-third: team names/scores plus the top few team-level stats

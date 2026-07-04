@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useGraphicsScene } from "../../hooks/useGraphicsScene";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
+import { useRoster } from "../../hooks/useRoster";
 import { SCENE_REGISTRY } from "./scenes/sceneRegistry";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
@@ -31,12 +32,15 @@ export default function GraphicsDisplay() {
   const { state } = useMatchState();
   const { scene } = useGraphicsScene();
   const [entitled, setEntitled] = useState<boolean | null>(null);
+  const [org, setOrg] = useState<string | null>(null);
+  const roster = useRoster(org);
   const { backgroundColor, textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const org = params.get("org");
-    const url = org ? `${RELAY_URL}/api/graphics/entitlement?org=${encodeURIComponent(org)}` : `${RELAY_URL}/api/graphics/entitlement`;
+    const orgParam = params.get("org");
+    setOrg(orgParam);
+    const url = orgParam ? `${RELAY_URL}/api/graphics/entitlement?org=${encodeURIComponent(orgParam)}` : `${RELAY_URL}/api/graphics/entitlement`;
     fetch(url)
       .then(res => res.json())
       .then(data => setEntitled(Boolean(data.entitled)))
@@ -65,7 +69,7 @@ export default function GraphicsDisplay() {
       {entitled === false ? (
         <UpgradePrompt />
       ) : SceneComponent ? (
-        <SceneComponent payload={scene?.payload} state={state} />
+        <SceneComponent payload={scene?.payload} state={state} roster={roster} />
       ) : null}
     </div>
   );

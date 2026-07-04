@@ -12,7 +12,7 @@ import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, Match
 import { prisma } from "@scorehub/db";
 import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
-import { requirePlan, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
+import { requirePlan, requireAddOn, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import {
   matchStatePatchSchema, matchStateSchema,
@@ -377,6 +377,78 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ status: "removed" });
   });
 
+  // ─── Player photo upload ─────────────────────────────────────────────────────
+  // Graphics Operator add-on roster (Phase C): gated by requireAddOn rather
+  // than requirePlan, since this is orthogonal to the pro/venue plan tiers —
+  // an org needs the graphics-operator add-on, not a specific plan. The
+  // uploaded photoUrl is handed back to the caller (frontend/control/roster),
+  // which PATCHes it onto the Player row via the players API route — this
+  // route only knows about storage, not the Player model.
+
+  const PLAYER_PHOTOS_DIR = path.join(UPLOAD_DIR, "player-photos");
+  fs.mkdirSync(PLAYER_PHOTOS_DIR, { recursive: true });
+  app.use("/player-photos", express.static(PLAYER_PHOTOS_DIR));
+
+  const playerPhotoUpload = multer({
+    storage: r2Enabled
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: (req, _file, cb) => {
+            const dir = path.join(PLAYER_PHOTOS_DIR, (req as any).orgId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+          },
+          filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || ".png";
+            cb(null, `${(req as any).params.playerId}${ext}`);
+          },
+        }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/png", "image/jpeg", "image/webp"];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+
+  app.post(
+    "/api/player-photo/:playerId",
+    controlRateLimit,
+    controlAuth,
+    requireAddOn("graphics-operator"),
+    playerPhotoUpload.single("photo"),
+    async (req, res) => {
+      if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+      const orgId = (req as any).orgId as string;
+      const playerId = req.params.playerId;
+
+      let photoUrl: string;
+      if (r2Enabled) {
+        const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+        const cdnUrl = await putObject(`player-photos/${orgId}/${playerId}${ext}`, req.file.buffer, req.file.mimetype);
+        photoUrl = `${cdnUrl}?t=${Date.now()}`;
+      } else {
+        const ext = path.extname(req.file.filename).toLowerCase();
+        photoUrl = `/player-photos/${orgId}/${playerId}${ext}?t=${Date.now()}`;
+      }
+
+      res.json({ photoUrl });
+    }
+  );
+
+  app.delete("/api/player-photo/:playerId", controlRateLimit, controlAuth, requireAddOn("graphics-operator"), async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const playerId = req.params.playerId;
+    if (r2Enabled) {
+      await deleteByPrefix(`player-photos/${orgId}/${playerId}.`);
+    } else {
+      const dir = path.join(PLAYER_PHOTOS_DIR, orgId);
+      if (fs.existsSync(dir)) {
+        fs.readdirSync(dir).filter(f => f.startsWith(`${playerId}.`)).forEach(f => fs.unlinkSync(path.join(dir, f)));
+      }
+    }
+    res.json({ status: "removed" });
+  });
+
   // ─── Sound upload ────────────────────────────────────────────────────────────
 
   const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
@@ -489,6 +561,24 @@ export function createServer(options: ServerOptions = {}) {
   app.get("/api/graphics/entitlement", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
     res.json({ entitled: await orgHasAddOn(orgId, "graphics-operator") });
+  });
+
+  // Public (no secret), same trust level as /api/graphics/entitlement above —
+  // /display/graphics has no session and needs to resolve a live feed
+  // player's id (provider+externalId) to a roster photo/bio. Returns the
+  // org's whole roster rather than a per-player lookup since the scene
+  // components already hold the full live player list client-side.
+  app.get("/api/graphics/roster", async (req, res) => {
+    const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    if (!process.env.DATABASE_URL) {
+      res.json({ players: [] });
+      return;
+    }
+    const players = await prisma.player.findMany({
+      where: { orgId },
+      select: { externalId: true, provider: true, firstName: true, lastName: true, displayName: true, photoUrl: true, bio: true },
+    });
+    res.json({ players });
   });
 
   app.post("/manual", controlRateLimit, async (req, res) => {
