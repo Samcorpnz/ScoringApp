@@ -15,12 +15,13 @@ import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subsc
 import { requirePlan, requireAddOn, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import {
-  matchStatePatchSchema, matchStateSchema,
+  matchStatePatchSchema, matchStateSchema, manualUpdateRequestSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
   scoreAdjustEventSchema, indoorCricketWicketEventSchema,
   graphicsSceneSchema, GraphicsScenePayload,
 } from "./schemas";
 import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
+import { resyncClock } from "./clock";
 import { captureException } from "./sentry";
 
 export interface ServerOptions {
@@ -167,7 +168,18 @@ export function createServer(options: ServerOptions = {}) {
     }
   });
 
-  async function applyManualUpdate(orgId: string, patch: Partial<MatchState>, matchId?: string): Promise<MatchState> {
+  // Bound on how far a client-supplied clock-event timestamp (see
+  // applyManualUpdate's eventMs param) may diverge from the relay's own
+  // receive time before it's distrusted and receive-time is used instead.
+  // Bounds clock-skew-estimation error and protects against a stale/bad value.
+  const MAX_CLOCK_EVENT_SKEW_MS = 2000;
+
+  async function applyManualUpdate(
+    orgId: string,
+    patch: Partial<MatchState>,
+    matchId?: string,
+    eventMs?: number,
+  ): Promise<MatchState> {
     const current = await getState(orgId, matchId);
     // Capture pre-change state for undo before overwriting
     const room = roomFor(orgId, matchId);
@@ -175,9 +187,38 @@ export function createServer(options: ServerOptions = {}) {
     stack.push(current);
     if (stack.length > UNDO_STACK_SIZE) stack.shift();
     undoStacks.set(room, stack);
+
+    const now = Date.now();
+    const effectiveMs =
+      eventMs !== undefined && Math.abs(eventMs - now) <= MAX_CLOCK_EVENT_SKEW_MS ? eventMs : now;
+
+    // Relay-tick-loop clock precision: anchor on start, precisely resync
+    // (folding real elapsed time into clockSeconds + clockCarryMs, discarding
+    // nothing) on stop, using the caller's latency-compensated click instant
+    // when trustworthy. Only applies when the patch is a plain isRunning
+    // transition — if the caller is also overriding clockSeconds outright
+    // (e.g. /action/period/end), that override wins and the anchor/carry
+    // are just cleared for the fresh value.
+    let clockPatch: Partial<MatchState> = {};
+    if (patch.isRunning === true && !current.isRunning) {
+      clockPatch = { clockAnchorMs: effectiveMs };
+    } else if (patch.isRunning === false && current.isRunning) {
+      if (patch.clockSeconds === undefined) {
+        const resynced = resyncClock(current, effectiveMs);
+        clockPatch = {
+          clockSeconds: resynced.clockSeconds,
+          clockCarryMs: resynced.clockCarryMs,
+          clockAnchorMs: undefined,
+        };
+      } else {
+        clockPatch = { clockAnchorMs: undefined, clockCarryMs: 0 };
+      }
+    }
+
     const next: MatchState = {
       ...current,
       ...patch,
+      ...clockPatch,
       // Starting the clock always exits break state
       ...(patch.isRunning === true ? { periodBreak: false } : {}),
       sequenceId: current.sequenceId + 1,
@@ -194,6 +235,10 @@ export function createServer(options: ServerOptions = {}) {
   // ensures only one relay instance advances a given org's clock when
   // multiple instances share Redis (SA-19) — it's a no-op true when Redis
   // is unset, so single-instance behavior is unchanged.
+  //
+  // Uses resyncClock (anchor + carried sub-second remainder) rather than a
+  // blind ±1 per firing, so the clock is exact regardless of setInterval
+  // jitter and no fractional second is ever discarded on stop (see clock.ts).
   const clockInterval = setInterval(() => {
     for (const [room, entry] of matchStates) {
       const { orgId, matchId, state } = entry;
@@ -201,8 +246,8 @@ export function createServer(options: ServerOptions = {}) {
       acquireTickLock(room)
         .then(acquired => {
           if (!acquired) return;
-          const next = state.countDown ? state.clockSeconds - 1 : state.clockSeconds + 1;
-          setState(orgId, { ...state, clockSeconds: next, sequenceId: state.sequenceId + 1 }, matchId);
+          const resynced = resyncClock(state, Date.now());
+          setState(orgId, { ...state, ...resynced, sequenceId: state.sequenceId + 1 }, matchId);
         })
         .catch(err => console.error(`[relay] failed to acquire tick lock for room ${room}`, err));
     }
@@ -912,17 +957,24 @@ export function createServer(options: ServerOptions = {}) {
 
       socket.on("manualUpdate", async (rawPatch: unknown, ack?: () => void) => {
         if (!assertController()) { socket.emit("controllerConflict", {}); ack?.(); return; }
-        const parsed = matchStatePatchSchema.safeParse(rawPatch);
+        const parsed = manualUpdateRequestSchema.safeParse(rawPatch);
         if (!parsed.success) {
           console.warn(`[relay] rejected malformed manualUpdate from room ${room}:`, parsed.error.issues);
           ack?.();
           return;
         }
-        const patch = parsed.data as Partial<MatchState>;
-        await applyManualUpdate(orgId, patch, matchId);
+        const { clientEventMs, ...patch } = parsed.data;
+        await applyManualUpdate(orgId, patch as Partial<MatchState>, matchId, clientEventMs);
         const bridge = bridgeSockets.get(room);
         if (bridge?.connected) bridge.emit("manualUpdate", patch);
         ack?.();
+      });
+
+      // Latency-compensated wall-clock offset estimation for the operator's
+      // control session — see useServerClockOffset.ts (client). Cheap,
+      // stateless, no extra auth beyond the already-authenticated socket.
+      socket.on("timeSync", (payload: { t0: number }) => {
+        socket.emit("timeSyncResponse", { t0: payload?.t0, serverNow: Date.now() });
       });
 
       socket.on("resetMatch", async () => {
@@ -1012,6 +1064,10 @@ export function createServer(options: ServerOptions = {}) {
           ...previous,
           // Keep sequenceId monotonic so viewers always accept the update
           sequenceId: (current?.state.sequenceId ?? previous.sequenceId) + 1,
+          // Re-anchor a restored running clock to now, otherwise the next
+          // tick would resync against a stale clockAnchorMs from whenever
+          // this snapshot was captured and fast-forward by that whole gap.
+          ...(previous.isRunning ? { clockAnchorMs: Date.now() } : {}),
         };
         matchStates.set(room, { orgId, matchId, state: restored });
         io.to(room).emit("matchStateChange", restored);

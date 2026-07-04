@@ -17,7 +17,10 @@ export function ScoreTab({
   const [matchName,  setMatchName]  = useState("");
   const [period,     setPeriod]     = useState("");
   const [clockInput, setClockInput] = useState("");
-  const displayClock = useInterpolatedClock({ clockSeconds: state.clockSeconds, isRunning: state.isRunning, countDown: state.countDown });
+  const displayClock = useInterpolatedClock({
+    clockSeconds: state.clockSeconds, isRunning: state.isRunning, countDown: state.countDown,
+    clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs,
+  });
 
   // Keep stable refs so keyboard handlers don't go stale
   const stateRef = useRef(state);

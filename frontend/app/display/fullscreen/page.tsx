@@ -128,7 +128,7 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
           className="flex flex-col items-center justify-center px-12"
           style={{ flexShrink: 0, borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
         >
-          <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+          <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} clockAnchorMs={state.clockAnchorMs} clockCarryMs={state.clockCarryMs} />
         </div>
 
         {/* Visitor side */}
@@ -196,7 +196,7 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
         <TeamSide team={home} side="home" possession={state.possession} relayUrl={relayUrl} scoreText={formatScore(state, "home")} />
       </div>
       <div className="flex items-center justify-center py-6" style={{ borderBottom: "1px solid var(--border)" }}>
-        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} />
+        <ClockPanel clockSeconds={clockSeconds} countDown={state.countDown} period={period} periodBreak={state.periodBreak} periodLabel={periodLabel} isRunning={isRunning} hornActive={hornActive} matchName={matchName} clockAnchorMs={state.clockAnchorMs} clockCarryMs={state.clockCarryMs} />
       </div>
       <div className="flex-1 flex items-center justify-center" style={{ borderBottom: DisplayStats ? "1px solid var(--border)" : undefined }}>
         <TeamSide team={visitor} side="visitor" possession={state.possession} relayUrl={relayUrl} scoreText={formatScore(state, "visitor")} />
@@ -216,7 +216,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
   const { home, visitor, clockSeconds, countDown, period, isRunning } = state;
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
-  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs });
   const periodLabel = getPeriodLabel(state);
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">

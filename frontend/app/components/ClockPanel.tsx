@@ -13,11 +13,13 @@ interface Props {
   hornActive: boolean;
   matchName?: string;
   size?: "full" | "compact";
+  clockAnchorMs?: number;
+  clockCarryMs?: number;
 }
 
-export function ClockPanel({ clockSeconds, countDown, period, periodBreak, periodLabel = "QTR", isRunning, hornActive, matchName, size = "full" }: Props) {
+export function ClockPanel({ clockSeconds, countDown, period, periodBreak, periodLabel = "QTR", isRunning, hornActive, matchName, size = "full", clockAnchorMs, clockCarryMs }: Props) {
   const isCompact = size === "compact";
-  const display = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const display = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs, clockCarryMs });
 
   return (
     <div className="flex flex-col items-center justify-center gap-2">
