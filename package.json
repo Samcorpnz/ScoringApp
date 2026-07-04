@@ -21,6 +21,7 @@
     "build:frontend": "npm run build --workspace=frontend",
     "db:migrate": "npm run migrate --workspace=packages/db",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace=frontend",
     "postinstall": "node scripts/patch-postcss-cve-2026-41305.js"
   },
   "overrides": {

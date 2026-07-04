@@ -5,12 +5,13 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
-import { getPeriodLabel } from "../../sport-templates";
+import { getPeriodLabel, getTemplate } from "../../sport-templates";
 import { formatScore } from "../../types";
 
 export default function BasicDisplay() {
   const { state, status, relayUnreachable } = useMatchState();
   const { textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
+  const DisplayStats = getTemplate(state.sport).displayStats;
 
   return (
     <div
@@ -79,6 +80,12 @@ export default function BasicDisplay() {
           <ScorePanel team={state.visitor} side="visitor" possession={state.possession} scoreText={formatScore(state, "visitor")} />
         </div>
       </div>
+
+      {DisplayStats && (
+        <div className="w-full max-w-3xl mt-6 rounded-2xl overflow-hidden" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+          <DisplayStats state={state} variant="full" />
+        </div>
+      )}
 
       {/* Input source */}
       {state.inputSource !== "none" && (

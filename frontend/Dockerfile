@@ -46,4 +46,4 @@ USER appuser
 WORKDIR /app/frontend
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy --schema ../packages/db/prisma/schema.prisma && npm start"]
+CMD ["sh", "-c", "npx prisma migrate deploy --config ../packages/db/prisma.config.ts && npm start"]

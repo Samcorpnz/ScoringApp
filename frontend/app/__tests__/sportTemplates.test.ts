@@ -2,14 +2,13 @@ import { describe, it, expect } from "vitest";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 import type { SportType } from "../types";
 
-// Every value in the SportType union (minus "cricket" which is
-// reserved for Phase 4 and intentionally has no template yet).
+// Every value in the SportType union.
 const DROP_IN_SPORT_TYPES: SportType[] = [
   "netball", "basketball", "rugby_union", "rugby_league",
   "volleyball", "football", "handball", "hockey", "waterpolo", "tennis",
   "touch_rugby", "futsal", "pickleball", "badminton",
   "table_tennis", "floorball", "squash", "lawn_bowls",
-  "indoor_cricket", "softball",
+  "indoor_cricket", "softball", "cricket",
   "custom",
 ];
 
@@ -142,10 +141,56 @@ describe("softball matchConfig", () => {
   });
 });
 
+describe("cricket matchConfig", () => {
+  const cricket = SPORT_TEMPLATES.find(t => t.sport === "cricket");
+
+  it("cricket template has matchConfig and a controlPanel override", () => {
+    expect(cricket?.matchConfig).toBeDefined();
+    expect(cricket?.matchConfig?.length).toBeGreaterThan(0);
+    expect(cricket?.controlPanel).toBeDefined();
+  });
+
+  it("cricket matchConfig has a 'format' field defaulting to t20", () => {
+    const field = cricket?.matchConfig?.find(f => f.key === "format");
+    expect(field).toBeDefined();
+    expect(field?.type).toBe("select");
+    expect(field?.defaultValue).toBe("t20");
+  });
+
+  it("format options include t20, odi and test", () => {
+    const field = cricket?.matchConfig?.find(f => f.key === "format");
+    const values = field?.options.map(o => o.value) ?? [];
+    expect(values).toContain("t20");
+    expect(values).toContain("odi");
+    expect(values).toContain("test");
+  });
+});
+
 describe("lawn_bowls scoreIncrements", () => {
   it("lawn_bowls has increments 1, 2, 3, 4", () => {
     const template = SPORT_TEMPLATES.find(t => t.sport === "lawn_bowls");
     expect(template?.scoreIncrements).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("displayStats overrides", () => {
+  const SPORTS_WITH_DISPLAY_STATS: SportType[] = ["cricket", "netball", "softball", "indoor_cricket"];
+
+  it.each(SPORTS_WITH_DISPLAY_STATS)("%s template has a displayStats override", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.displayStats).toBeDefined();
+  });
+
+  const SPORTS_WITHOUT_DISPLAY_STATS: SportType[] = [
+    "basketball", "rugby_union", "rugby_league", "volleyball", "football",
+    "handball", "hockey", "waterpolo", "tennis", "touch_rugby", "futsal",
+    "pickleball", "badminton", "table_tennis", "floorball", "squash",
+    "lawn_bowls", "custom",
+  ];
+
+  it.each(SPORTS_WITHOUT_DISPLAY_STATS)("%s template has no displayStats override", (sport) => {
+    const template = SPORT_TEMPLATES.find(t => t.sport === sport);
+    expect(template?.displayStats).toBeUndefined();
   });
 });
 

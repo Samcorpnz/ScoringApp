@@ -16,6 +16,11 @@ model Account {
   stripeSubscriptionId String?
   plan                 String   @default("free")
   billingInterval      String?
+  // Add-on purchases orthogonal to `plan` (e.g. "graphics-operator") — see
+  // requireAddOn() in relay/src/entitlements.ts. A plain string array is the
+  // pragmatic choice while there's a single add-on; revisit as a proper
+  // join model if/when several independent add-ons exist.
+  addOns               String[] @default([])
   createdAt            DateTime @default(now())
 
   orgs Org[]
@@ -52,6 +57,7 @@ model Org {
   memberships Membership[]
   tokens      ScopedToken[]
   invitations Invitation[]
+  players     Player[]
 
   @@index([accountId])
   @@index([parentOrgId])
@@ -166,6 +172,7 @@ model Invitation {
 enum ScopedTokenType {
   BRIDGE
   CONTROL
+  GRAPHICS
 }
 
 // Per-org credential for headless devices (the bridge) that can't do an
@@ -188,4 +195,28 @@ model ScopedToken {
 
   @@index([orgId])
   @@index([matchId])
+}
+
+// Graphics Operator add-on roster entry — org-wide (not per-sport/competition
+// per product decision), so the same person's photo/bio is reused across all
+// their teams. externalId/provider join a live graphicsFeed player stat
+// (keyed by the provider's own player id) to this record; a player with no
+// match here just renders without a photo, never blocks the stat itself.
+model Player {
+  id          String   @id @default(uuid())
+  orgId       String
+  org         Org      @relation(fields: [orgId], references: [id])
+  externalId  String?
+  provider    String?
+  firstName   String
+  lastName    String
+  displayName String?
+  photoUrl    String?
+  bio         String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([orgId, provider, externalId])
+  @@index([orgId])
 }

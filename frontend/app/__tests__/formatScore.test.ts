@@ -25,4 +25,27 @@ describe("formatScore", () => {
     const state = makeState({ sport: "indoor_cricket", home: { ...DEFAULT_MATCH_STATE.home, score: 4 } });
     expect(formatScore(state, "home")).toBe("4/0");
   });
+
+  it("returns runs/wickets for the batting team's current innings in cricket", () => {
+    const state = makeState({
+      sport: "cricket",
+      sportState: {
+        sport: "cricket", format: "t20", inningsNumber: 1,
+        innings: [{
+          battingTeam: "home", runs: 123, wickets: 4, oversComplete: 15, ballsThisOver: 2,
+          extras: { wides: 0, noBalls: 0, byes: 0, legByes: 0, penalties: 0 },
+          batters: [], bowlers: [], currentBatter1Index: 0, currentBatter2Index: 1, currentBowlerIndex: 0,
+          thisOverBalls: [],
+        }],
+        homeSquad: [], visitorSquad: [],
+      },
+    });
+    expect(formatScore(state, "home")).toBe("123/4");
+    expect(formatScore(state, "visitor")).toBe("0/0");
+  });
+
+  it("returns 0/0 for cricket when sportState is not yet set", () => {
+    const state = makeState({ sport: "cricket" });
+    expect(formatScore(state, "home")).toBe("0/0");
+  });
 });

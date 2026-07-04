@@ -15,6 +15,7 @@ export default defineConfig({
     // this it's left undefined, breaking useSoundCues' localStorage calls.
     environmentOptions: { jsdom: { url: "http://localhost:3000" } },
     setupFiles: ["./vitest.setup.ts"],
-    exclude: ["node_modules", ".next"],
+    // e2e/ holds Playwright specs (run via `npm run test:e2e`), not vitest tests.
+    exclude: ["node_modules", ".next", "e2e"],
   },
 });

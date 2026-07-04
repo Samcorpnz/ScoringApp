@@ -18,11 +18,12 @@ export function ColorSwatch({ color }: { color: string }) {
   );
 }
 
-export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels }: {
+export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels, testIdPrefix }: {
   score: number;
   onAdjust: (d: number) => void;
   scoreIncrements: number[];
   scoreLabels?: string[];
+  testIdPrefix?: string;
 }) {
   const compact = scoreIncrements.length > 2;
   const btnClass = `rounded-xl py-4 font-black flex-1 ${compact ? "text-lg" : "text-xl"}`;
@@ -34,12 +35,14 @@ export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels }: 
       <div className="flex items-center gap-2">
         {negatives.map(d => (
           <button key={-d} className={btnClass}
+            data-testid={testIdPrefix ? `${testIdPrefix}-dec-${d}` : undefined}
             style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
             onClick={() => onAdjust(-d)}>−{d}</button>
         ))}
         <div className={scoreClass} style={{ color: "var(--accent)" }}>{score}</div>
         {scoreIncrements.map(d => (
           <button key={d} className={btnClass}
+            data-testid={testIdPrefix ? `${testIdPrefix}-inc-${d}` : undefined}
             style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
             onClick={() => onAdjust(d)}>+{d}</button>
         ))}

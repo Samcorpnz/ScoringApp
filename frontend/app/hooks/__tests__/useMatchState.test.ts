@@ -7,11 +7,17 @@ type Handler = (...args: any[]) => void;
 
 function makeFakeSocket() {
   const handlers: Record<string, Handler[]> = {};
+  const timeoutEmit = vi.fn((event: string, ...args: any[]) => {
+    const cb = args[args.length - 1];
+    if (typeof cb === "function") cb();
+  });
   return {
     on: vi.fn((event: string, cb: Handler) => {
       (handlers[event] ??= []).push(cb);
     }),
     emit: vi.fn(),
+    timeout: vi.fn(() => ({ emit: timeoutEmit })),
+    timeoutEmit,
     disconnect: vi.fn(),
     __trigger: (event: string, ...args: any[]) => {
       for (const cb of handlers[event] ?? []) cb(...args);
@@ -68,8 +74,10 @@ describe("useMatchState", () => {
 
   it("sendManualUpdate emits manualUpdate on the socket", () => {
     const { result } = renderHook(() => useMatchState({ secret: "s", role: "control" }));
-    act(() => result.current.sendManualUpdate({ matchName: "New" }));
-    expect(fakeSocket.emit).toHaveBeenCalledWith("manualUpdate", { matchName: "New" });
+    act(() => { result.current.sendManualUpdate({ matchName: "New" }); });
+    expect(fakeSocket.timeoutEmit).toHaveBeenCalledWith(
+      "manualUpdate", { matchName: "New" }, expect.any(Function)
+    );
   });
 
   it("sendReset emits resetMatch on the socket", () => {

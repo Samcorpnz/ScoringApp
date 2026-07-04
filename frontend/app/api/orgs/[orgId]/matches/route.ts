@@ -3,7 +3,10 @@ import { SignJWT } from "jose";
 import { prisma, MatchStatus } from "@scorehub/db";
 import { auth } from "@/auth";
 
-const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
+// Server-side fetch — needs the relay's address as reachable from this
+// process (e.g. Docker's internal `http://relay:4000`), which can differ
+// from NEXT_PUBLIC_RELAY_URL (baked into client bundles for the browser).
+const RELAY_URL = process.env.RELAY_INTERNAL_URL ?? process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
 // Always creates a brand-new LIVE match via the relay (which owns the
 // free-tier concurrent-match entitlement check and the live state cache) —

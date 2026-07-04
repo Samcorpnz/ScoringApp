@@ -31,7 +31,10 @@ function ControlPanelInner() {
   const router = useRouter();
   const matchId = useSearchParams().get("matchId") ?? undefined;
   const controlToken = useControlToken(matchId);
-  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl } = useMatchState({ secret: controlToken, role: "control" });
+  const {
+    state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
+    sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+  } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
   // Redirect to login if not authenticated — runs client-side, no Edge Function needed
@@ -138,11 +141,12 @@ function ControlPanelInner() {
 
       {/* Controller conflict banner */}
       {controllerStatus === "conflict" && (
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,160,0,0.12)", borderBottom: "1px solid rgba(255,160,0,0.3)" }}>
+        <div data-testid="controller-conflict-banner" className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,160,0,0.12)", borderBottom: "1px solid rgba(255,160,0,0.3)" }}>
           <span className="text-sm font-bold" style={{ color: "#ffa000" }}>
             Another control panel is already connected to this match.
           </span>
           <button
+            data-testid="take-control"
             onClick={takeControl}
             className="rounded-lg px-4 py-1.5 text-xs font-bold"
             style={{ background: "#ffa000", color: "#000" }}
@@ -154,11 +158,12 @@ function ControlPanelInner() {
 
       {/* Revoked banner */}
       {controllerStatus === "revoked" && (
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,60,60,0.12)", borderBottom: "1px solid rgba(255,60,60,0.3)" }}>
+        <div data-testid="controller-revoked-banner" className="flex items-center justify-between px-6 py-3" style={{ background: "rgba(255,60,60,0.12)", borderBottom: "1px solid rgba(255,60,60,0.3)" }}>
           <span className="text-sm font-bold" style={{ color: "#ff3c3c" }}>
             Control was taken by another operator. You are now viewing only.
           </span>
           <button
+            data-testid="reclaim-control"
             onClick={takeControl}
             className="rounded-lg px-4 py-1.5 text-xs font-bold"
             style={{ background: "#ff3c3c", color: "#fff" }}
@@ -193,8 +198,19 @@ function ControlPanelInner() {
 
       {/* Tab content */}
       <div className="p-6 max-w-5xl" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "score"    && <ScoreTab    state={state} push={push} sendReset={sendReset} sendUndo={sendUndo} />}
-        {tab === "outputs"  && <OutputsTab  />}
+        {tab === "score"    && (
+          <ScoreTab
+            state={state}
+            push={push}
+            sendReset={sendReset}
+            sendUndo={sendUndo}
+            sendCricketBall={sendCricketBall}
+            sendCricketOverComplete={sendCricketOverComplete}
+            sendCricketInningsChange={sendCricketInningsChange}
+            sendCricketDeclare={sendCricketDeclare}
+          />
+        )}
+        {tab === "outputs"  && <OutputsTab matchId={matchId} />}
         {tab === "logos"    && <LogosTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "theme"    && <ThemeTab    state={state} push={push} controlToken={controlToken} />}
         {tab === "audio"    && <AudioTab    cues={cues} addCue={addCue} removeCue={removeCue} controlToken={controlToken} />}

@@ -13,11 +13,12 @@ export function Card({ title, children }: { title: string; children: React.React
   );
 }
 
-export function SmallBtn({ label, onClick, primary = false, active = false }: {
-  label: string; onClick: () => void; primary?: boolean; active?: boolean;
+export function SmallBtn({ label, onClick, primary = false, active = false, testId }: {
+  label: string; onClick: () => void; primary?: boolean; active?: boolean; testId?: string;
 }) {
   return (
     <button className="rounded-lg px-3 py-1.5 text-xs font-bold"
+      data-testid={testId}
       style={{
         background: active || primary ? "var(--accent-dim)" : "var(--bg-elevated)",
         border: `1px solid ${active || primary ? "var(--border-accent)" : "var(--border)"}`,

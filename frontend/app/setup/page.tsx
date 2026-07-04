@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
-import type { SportType } from "../types";
+import type { SportType, CricketInningsState } from "../types";
 import { useControlToken } from "../hooks/useControlToken";
 import { useMatchState } from "../hooks/useMatchState";
+import { CricketSquadSetup, emptySquad } from "../control/components/CricketSquadSetup";
 
-type SetupState = "form" | "provisioning" | "applying" | "upgrade-required" | "error";
+type SetupState = "form" | "squad-entry" | "provisioning" | "applying" | "upgrade-required" | "error";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function SetupPage() {
   const [sportConfig, setSportConfig] = useState<Record<string, string>>({});
   const [state, setState] = useState<SetupState>("form");
   const [message, setMessage] = useState("");
+  const [homeSquad, setHomeSquad] = useState<string[]>(emptySquad());
+  const [visitorSquad, setVisitorSquad] = useState<string[]>(emptySquad());
 
   const [matchId, setMatchId] = useState<string | null>(null);
   const controlToken = useControlToken(matchId ?? undefined);
@@ -46,9 +49,18 @@ export default function SetupPage() {
   // Once the socket is connected (only mounted once the form is submitted),
   // push the chosen sport/names and move on — the relay's manualUpdate
   // patch is the only way to set match fields, there's no REST write path.
+  // We must await the relay's ack before navigating: router.push unmounts
+  // this page, which disconnects the socket, and a fire-and-forget emit can
+  // be dropped if that happens before the relay finishes applying it.
   useEffect(() => {
     if (state !== "applying" || connStatus !== "connected") return;
     const template = getTemplate(sport);
+    const freshInnings: CricketInningsState = {
+      battingTeam: "home", runs: 0, wickets: 0, oversComplete: 0, ballsThisOver: 0,
+      extras: { wides: 0, noBalls: 0, byes: 0, legByes: 0, penalties: 0 },
+      batters: [], bowlers: [], currentBatter1Index: 0, currentBatter2Index: 1, currentBowlerIndex: 0,
+      thisOverBalls: [],
+    };
     sendManualUpdate({
       sport,
       matchName: matchName.trim(),
@@ -59,8 +71,19 @@ export default function SetupPage() {
       home: { ...matchState.home, name: homeName.trim() },
       visitor: { ...matchState.visitor, name: visitorName.trim() },
       ...(Object.keys(sportConfig).length > 0 && { sportConfig }),
+      ...(sport === "cricket" && {
+        sportState: {
+          sport: "cricket",
+          format: (sportConfig.format as "t20" | "odi" | "test") ?? "t20",
+          inningsNumber: 1,
+          innings: [freshInnings],
+          homeSquad: homeSquad.filter(n => n.trim()).map((name, id) => ({ id, name: name.trim() })),
+          visitorSquad: visitorSquad.filter(n => n.trim()).map((name, id) => ({ id, name: name.trim() })),
+        },
+      }),
+    }).then(() => {
+      router.push(`/control?matchId=${matchId}`);
     });
-    router.push(`/control?matchId=${matchId}`);
   }, [state, connStatus]);
 
   async function handleSubmit() {
@@ -150,6 +173,7 @@ export default function SetupPage() {
                 {SPORT_TEMPLATES.map(t => (
                   <button
                     key={t.sport}
+                    data-testid={`sport-tile-${t.sport}`}
                     className="rounded-lg px-3 py-2 text-left"
                     style={{
                       background: sport === t.sport ? "var(--accent-dim)" : "var(--bg-elevated)",
@@ -173,6 +197,7 @@ export default function SetupPage() {
                   {field.options.map(opt => (
                     <button
                       key={opt.value}
+                      data-testid={`match-config-${field.key}-${opt.value}`}
                       className="rounded-lg px-4 py-2 text-left"
                       style={{
                         background: sportConfig[field.key] === opt.value ? "var(--accent-dim)" : "var(--bg-elevated)",
@@ -190,33 +215,48 @@ export default function SetupPage() {
             ))}
 
             <div className="rounded-xl p-5 space-y-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
-              <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} />
-              <SetupField label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} />
-              <SetupField label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} />
+              <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} testId="setup-match-name" />
+              <SetupField label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} testId="setup-home-name" />
+              <SetupField label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} testId="setup-visitor-name" />
             </div>
 
             <button
+              data-testid="setup-submit"
               className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
               style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
-              onClick={handleSubmit}
+              onClick={() => sport === "cricket" ? setState("squad-entry") : handleSubmit()}
               disabled={!orgId}
             >
-              Start Match →
+              {sport === "cricket" ? "Next: Squads →" : "Start Match →"}
             </button>
           </div>
+        )}
+
+        {state === "squad-entry" && (
+          <CricketSquadSetup
+            homeTeamName={homeName}
+            visitorTeamName={visitorName}
+            homeSquad={homeSquad}
+            visitorSquad={visitorSquad}
+            onChangeHome={(idx, name) => setHomeSquad(prev => prev.map((n, i) => i === idx ? name : n))}
+            onChangeVisitor={(idx, name) => setVisitorSquad(prev => prev.map((n, i) => i === idx ? name : n))}
+            onBack={() => setState("form")}
+            onSubmit={handleSubmit}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function SetupField({ label, placeholder, value, onChange }: {
-  label: string; placeholder: string; value: string; onChange: (v: string) => void;
+function SetupField({ label, placeholder, value, onChange, testId }: {
+  label: string; placeholder: string; value: string; onChange: (v: string) => void; testId?: string;
 }) {
   return (
     <div>
       <p className="text-xs mb-1" style={{ color: "var(--text-dim)" }}>{label}</p>
       <input
+        data-testid={testId}
         className="w-full rounded-lg px-3 py-2 text-sm font-semibold"
         style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
         placeholder={placeholder}

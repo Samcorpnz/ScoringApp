@@ -13,6 +13,7 @@ packages/db/generated/
 .env.local
 .env.*.local
 .env.vercel.*
+.env.remote
 
 # Uploaded logos (user content, not source)
 relay/uploads/

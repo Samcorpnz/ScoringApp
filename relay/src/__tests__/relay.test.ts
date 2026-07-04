@@ -108,6 +108,14 @@ describe("GET /state", () => {
   });
 });
 
+describe("GET /api/graphics/entitlement", () => {
+  it("is unrestricted (entitled: true) in legacy single-tenant mode", async () => {
+    const res = await request(app).get("/api/graphics/entitlement");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ entitled: true });
+  });
+});
+
 describe("POST /manual", () => {
   it("rejects requests without a secret header", async () => {
     const res = await request(app).post("/manual").send({ home: { score: 99 } });
@@ -376,6 +384,36 @@ describe("socket — control resetMatch", () => {
     } finally {
       control.disconnect();
       viewer.disconnect();
+    }
+  });
+});
+
+describe("socket — requestControl", () => {
+  it("grants control on request when no other controller is active", async () => {
+    const control = await connectControl();
+    try {
+      const grantedPromise = new Promise<void>(resolve => control.once("controllerGranted", resolve));
+      const ackPromise = new Promise<void>(resolve => control.timeout(3000).emit("requestControl", resolve));
+      await Promise.all([grantedPromise, ackPromise]);
+    } finally {
+      control.disconnect();
+    }
+  });
+
+  it("responds with a conflict when another socket already holds the token", async () => {
+    const first = await connectControl();
+    const second = ioClient(serverUrl, { auth: { secret: CONTROL_SECRET, role: "control" }, reconnection: false });
+    try {
+      // The connect-time resolution already emits an initial conflict; wait
+      // for it to settle before issuing the explicit requestControl so the
+      // assertion below is unambiguously about the retry path.
+      await nextEvent(second, "controllerConflict");
+      const conflictPromise = new Promise<void>(resolve => second.once("controllerConflict", () => resolve()));
+      const ackPromise = new Promise<void>(resolve => second.timeout(3000).emit("requestControl", resolve));
+      await Promise.all([conflictPromise, ackPromise]);
+    } finally {
+      first.disconnect();
+      second.disconnect();
     }
   });
 });
