@@ -123,6 +123,31 @@ purchasing the add-on itself; multi-operator scene-control concurrency (Phase A 
 wins, same as `matchStateChange` today); a visual/customizable scene template editor (scenes are
 hardcoded React components per type through Phase B).
 
+### Phase C0 — graphics scene look-and-feel (theme wiring)
+
+Added per user request before roster/photo work: give graphics scenes the same per-match branding
+control operators already have for other display outputs, rather than inventing a new theming
+system. `MatchState.displayTheme` (`packages/types/index.ts` — `primaryColor`, `backgroundColor`,
+`font`, `textScale`, `competitionLogoUrl`) is already editable per-match via
+`frontend/app/control/components/ThemeTab.tsx` and applied via `frontend/app/hooks/useDisplayTheme.ts`
+on every other `/display/*` route, but `/display/graphics` and its scenes didn't call it, and
+separately hardcoded team colors instead of reading `state.home.color`/`state.visitor.color` the
+way `ScoreTab.tsx` already does.
+
+- `display/graphics/page.tsx` now calls `useDisplayTheme(state.displayTheme)`, applying
+  `--accent`/`--accent-dim`/`fontFamily`/`--text-scale` to the root wrapper. The theme's
+  `backgroundColor` is deliberately *not* applied to the wrapper background (must stay transparent
+  for OBS/vMix compositing) — instead it's converted to an rgba tint via a local `hexToRgba()` and
+  exposed as the `--graphics-card-bg` CSS var, which `LowerThird`/`PlayerStatCard`/
+  `PlayerHeadshotBio` now use for their card backgrounds (`var(--graphics-card-bg, rgba(7,9,15,0.92))`
+  — falls back to the old hardcoded value if rendered outside that wrapper, e.g. in tests).
+- The three graphics scenes now read `state.home.color`/`state.visitor.color` with the existing
+  CSS-var fallback, matching `ScoreTab.tsx`. Known pre-existing gap, not fixed here to avoid
+  unrelated scope creep: `display/basic`/`advanced`/`overlay` and the non-graphics
+  `*DisplayStats` components still hardcode the CSS vars instead of reading team colors.
+- No new admin UI needed — `ThemeTab.tsx`'s existing color pickers/font field/competition-logo
+  uploader become the graphics customization UI for free, since it's the same `displayTheme` field.
+
 ## Critical files
 
 - `relay/src/server.ts` — `setScene`/`graphicsSceneUpdate` handling, room-scoped scene state,
@@ -163,6 +188,52 @@ hardcoded React components per type through Phase B).
       /display/graphics (lowerThird + playerStatCard scenes, upgrade-prompt soft-degrade), minimal
       /control/graphics scene picker. Not yet done: manual docker-compose end-to-end smoke test
       (automated tsc/eslint/jest/vitest all pass; browser verification still pending).
-- [ ] Phase B — generalize
-- [ ] Phase C — player photo/bio management
-- [ ] Phase D — additional providers
+- [x] Phase B — generalize (2026-07-04): best-guess championdata.basketball.json and
+      championdata.cricket.json feed mappings (no real sample payload for these two providers yet,
+      unlike netball — field paths follow Champion Data's usual conventions but are unverified;
+      correcting them once a real feed is seen is a JSON edit, proving the no-redeploy thesis).
+      frontend/app/sport-graphics-templates.ts adds per-sport stat labels + display ordering for
+      netball/basketball/cricket, wired into LowerThird and PlayerStatCard (falls back to a generic
+      camelCase-split label for sports with no template). Added the playerHeadshotBio scene
+      (initials-avatar placeholder — real photos are Phase C) and scene preview thumbnails in
+      control/graphics. All new/updated tests passing (bridge 57/57, frontend tsc/eslint clean,
+      155 relevant vitest tests).
+- [x] Phase C0 — graphics scene look-and-feel (2026-07-04): wired `useDisplayTheme` into
+      `display/graphics/page.tsx` (accent/font/text-scale, plus a `--graphics-card-bg` tint derived
+      from the theme's backgroundColor without breaking OBS transparency), and switched
+      `LowerThird`/`PlayerStatCard`/`PlayerHeadshotBio` to read `state.home.color`/
+      `state.visitor.color` instead of hardcoded CSS vars. Also fixed a pre-existing `tsc` break in
+      `SoftballTab.tsx` (missing `sendScoreAdjust` prop destructure) found while verifying this
+      branch's build is clean. New `graphicsSceneTheme.test.tsx` (4 tests); full frontend suite
+      192/192 passing, tsc/eslint clean.
+- [x] Phase C — player photo/bio management (2026-07-04): `Player` CRUD routes
+      (`frontend/app/api/orgs/[orgId]/players[/[playerId]]`, gated by ADMIN/MANAGER/OPERATOR + the
+      graphics-operator add-on, mirroring the invitations/graphics-token route patterns); relay
+      `POST/DELETE /api/player-photo/:playerId` (dual R2/disk storage, `requireAddOn` instead of
+      `requirePlan`, copies the logo-upload multer pattern) and a public
+      `GET /api/graphics/roster?org=` read route (same trust level as `/api/graphics/entitlement`);
+      new standalone `/control/roster` page (create/edit/delete players, photo upload, plus a "Live
+      match — unmatched players" section for manual-only linking of a live feed player's
+      provider/externalId to a roster entry, no fuzzy matching); `useRoster`/`findRosterMatch` hook
+      wired into `PlayerStatCard`/`PlayerHeadshotBio` (shows roster photo/displayName/bio when
+      matched, falls back to the existing initials-avatar/feed-name rendering when not — additive,
+      non-breaking). No new migration needed (the `Player` model already existed from Phase A).
+      New tests: `graphics-roster.test.ts` (relay, 3 tests) and `useRoster.test.ts` (frontend, 3
+      tests). Full suites passing: relay 144/144, frontend 195/195, both tsc-clean.
+- [x] Phase D — additional providers (2026-07-04): built the multi-provider registry/transport
+      split as testing infra rather than a real vendor integration (no second real provider was
+      named yet — user confirmed to prove the pattern with a mock/synthetic provider). Added
+      `feedMappings/mockpush.netball.json`, a deliberately differently-shaped payload (nested
+      `match.teams`/`roster`/`stats`, vs. Champion Data's flat fields) registered under provider id
+      `mockpush`, proving `findFeedMapping` keys on provider+sport rather than sport alone. Added
+      `bridge/src/sources/mockPushSource.ts` — an event-driven push source (any `EventEmitter`,
+      modeling a websocket "message" feed) rather than HTTP polling
+      (`championDataJsonSource.ts`'s "Path 1"), reusing `applyFeedMapping`/`buildGraphicsFeed`
+      unchanged and never touching score state (graphics-feed-only, no score parser of its own).
+      Deliberately **not** wired into `BridgeController`'s operator-facing `SourceType` — it's a
+      test/dev harness proving the registry design, not a shippable source, so it stays out of the
+      production source picker. New `mockPushSource.test.ts` (4 tests: builds a feed from a pushed
+      payload, teardown stops listening, never throws on malformed input, no-ops for a sport with
+      no mockpush mapping). Full bridge suite 61/61 passing, tsc clean. Revisit file-based vs.
+      DB-stored mapping config (noted as a possible future step above) once/if a second *real*
+      provider is named.

@@ -34,6 +34,7 @@ function ControlPanelInner() {
   const {
     state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
     sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
+    sendScoreAdjust, sendIndoorCricketWicket,
   } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
@@ -208,6 +209,8 @@ function ControlPanelInner() {
             sendCricketOverComplete={sendCricketOverComplete}
             sendCricketInningsChange={sendCricketInningsChange}
             sendCricketDeclare={sendCricketDeclare}
+            sendScoreAdjust={sendScoreAdjust}
+            sendIndoorCricketWicket={sendIndoorCricketWicket}
           />
         )}
         {tab === "outputs"  && <OutputsTab matchId={matchId} />}

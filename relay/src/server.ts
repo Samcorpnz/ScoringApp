@@ -7,16 +7,17 @@ import { Server, Socket } from "socket.io";
 import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { MatchState, DEFAULT_MATCH_STATE } from "./types";
+import { MatchState, DEFAULT_MATCH_STATE, IndoorCricketState } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
 import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
-import { requirePlan, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
+import { requirePlan, requireAddOn, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
 import {
   matchStatePatchSchema, matchStateSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
+  scoreAdjustEventSchema, indoorCricketWicketEventSchema,
   graphicsSceneSchema, GraphicsScenePayload,
 } from "./schemas";
 import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
@@ -376,6 +377,78 @@ export function createServer(options: ServerOptions = {}) {
     res.json({ status: "removed" });
   });
 
+  // ─── Player photo upload ─────────────────────────────────────────────────────
+  // Graphics Operator add-on roster (Phase C): gated by requireAddOn rather
+  // than requirePlan, since this is orthogonal to the pro/venue plan tiers —
+  // an org needs the graphics-operator add-on, not a specific plan. The
+  // uploaded photoUrl is handed back to the caller (frontend/control/roster),
+  // which PATCHes it onto the Player row via the players API route — this
+  // route only knows about storage, not the Player model.
+
+  const PLAYER_PHOTOS_DIR = path.join(UPLOAD_DIR, "player-photos");
+  fs.mkdirSync(PLAYER_PHOTOS_DIR, { recursive: true });
+  app.use("/player-photos", express.static(PLAYER_PHOTOS_DIR));
+
+  const playerPhotoUpload = multer({
+    storage: r2Enabled
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: (req, _file, cb) => {
+            const dir = path.join(PLAYER_PHOTOS_DIR, (req as any).orgId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+          },
+          filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || ".png";
+            cb(null, `${(req as any).params.playerId}${ext}`);
+          },
+        }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/png", "image/jpeg", "image/webp"];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+
+  app.post(
+    "/api/player-photo/:playerId",
+    controlRateLimit,
+    controlAuth,
+    requireAddOn("graphics-operator"),
+    playerPhotoUpload.single("photo"),
+    async (req, res) => {
+      if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
+      const orgId = (req as any).orgId as string;
+      const playerId = req.params.playerId;
+
+      let photoUrl: string;
+      if (r2Enabled) {
+        const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+        const cdnUrl = await putObject(`player-photos/${orgId}/${playerId}${ext}`, req.file.buffer, req.file.mimetype);
+        photoUrl = `${cdnUrl}?t=${Date.now()}`;
+      } else {
+        const ext = path.extname(req.file.filename).toLowerCase();
+        photoUrl = `/player-photos/${orgId}/${playerId}${ext}?t=${Date.now()}`;
+      }
+
+      res.json({ photoUrl });
+    }
+  );
+
+  app.delete("/api/player-photo/:playerId", controlRateLimit, controlAuth, requireAddOn("graphics-operator"), async (req, res) => {
+    const orgId = (req as any).orgId as string;
+    const playerId = req.params.playerId;
+    if (r2Enabled) {
+      await deleteByPrefix(`player-photos/${orgId}/${playerId}.`);
+    } else {
+      const dir = path.join(PLAYER_PHOTOS_DIR, orgId);
+      if (fs.existsSync(dir)) {
+        fs.readdirSync(dir).filter(f => f.startsWith(`${playerId}.`)).forEach(f => fs.unlinkSync(path.join(dir, f)));
+      }
+    }
+    res.json({ status: "removed" });
+  });
+
   // ─── Sound upload ────────────────────────────────────────────────────────────
 
   const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
@@ -488,6 +561,24 @@ export function createServer(options: ServerOptions = {}) {
   app.get("/api/graphics/entitlement", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
     res.json({ entitled: await orgHasAddOn(orgId, "graphics-operator") });
+  });
+
+  // Public (no secret), same trust level as /api/graphics/entitlement above —
+  // /display/graphics has no session and needs to resolve a live feed
+  // player's id (provider+externalId) to a roster photo/bio. Returns the
+  // org's whole roster rather than a per-player lookup since the scene
+  // components already hold the full live player list client-side.
+  app.get("/api/graphics/roster", async (req, res) => {
+    const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    if (!process.env.DATABASE_URL) {
+      res.json({ players: [] });
+      return;
+    }
+    const players = await prisma.player.findMany({
+      where: { orgId },
+      select: { externalId: true, provider: true, firstName: true, lastName: true, displayName: true, photoUrl: true, bio: true },
+    });
+    res.json({ players });
   });
 
   app.post("/manual", controlRateLimit, async (req, res) => {
@@ -926,6 +1017,81 @@ export function createServer(options: ServerOptions = {}) {
         io.to(room).emit("matchStateChange", restored);
         getMatchStore(orgId, matchId)?.save(restored);
         publishStateUpdate(room, restored);
+      });
+
+      // Delta-based score mutations. Unlike manualUpdate (which trusts a
+      // client-computed absolute value and merges via applyManualUpdate's
+      // `await getState(...)`), these apply a delta against the relay's own
+      // authoritative state and are kept fully synchronous — no `await`
+      // anywhere in the handler body. That's deliberate: even an
+      // already-resolved `await getState(...)` still defers its continuation
+      // by a microtask tick, and if two rapid clicks dispatch their socket
+      // events back-to-back in the same synchronous frame-parsing pass, both
+      // handlers' reads could land before either write — reproducing the
+      // exact stale-base-score coalescing bug this event exists to fix, just
+      // moved server-side. Direct, synchronous matchStates access (matching
+      // resetMatch/undo above, not applyManualUpdate) closes that window.
+      socket.on("adjustScore", (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = scoreAdjustEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed adjustScore from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const { side, delta } = parsed.data;
+        const entry = matchStates.get(room);
+        if (!entry) return; // room is expected to always be warm by this point
+        const current = entry.state;
+        const stack = undoStacks.get(room) ?? [];
+        stack.push(current);
+        if (stack.length > UNDO_STACK_SIZE) stack.shift();
+        undoStacks.set(room, stack);
+        const next: MatchState = {
+          ...current,
+          sequenceId: current.sequenceId + 1,
+          [side]: { ...current[side], score: Math.max(0, current[side].score + delta) },
+        };
+        setState(orgId, next, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { [side]: next[side] });
+      });
+
+      // Indoor cricket's "take a wicket" action atomically combines a score
+      // decrement (by the configured wicketPenalty) with a wicket-count
+      // increment on the same side — same synchronous-only requirement as
+      // adjustScore above, and for the same reason.
+      socket.on("indoorCricket:wicket", (rawPayload: unknown) => {
+        if (!assertController()) { socket.emit("controllerConflict", {}); return; }
+        const parsed = indoorCricketWicketEventSchema.safeParse(rawPayload);
+        if (!parsed.success) {
+          console.warn(`[relay] rejected malformed indoorCricket:wicket from room ${room}:`, parsed.error.issues);
+          return;
+        }
+        const { side } = parsed.data;
+        const entry = matchStates.get(room);
+        if (!entry) return;
+        const current = entry.state;
+        const cricketState = current.sportState as IndoorCricketState | undefined;
+        const wicketPenalty = Number(current.sportConfig?.wicketPenalty ?? 5);
+        const stack = undoStacks.get(room) ?? [];
+        stack.push(current);
+        if (stack.length > UNDO_STACK_SIZE) stack.shift();
+        undoStacks.set(room, stack);
+        const next: MatchState = {
+          ...current,
+          sequenceId: current.sequenceId + 1,
+          [side]: { ...current[side], score: Math.max(0, current[side].score - wicketPenalty) },
+          sportState: {
+            sport: "indoor_cricket",
+            wicketPenalty: wicketPenalty === 2 ? 2 : 5,
+            oversPerInnings: cricketState?.oversPerInnings ?? 8,
+            homeWickets: side === "home" ? (cricketState?.homeWickets ?? 0) + 1 : (cricketState?.homeWickets ?? 0),
+            visitorWickets: side === "visitor" ? (cricketState?.visitorWickets ?? 0) + 1 : (cricketState?.visitorWickets ?? 0),
+          },
+        };
+        setState(orgId, next, matchId);
+        const bridge = bridgeSockets.get(room);
+        if (bridge?.connected) bridge.emit("manualUpdate", { [side]: next[side], sportState: next.sportState });
       });
     }
 

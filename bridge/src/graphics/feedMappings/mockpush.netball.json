@@ -1,0 +1,20 @@
+{
+  "provider": "mockpush",
+  "sport": "netball",
+  "teamsPath": "match.teams",
+  "playersPath": "roster",
+  "playerIdField": "id",
+  "playerNameField": "name",
+  "teamFields": [
+    { "path": "name", "statKey": "squadName" },
+    { "path": "stats.goals", "statKey": "goals" },
+    { "path": "stats.attempts", "statKey": "goalAttempts" },
+    { "path": "stats.turnovers", "statKey": "turnovers" }
+  ],
+  "playerFields": [
+    { "path": "position", "statKey": "position" },
+    { "path": "stats.goals", "statKey": "goals" },
+    { "path": "stats.assists", "statKey": "goalAssists" },
+    { "path": "stats.intercepts", "statKey": "intercepts" }
+  ]
+}

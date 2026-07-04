@@ -8,6 +8,7 @@ export type {
   NetballMatchStats,
   DisplayTheme,
   MatchState,
+  IndoorCricketState,
 } from "@scorehub/types";
 
 export { DEFAULT_DISPLAY_THEME } from "@scorehub/types";
