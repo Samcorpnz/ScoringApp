@@ -11,20 +11,24 @@ import { useGraphicsScene } from "../../hooks/useGraphicsScene";
 // operator (though per product decision a scoring operator may also use
 // this to drive scenes solo on smaller productions).
 export default function GraphicsControl() {
-  useSession({
+  const { data: session } = useSession({
     required: true,
     onUnauthenticated() {
       window.location.href = "/login?callbackUrl=/control/graphics";
     },
   });
 
-  const graphicsToken = useGraphicsToken();
+  const { token: graphicsToken, status: entitlementStatus } = useGraphicsToken();
   const { state } = useMatchState();
   const { scene, status, setScene } = useGraphicsScene({ secret: graphicsToken, role: "graphics" });
 
   const players = state.graphicsFeed?.stats.players ?? [];
   const isLive = (sceneType: string, playerId?: string) =>
     scene?.sceneType === sceneType && (!playerId || scene.payload?.playerId === playerId);
+
+  if (entitlementStatus === "forbidden") {
+    return <GraphicsUpsell isAdmin={session?.user?.activeRole === "ADMIN"} />;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24 }}>
@@ -85,6 +89,37 @@ export default function GraphicsControl() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function GraphicsUpsell({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24, display: "flex", justifyContent: "center" }}>
+      <div style={{ maxWidth: 480, marginTop: "10vh", textAlign: "center" }}>
+        <h1 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: 8 }}>Unlock Graphics Control</h1>
+        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: 20 }}>
+          Broadcast-style lower thirds, player stat cards, and headshot bios — pushed live to your display outputs
+          in real time, driven straight from your existing scoring feed.
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", textAlign: "left", fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <li>✓ Live-feed-driven scenes — no manual data entry</li>
+          <li>✓ Per-match theming to match your competition branding</li>
+          <li>✓ One-click scene switching from a second device</li>
+        </ul>
+        {isAdmin ? (
+          <a
+            href="/account"
+            style={{ display: "inline-block", background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", borderRadius: 8, padding: "10px 20px", fontSize: "0.85rem", fontWeight: 700, textDecoration: "none" }}
+          >
+            Add Graphics — $29/mo
+          </a>
+        ) : (
+          <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
+            Ask your account admin to add Graphics Operator ($29/mo) from Account settings.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
