@@ -220,4 +220,20 @@ way `ScoreTab.tsx` already does.
       non-breaking). No new migration needed (the `Player` model already existed from Phase A).
       New tests: `graphics-roster.test.ts` (relay, 3 tests) and `useRoster.test.ts` (frontend, 3
       tests). Full suites passing: relay 144/144, frontend 195/195, both tsc-clean.
-- [ ] Phase D — additional providers
+- [x] Phase D — additional providers (2026-07-04): built the multi-provider registry/transport
+      split as testing infra rather than a real vendor integration (no second real provider was
+      named yet — user confirmed to prove the pattern with a mock/synthetic provider). Added
+      `feedMappings/mockpush.netball.json`, a deliberately differently-shaped payload (nested
+      `match.teams`/`roster`/`stats`, vs. Champion Data's flat fields) registered under provider id
+      `mockpush`, proving `findFeedMapping` keys on provider+sport rather than sport alone. Added
+      `bridge/src/sources/mockPushSource.ts` — an event-driven push source (any `EventEmitter`,
+      modeling a websocket "message" feed) rather than HTTP polling
+      (`championDataJsonSource.ts`'s "Path 1"), reusing `applyFeedMapping`/`buildGraphicsFeed`
+      unchanged and never touching score state (graphics-feed-only, no score parser of its own).
+      Deliberately **not** wired into `BridgeController`'s operator-facing `SourceType` — it's a
+      test/dev harness proving the registry design, not a shippable source, so it stays out of the
+      production source picker. New `mockPushSource.test.ts` (4 tests: builds a feed from a pushed
+      payload, teardown stops listening, never throws on malformed input, no-ops for a sport with
+      no mockpush mapping). Full bridge suite 61/61 passing, tsc clean. Revisit file-based vs.
+      DB-stored mapping config (noted as a possible future step above) once/if a second *real*
+      provider is named.
