@@ -20,6 +20,16 @@ const eslintConfig = [
       "react-hooks/purity": "warn",
     },
   },
+  {
+    // Playwright fixtures take a callback parameter literally named `use`
+    // (test.extend's fixture-provider signature) — react-hooks/rules-of-hooks
+    // mistakes calls to it for the React 19 `use()` hook, since the enclosing
+    // fixture functions aren't components or `use*`-named hooks.
+    files: ["e2e/**"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ];
 
 export default eslintConfig;
