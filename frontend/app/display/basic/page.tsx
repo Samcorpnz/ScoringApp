@@ -72,6 +72,8 @@ export default function BasicDisplay() {
             isRunning={state.isRunning}
             hornActive={state.hornActive}
             matchName={state.matchName}
+            clockAnchorMs={state.clockAnchorMs}
+            clockCarryMs={state.clockCarryMs}
           />
         </div>
 

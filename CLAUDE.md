@@ -104,6 +104,29 @@ Prisma schema (`packages/db/prisma/schema.prisma`): `Account` → `Org` (hierarc
 `parentOrgId`) → `Membership` (role-based) → `User`; `Match`, `Invitation`, `ScopedToken`,
 `StripeEvent`, `EmailChangeRequest` round out the model.
 
+## Billing (Stripe)
+
+Two entirely separate Stripe accounts, not live/test modes of one account — a test-mode API key
+authenticates against a different `acct_...` ID than the live key, so anything set up in one
+(products, prices, webhook endpoints) does not exist in the other and has to be replicated by
+hand:
+
+- **Live** — `acct_1Tl1p7HOooda4q8p` (`sk_live_51Tl1p7...`), used by `frontend/.env.vercel.production`.
+- **Test** — `acct_1Tl1swHwavOcrAr0` (`sk_test_51Tl1sw...`), used by `frontend/.env.local` and
+  `frontend/.env.vercel.preview`.
+
+Catalog: `ScoreHub Pro` ($89/mo, $890/yr), `ScoreHub Venue` ($349/mo, $3,490/yr), and the
+`ScoreHub Graphics` add-on ($29/mo, $290/yr — requires an active Pro or Venue plan; see
+`requireAddOn("graphics-operator")` in `relay/src/entitlements.ts`). All prices are NZD, and the
+annual price is always 10x the monthly price (2 months free). `frontend/lib/plans.ts` maps
+plan/add-on names to `STRIPE_PRICE_ID_*` env vars in both directions — adding a price in Stripe
+without adding its env var (in `.env.example`, `.env.local`, and both `.env.vercel.*` files) means
+checkout 500s with "not configured".
+
+`.env.vercel.production`/`.env.vercel.preview` are gitignored local snapshots of whatever's
+actually configured in the Vercel dashboard — editing them locally does not push the change to
+Vercel; that still needs `vercel env add` or the dashboard.
+
 ## Serial protocol (bridge)
 
 **Saturn/Vega (Swiss Timing)**, spec 0100.073.02 v2.0 — 9600 baud, 8N1, RS422. Messages are

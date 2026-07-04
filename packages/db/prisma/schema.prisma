@@ -21,6 +21,12 @@ model Account {
   // pragmatic choice while there's a single add-on; revisit as a proper
   // join model if/when several independent add-ons exist.
   addOns               String[] @default([])
+  // Add-ons bill on their own Stripe subscription (separate from the base
+  // plan's stripeSubscriptionId) so an add-on purchase/cancellation never
+  // touches the base plan's subscription items. Same "single add-on today"
+  // pragmatism as addOns above — becomes a join table if a second add-on
+  // needs its own subscription tracking.
+  graphicsSubscriptionId String?
   createdAt            DateTime @default(now())
 
   orgs Org[]

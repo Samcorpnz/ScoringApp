@@ -1,5 +1,5 @@
 import {
-  matchStatePatchSchema,
+  matchStatePatchSchema, manualUpdateRequestSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
 } from "../schemas";
 
@@ -115,6 +115,38 @@ describe("matchStatePatchSchema field validation", () => {
 
   it("rejects invalid possession value", () => {
     const result = matchStatePatchSchema.safeParse({ possession: "everyone" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts clockAnchorMs/clockCarryMs present", () => {
+    const result = matchStatePatchSchema.safeParse({ clockAnchorMs: Date.now(), clockCarryMs: 700 });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts clockAnchorMs/clockCarryMs absent (optional, backward compatible)", () => {
+    const result = matchStatePatchSchema.safeParse({ clockSeconds: 30 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a wildly out-of-range clockCarryMs", () => {
+    const result = matchStatePatchSchema.safeParse({ clockCarryMs: 5000 });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("manualUpdateRequestSchema", () => {
+  it("accepts a patch with clientEventMs", () => {
+    const result = manualUpdateRequestSchema.safeParse({ isRunning: true, clientEventMs: Date.now() });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a patch without clientEventMs", () => {
+    const result = manualUpdateRequestSchema.safeParse({ isRunning: true });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-numeric clientEventMs", () => {
+    const result = manualUpdateRequestSchema.safeParse({ isRunning: true, clientEventMs: "now" });
     expect(result.success).toBe(false);
   });
 });

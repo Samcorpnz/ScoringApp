@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@scorehub/db";
 import { getStripe } from "@/lib/stripe";
-import { planForPriceId } from "@/lib/plans";
+import { planForPriceId, addOnForPriceId, AddOn } from "@/lib/plans";
 import { sendPaymentFailedEmail } from "@/lib/email";
 
 // Stripe retries webhooks on any non-2xx response, so on a real processing
@@ -58,9 +58,15 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
 
       const subscription = await getStripe().subscriptions.retrieve(session.subscription);
       const priceId = subscription.items.data[0]?.price.id;
+      const addOn = session.metadata?.addOn as AddOn | undefined;
+
+      if (addOn) {
+        await addAddOn(accountId, addOn, subscription.id);
+        break;
+      }
+
       const plan = priceId ? planForPriceId(priceId) : null;
       const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
-
       await prisma.account.update({
         where: { id: accountId },
         data: {
@@ -76,32 +82,73 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
       const accountId = subscription.metadata?.accountId;
+      const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
+      const priceId = subscription.items.data[0]?.price.id;
+
+      if (metadataAddOn || (priceId && addOnForPriceId(priceId))) {
+        const account = accountId
+          ? await prisma.account.findUnique({ where: { id: accountId } })
+          : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
+        if (!account) break;
+        const addOn = metadataAddOn ?? addOnForPriceId(priceId!)!;
+        if (subscription.status === "active") {
+          await addAddOn(account.id, addOn, subscription.id);
+        } else {
+          await removeAddOn(account.id, addOn);
+        }
+        break;
+      }
+
       const account = accountId
         ? await prisma.account.findUnique({ where: { id: accountId } })
         : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
       if (!account) break;
 
-      const priceId = subscription.items.data[0]?.price.id;
       const plan = priceId ? planForPriceId(priceId) : null;
       const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
+      const nextPlan = subscription.status === "active" ? (plan ?? account.plan) : "free";
       await prisma.account.update({
         where: { id: account.id },
         data: {
           stripeSubscriptionId: subscription.id,
-          plan: subscription.status === "active" ? (plan ?? account.plan) : "free",
+          plan: nextPlan,
           billingInterval: subscription.status === "active" ? interval : null,
         },
       });
+      // Add-ons require an active paid plan — if the base plan just lapsed,
+      // cancel any running add-on subscription rather than leaving it billing
+      // for a feature the account can no longer use.
+      if (nextPlan === "free" && account.graphicsSubscriptionId) {
+        await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
+      }
       break;
     }
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
       const accountId = subscription.metadata?.accountId;
+      const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
+
+      if (metadataAddOn) {
+        const account = accountId
+          ? await prisma.account.findUnique({ where: { id: accountId } })
+          : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
+        if (account) await removeAddOn(account.id, metadataAddOn);
+        break;
+      }
+
+      const account = accountId
+        ? await prisma.account.findUnique({ where: { id: accountId } })
+        : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
       await prisma.account.updateMany({
         where: accountId ? { id: accountId } : { stripeSubscriptionId: subscription.id },
         data: { plan: "free", stripeSubscriptionId: null, billingInterval: null },
       });
+      // Same cascade as the "updated" case above, for when the base plan
+      // subscription is cancelled outright rather than just lapsing.
+      if (account?.graphicsSubscriptionId) {
+        await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
+      }
       break;
     }
 
@@ -122,4 +169,36 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       break;
     }
   }
+}
+
+async function addAddOn(accountId: string, addOn: AddOn, subscriptionId: string): Promise<void> {
+  const account = await prisma.account.findUnique({ where: { id: accountId } });
+  if (!account) return;
+  await prisma.account.update({
+    where: { id: accountId },
+    data: {
+      graphicsSubscriptionId: subscriptionId,
+      addOns: account.addOns.includes(addOn) ? account.addOns : [...account.addOns, addOn],
+    },
+  });
+}
+
+async function removeAddOn(accountId: string, addOn: AddOn): Promise<void> {
+  const account = await prisma.account.findUnique({ where: { id: accountId } });
+  if (!account) return;
+  await prisma.account.update({
+    where: { id: accountId },
+    data: {
+      graphicsSubscriptionId: null,
+      addOns: account.addOns.filter(a => a !== addOn),
+    },
+  });
+}
+
+// Used when the base plan lapses/cancels — an add-on can't legitimately keep
+// billing without a paid base plan under it, so cancel it immediately
+// (unlike the base plan's own cancel flow, which lets the period run out).
+async function cancelAddOnSubscription(accountId: string, subscriptionId: string, addOn: AddOn): Promise<void> {
+  await getStripe().subscriptions.cancel(subscriptionId).catch(() => {});
+  await removeAddOn(accountId, addOn);
 }

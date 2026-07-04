@@ -56,6 +56,8 @@ export default function AdvancedDisplay() {
               periodLabel={getPeriodLabel(state)}
               isRunning={state.isRunning}
               hornActive={state.hornActive}
+              clockAnchorMs={state.clockAnchorMs}
+              clockCarryMs={state.clockCarryMs}
             />
           </div>
           <TeamColumn team={state.visitor} side="visitor" possession={state.possession} scoreText={formatScore(state, "visitor")} />

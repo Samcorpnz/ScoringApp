@@ -18,7 +18,7 @@ export default function OverlayDisplay() {
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const periodLabel = getPeriodLabel(state);
   const DisplayStats = getTemplate(state.sport).displayStats;
-  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
 
   return (

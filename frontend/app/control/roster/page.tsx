@@ -36,6 +36,7 @@ export default function RosterControl() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [forbidden, setForbidden] = useState(false);
   const [editing, setEditing] = useState<Player | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [prefill, setPrefill] = useState<{ name?: string; externalId?: string } | null>(null);
@@ -45,6 +46,10 @@ export default function RosterControl() {
     setLoading(true);
     try {
       const res = await fetch(`/api/orgs/${orgId}/players`);
+      if (res.status === 403) {
+        setForbidden(true);
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setPlayers(data.players ?? []);
@@ -56,6 +61,10 @@ export default function RosterControl() {
   };
 
   useEffect(() => { loadPlayers(); }, [orgId]);
+
+  if (forbidden) {
+    return <RosterUpsell isAdmin={session?.user?.activeRole === "ADMIN"} />;
+  }
 
   const deletePlayer = async (playerId: string) => {
     if (!orgId) return;
@@ -155,6 +164,37 @@ export default function RosterControl() {
           onSaved={async () => { setShowForm(false); await loadPlayers(); }}
         />
       )}
+    </div>
+  );
+}
+
+function RosterUpsell({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24, display: "flex", justifyContent: "center" }}>
+      <div style={{ maxWidth: 480, marginTop: "10vh", textAlign: "center" }}>
+        <h1 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: 8 }}>Unlock Player Photos & Bios</h1>
+        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: 20 }}>
+          Manage a roster of player headshots and bios that feed straight into your Graphics scenes — no more
+          generic name-only lower thirds.
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", textAlign: "left", fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <li>✓ Upload headshots once, reuse across every match</li>
+          <li>✓ Auto-links to live feed players by provider ID</li>
+          <li>✓ Powers the Headshot + Bio scene in Graphics Control</li>
+        </ul>
+        {isAdmin ? (
+          <a
+            href="/account"
+            style={{ display: "inline-block", background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", borderRadius: 8, padding: "10px 20px", fontSize: "0.85rem", fontWeight: 700, textDecoration: "none" }}
+          >
+            Add Graphics — $29/mo
+          </a>
+        ) : (
+          <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
+            Ask your account admin to add Graphics Operator ($29/mo) from Account settings.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

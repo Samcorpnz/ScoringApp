@@ -34,7 +34,7 @@ function ControlPanelInner() {
   const {
     state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
     sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
-    sendScoreAdjust, sendIndoorCricketWicket,
+    sendScoreAdjust, sendIndoorCricketWicket, estimateServerNow,
   } = useMatchState({ secret: controlToken, role: "control" });
   const { cues, addCue, removeCue } = useSoundCues();
   useSoundPlayback(state, cues);
@@ -47,7 +47,12 @@ function ControlPanelInner() {
   });
   const [tab, setTab] = useState<Tab>("score");
 
-  const push = (patch: Partial<MatchState>) => sendManualUpdate(patch);
+  // Attach a latency-compensated click-instant timestamp whenever a patch
+  // toggles isRunning (Start/Stop), so the relay's clock anchor reflects the
+  // moment of the click rather than the moment the network round-trip
+  // happens to land (see resyncClock/applyManualUpdate on the relay).
+  const push = (patch: Partial<MatchState>) =>
+    sendManualUpdate("isRunning" in patch ? { ...patch, clientEventMs: estimateServerNow() } : patch);
 
   // Show nothing while checking auth — prevents flash of content
   if (authStatus === "loading") {

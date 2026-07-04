@@ -36,7 +36,7 @@ function Scorebug() {
 
   const { state } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
-  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown });
+  const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
   const periodLabel = getPeriodLabel(state);
 

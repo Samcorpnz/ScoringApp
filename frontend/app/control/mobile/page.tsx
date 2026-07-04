@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useControlToken } from "../../hooks/useControlToken";
+import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { MatchState, formatClock } from "../../types";
 import { getTemplate } from "../../sport-templates";
@@ -15,7 +16,7 @@ const CLOCK_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 45].map(m => ({
 
 export default function MobileControl() {
   const controlToken = useControlToken();
-  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset } = useMatchState({
+  const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, estimateServerNow } = useMatchState({
     secret: controlToken,
     role: "control",
   });
@@ -27,67 +28,33 @@ export default function MobileControl() {
     },
   });
 
-  // Local clock authority — mobile drives the countdown when no bridge
-  const [localClock, setLocalClock]     = useState(0);
-  const [isAuthority, setIsAuthority]   = useState(false);
   const [showSetTime, setShowSetTime]   = useState(false);
   const [customMins, setCustomMins]     = useState("");
   const [customSecs, setCustomSecs]     = useState("");
 
-  const clockRef    = useRef(0);         // mirrors localClock for interval reads
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const sendRef     = useRef(sendManualUpdate);
-  sendRef.current   = sendManualUpdate;
+  // The relay is the sole clock authority (see resyncClock/applyManualUpdate)
+  // — this page just displays its precise anchor/carry and sends plain
+  // isRunning/clockSeconds patches, exactly like the desktop ScoreTab.
+  const displayClock = useInterpolatedClock({
+    clockSeconds: state.clockSeconds, isRunning: state.isRunning, countDown: state.countDown,
+    clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs,
+  });
 
-  // Sync clock from relay when we're not driving it
-  useEffect(() => {
-    if (!isAuthority) {
-      clockRef.current = state.clockSeconds;
-      setLocalClock(state.clockSeconds);
-    }
-  }, [state.clockSeconds, isAuthority]);
+  // Attach a latency-compensated click-instant timestamp whenever a patch
+  // toggles isRunning, same as the desktop control panel's `push`.
+  const push = (patch: Partial<MatchState>) =>
+    sendManualUpdate("isRunning" in patch ? { ...patch, clientEventMs: estimateServerNow() } : patch);
 
-  const stopClock = () => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    setIsAuthority(false);
-    sendRef.current({ isRunning: false });
-  };
-
-  const startClock = () => {
-    if (intervalRef.current) return;
-    setIsAuthority(true);
-    sendRef.current({ isRunning: true });
-    intervalRef.current = setInterval(() => {
-      clockRef.current = Math.max(0, clockRef.current - 1);
-      setLocalClock(clockRef.current);
-      sendRef.current({ clockSeconds: clockRef.current, isRunning: clockRef.current > 0 });
-      if (clockRef.current === 0) {
-        clearInterval(intervalRef.current!);
-        intervalRef.current = null;
-        setIsAuthority(false);
-      }
-    }, 1000);
-  };
-
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-  const toggleClock = () => {
-    if (isAuthority || state.isRunning) stopClock();
-    else startClock();
-  };
+  const toggleClock = () => push({ isRunning: !state.isRunning });
 
   const setClockTo = (secs: number) => {
-    stopClock();
-    clockRef.current = secs;
-    setLocalClock(secs);
-    sendRef.current({ clockSeconds: secs, isRunning: false });
+    push({ clockSeconds: secs, isRunning: false });
     setShowSetTime(false);
     setCustomMins("");
     setCustomSecs("");
   };
 
-  const push = (patch: Partial<MatchState>) => sendManualUpdate(patch);
-  const clockRunning = isAuthority || state.isRunning;
+  const clockRunning = state.isRunning;
   const increments   = getTemplate(state.sport).scoreIncrements;
   const period       = parseInt(state.period || "1", 10);
 
@@ -167,7 +134,7 @@ export default function MobileControl() {
             color: clockRunning ? "var(--text-primary)" : "var(--text-secondary)",
             lineHeight: 1,
           }}>
-            {formatClock(localClock)}
+            {formatClock(Math.floor(displayClock))}
           </div>
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: 2,

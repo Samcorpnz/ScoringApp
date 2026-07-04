@@ -176,6 +176,11 @@ export type SportState = IndoorCricketState | SoftballState | CricketState;
 export interface MatchState {
   sequenceId: number;
   clockSeconds: number;
+  // Relay-internal clock precision bookkeeping, only used when the relay's
+  // own 1Hz tick loop is driving the clock (i.e. no bridge connected).
+  // Absent/undefined means "no anchor available" — legacy/bridge behavior.
+  clockAnchorMs?: number; // epoch ms of the last instant clockSeconds was exactly correct
+  clockCarryMs?: number; // signed leftover ms (< 1000 magnitude), never discarded, only banked
   countDown: boolean;
   period: string;
   periodBreak: boolean;

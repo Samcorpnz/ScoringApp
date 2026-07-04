@@ -14,30 +14,39 @@ export async function GET() {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }
 
-  let subscription: {
+  type SubscriptionSummary = {
     status: string;
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: number | null;
     amount: number | null;
     currency: string | null;
-  } | null = null;
+    interval: "month" | "year" | null;
+  };
 
-  if (account.stripeSubscriptionId) {
-    const sub = await getStripe().subscriptions.retrieve(account.stripeSubscriptionId);
+  async function summarize(subscriptionId: string): Promise<SubscriptionSummary> {
+    const sub = await getStripe().subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
-    subscription = {
+    return {
       status: sub.status,
       cancelAtPeriodEnd: sub.cancel_at_period_end,
       currentPeriodEnd: item?.current_period_end ?? null,
       amount: item?.price.unit_amount ?? null,
       currency: sub.currency,
+      interval: (item?.price.recurring?.interval as "month" | "year" | undefined) ?? null,
     };
   }
+
+  const [subscription, graphicsSubscription] = await Promise.all([
+    account.stripeSubscriptionId ? summarize(account.stripeSubscriptionId) : Promise.resolve(null),
+    account.graphicsSubscriptionId ? summarize(account.graphicsSubscriptionId) : Promise.resolve(null),
+  ]);
 
   return NextResponse.json({
     plan: account.plan,
     billingInterval: account.billingInterval,
     hasStripeCustomer: Boolean(account.stripeCustomerId),
     subscription,
+    addOns: account.addOns,
+    graphicsSubscription,
   });
 }

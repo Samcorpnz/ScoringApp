@@ -50,6 +50,10 @@ const sportSchema = z.enum([
 const matchStateFields = {
   sequenceId: z.number().int().min(0),
   clockSeconds: z.number().int().min(-1).max(24 * 60 * 60),
+  // Relay-tick-loop-internal clock precision bookkeeping (see MatchState).
+  // Optional for backward compatibility with bridges that don't send them.
+  clockAnchorMs: z.number().int().nonnegative().optional(),
+  clockCarryMs: z.number().int().min(-1000).max(1000).optional(),
   countDown: z.boolean(),
   period: z.string().max(20),
   periodBreak: z.boolean(),
@@ -82,6 +86,15 @@ export const matchStateSchema = z.object(matchStateFields);
 export const matchStatePatchSchema = z.object(matchStateFields).partial();
 
 export type MatchStatePatch = z.infer<typeof matchStatePatchSchema>;
+
+// manualUpdate socket payload only — clientEventMs is a one-off input to the
+// mutation (the operator's click instant, latency-compensated client-side),
+// not a persisted MatchState field, so it's not part of matchStateFields.
+export const manualUpdateRequestSchema = matchStatePatchSchema.extend({
+  clientEventMs: z.number().optional(),
+});
+
+export type ManualUpdateRequest = z.infer<typeof manualUpdateRequestSchema>;
 
 // Payload schemas for the dedicated cricket:* socket events. Unlike
 // indoor_cricket/softball (whole sportState pushed through the generic,
