@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures/auth";
-import { createMatch, endMatch, getOrgId, openDisplay, waitForLive } from "../helpers/match";
+import { createMatch, endMatch, getOrgId, waitForLive } from "../helpers/match";
 import { clickScoreIncrement, getScore, undo } from "../helpers/score";
 
 test.describe("adversarial: try to break it", () => {
