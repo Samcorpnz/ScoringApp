@@ -123,6 +123,31 @@ purchasing the add-on itself; multi-operator scene-control concurrency (Phase A 
 wins, same as `matchStateChange` today); a visual/customizable scene template editor (scenes are
 hardcoded React components per type through Phase B).
 
+### Phase C0 — graphics scene look-and-feel (theme wiring)
+
+Added per user request before roster/photo work: give graphics scenes the same per-match branding
+control operators already have for other display outputs, rather than inventing a new theming
+system. `MatchState.displayTheme` (`packages/types/index.ts` — `primaryColor`, `backgroundColor`,
+`font`, `textScale`, `competitionLogoUrl`) is already editable per-match via
+`frontend/app/control/components/ThemeTab.tsx` and applied via `frontend/app/hooks/useDisplayTheme.ts`
+on every other `/display/*` route, but `/display/graphics` and its scenes didn't call it, and
+separately hardcoded team colors instead of reading `state.home.color`/`state.visitor.color` the
+way `ScoreTab.tsx` already does.
+
+- `display/graphics/page.tsx` now calls `useDisplayTheme(state.displayTheme)`, applying
+  `--accent`/`--accent-dim`/`fontFamily`/`--text-scale` to the root wrapper. The theme's
+  `backgroundColor` is deliberately *not* applied to the wrapper background (must stay transparent
+  for OBS/vMix compositing) — instead it's converted to an rgba tint via a local `hexToRgba()` and
+  exposed as the `--graphics-card-bg` CSS var, which `LowerThird`/`PlayerStatCard`/
+  `PlayerHeadshotBio` now use for their card backgrounds (`var(--graphics-card-bg, rgba(7,9,15,0.92))`
+  — falls back to the old hardcoded value if rendered outside that wrapper, e.g. in tests).
+- The three graphics scenes now read `state.home.color`/`state.visitor.color` with the existing
+  CSS-var fallback, matching `ScoreTab.tsx`. Known pre-existing gap, not fixed here to avoid
+  unrelated scope creep: `display/basic`/`advanced`/`overlay` and the non-graphics
+  `*DisplayStats` components still hardcode the CSS vars instead of reading team colors.
+- No new admin UI needed — `ThemeTab.tsx`'s existing color pickers/font field/competition-logo
+  uploader become the graphics customization UI for free, since it's the same `displayTheme` field.
+
 ## Critical files
 
 - `relay/src/server.ts` — `setScene`/`graphicsSceneUpdate` handling, room-scoped scene state,
@@ -173,5 +198,13 @@ hardcoded React components per type through Phase B).
       (initials-avatar placeholder — real photos are Phase C) and scene preview thumbnails in
       control/graphics. All new/updated tests passing (bridge 57/57, frontend tsc/eslint clean,
       155 relevant vitest tests).
+- [x] Phase C0 — graphics scene look-and-feel (2026-07-04): wired `useDisplayTheme` into
+      `display/graphics/page.tsx` (accent/font/text-scale, plus a `--graphics-card-bg` tint derived
+      from the theme's backgroundColor without breaking OBS transparency), and switched
+      `LowerThird`/`PlayerStatCard`/`PlayerHeadshotBio` to read `state.home.color`/
+      `state.visitor.color` instead of hardcoded CSS vars. Also fixed a pre-existing `tsc` break in
+      `SoftballTab.tsx` (missing `sendScoreAdjust` prop destructure) found while verifying this
+      branch's build is clean. New `graphicsSceneTheme.test.tsx` (4 tests); full frontend suite
+      192/192 passing, tsc/eslint clean.
 - [ ] Phase C — player photo/bio management
 - [ ] Phase D — additional providers

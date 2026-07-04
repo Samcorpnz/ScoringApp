@@ -20,7 +20,9 @@ export function PlayerHeadshotBio({ payload, state }: SceneProps) {
     );
   }
 
-  const teamColor = player.team === "home" ? "var(--home-color)" : "var(--visitor-color)";
+  const teamColor = player.team === "home"
+    ? (state.home.color || "var(--home-color)")
+    : (state.visitor.color || "var(--visitor-color)");
   const initials = player.name
     .split(/\s+/)
     .filter(Boolean)
@@ -65,7 +67,7 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        background: "rgba(7,9,15,0.92)",
+        background: "var(--graphics-card-bg, rgba(7,9,15,0.92))",
         borderRadius: 10,
         padding: "14px 20px",
         boxShadow: "0 4px 32px rgba(0,0,0,0.7)",

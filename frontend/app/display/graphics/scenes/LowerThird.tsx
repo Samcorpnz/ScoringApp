@@ -26,12 +26,12 @@ export function LowerThird({ state }: SceneProps) {
         boxShadow: "0 4px 32px rgba(0,0,0,0.7)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
-        background: "rgba(7,9,15,0.92)",
+        background: "var(--graphics-card-bg, rgba(7,9,15,0.92))",
       }}
     >
-      <TeamBlock sport={state.sport} name={state.home.name || "HOME"} score={formatScore(state, "home")} color="var(--home-color)" stats={feed?.stats.team.home} align="right" />
+      <TeamBlock sport={state.sport} name={state.home.name || "HOME"} score={formatScore(state, "home")} color={state.home.color || "var(--home-color)"} stats={feed?.stats.team.home} align="right" />
       <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.08)" }} />
-      <TeamBlock sport={state.sport} name={state.visitor.name || "VISITOR"} score={formatScore(state, "visitor")} color="var(--visitor-color)" stats={feed?.stats.team.visitor} align="left" />
+      <TeamBlock sport={state.sport} name={state.visitor.name || "VISITOR"} score={formatScore(state, "visitor")} color={state.visitor.color || "var(--visitor-color)"} stats={feed?.stats.team.visitor} align="left" />
     </div>
   );
 }

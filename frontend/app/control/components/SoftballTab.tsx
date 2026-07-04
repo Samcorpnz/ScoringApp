@@ -22,7 +22,7 @@ function getSoftballState(state: ControlPanelProps["state"]): SoftballState {
   };
 }
 
-export function SoftballTab({ state, push, sendReset, sendUndo }: ControlPanelProps) {
+export function SoftballTab({ state, push, sendReset, sendUndo, sendScoreAdjust }: ControlPanelProps) {
   const [homeName, setHomeName] = useState("");
   const [visName, setVisName] = useState("");
   const [matchName, setMatchName] = useState("");
