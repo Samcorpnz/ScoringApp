@@ -11,7 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1073.0",
+    "@aws-sdk/client-s3": "^3.1079.0",
     "@scorehub/db": "*",
     "@scorehub/types": "*",
     "@sentry/node": "^10.62.0",
@@ -21,7 +21,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "ioredis": "^5.4.1",
-    "jose": "^5.9.6",
+    "jose": "^6.2.3",
     "multer": "^2.2.0",
     "socket.io": "^4.8.3",
     "zod": "^4.4.3"
@@ -30,8 +30,8 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
-    "@types/multer": "^2.1.0",
-    "@types/node": "^26.0.1",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.1.0",
     "@types/supertest": "^7.2.0",
     "jest": "^30.4.2",
     "socket.io-client": "^4.8.3",
