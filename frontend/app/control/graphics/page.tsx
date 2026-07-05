@@ -1,6 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useGraphicsToken } from "../../hooks/useGraphicsToken";
 import { useGraphicsScene } from "../../hooks/useGraphicsScene";
@@ -10,16 +12,36 @@ import { useGraphicsScene } from "../../hooks/useGraphicsScene";
 // this is meant to be run by a separate person/device from the scoring
 // operator (though per product decision a scoring operator may also use
 // this to drive scenes solo on smaller productions).
-export default function GraphicsControl() {
+export default function GraphicsControlPage() {
+  return (
+    <Suspense>
+      <GraphicsControl />
+    </Suspense>
+  );
+}
+
+function GraphicsControl() {
   const { data: session } = useSession({
     required: true,
     onUnauthenticated() {
       window.location.href = "/login?callbackUrl=/control/graphics";
     },
   });
+  // Without ?matchId=, both the graphics token and the state socket below
+  // scope to the org's singleton "default" room — wrong (or empty) once an
+  // org has more than one match going, same reasoning as OutputsTab's
+  // withOrg() for display links. OutputsTab's "Graphics Control" link
+  // passes it; this only stays unscoped if the route is opened directly.
+  const matchId = useSearchParams().get("matchId") ?? undefined;
 
-  const { token: graphicsToken, status: entitlementStatus } = useGraphicsToken();
-  const { state } = useMatchState();
+  const { token: graphicsToken, status: entitlementStatus } = useGraphicsToken(matchId);
+  // Authenticated with the graphics token (role: "graphics"), not a control
+  // token — this page only reads state and switches scenes, and a "control"
+  // role would enter the scoring controller mutex (relay/src/server.ts's
+  // isControl block) and contend with whoever's actually scoring the match
+  // on a separate device, which is the exact scenario this page is meant to
+  // run alongside.
+  const { state } = useMatchState({ secret: graphicsToken, role: "graphics" });
   const { scene, status, setScene } = useGraphicsScene({ secret: graphicsToken, role: "graphics" });
 
   const players = state.graphicsFeed?.stats.players ?? [];
@@ -41,8 +63,8 @@ export default function GraphicsControl() {
       <section style={{ marginBottom: 28 }}>
         <SectionLabel>Scenes</SectionLabel>
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <SceneButton label="Lower Third" preview={<LowerThirdThumb />} active={isLive("lowerThird")} onClick={() => setScene("lowerThird")} />
-          <SceneButton label="Clear" preview={<ClearThumb />} active={!scene} onClick={() => setScene("")} />
+          <SceneButton testId="scene-btn-lowerThird" label="Lower Third" preview={<LowerThirdThumb />} active={isLive("lowerThird")} onClick={() => setScene("lowerThird")} />
+          <SceneButton testId="scene-btn-clear" label="Clear" preview={<ClearThumb />} active={!scene} onClick={() => setScene("")} />
         </div>
       </section>
 
@@ -57,6 +79,7 @@ export default function GraphicsControl() {
             {players.map(p => (
               <SceneButton
                 key={p.id}
+                testId={`scene-btn-statCard-${p.id}`}
                 label={p.name}
                 sub={p.team}
                 preview={<StatCardThumb />}
@@ -79,6 +102,7 @@ export default function GraphicsControl() {
             {players.map(p => (
               <SceneButton
                 key={p.id}
+                testId={`scene-btn-headshotBio-${p.id}`}
                 label={p.name}
                 sub={p.team}
                 preview={<HeadshotThumb />}
@@ -132,11 +156,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SceneButton({ label, sub, preview, active, onClick }: {
-  label: string; sub?: string; preview?: React.ReactNode; active: boolean; onClick: () => void;
+function SceneButton({ testId, label, sub, preview, active, onClick }: {
+  testId?: string; label: string; sub?: string; preview?: React.ReactNode; active: boolean; onClick: () => void;
 }) {
   return (
     <button
+      data-testid={testId}
       onClick={onClick}
       style={{
         display: "flex",

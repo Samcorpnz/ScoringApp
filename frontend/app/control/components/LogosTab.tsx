@@ -87,7 +87,7 @@ function LogoUploader({ team, teamState, push, state, controlToken }: {
         onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
       >
         {logoSrc ? (
-          <div style={{ position: "relative", height: 110, width: "80%" }}>
+          <div data-testid={`logo-${team}-preview`} style={{ position: "relative", height: 110, width: "80%" }}>
             <Image src={logoSrc} alt={teamState.name} fill style={{ objectFit: "contain" }} />
           </div>
         ) : (
@@ -99,13 +99,14 @@ function LogoUploader({ team, teamState, push, state, controlToken }: {
         )}
       </div>
 
-      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+      <input ref={inputRef} data-testid={`logo-${team}-input`} type="file" accept="image/*" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
 
-      {error && <p className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
+      {error && <p data-testid={`logo-${team}-error`} className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
 
       <div className="flex gap-2">
         <button
+          data-testid={`logo-${team}-upload-button`}
           className="flex-1 rounded-lg py-2 text-sm font-bold"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
           onClick={() => inputRef.current?.click()}
@@ -115,6 +116,7 @@ function LogoUploader({ team, teamState, push, state, controlToken }: {
         </button>
         {logoSrc && (
           <button
+            data-testid={`logo-${team}-remove-button`}
             className="rounded-lg px-4 py-2 text-sm font-bold"
             style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "var(--danger)" }}
             onClick={handleRemove}

@@ -153,6 +153,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
           </div>
           <input
             ref={fileRef}
+            data-testid="sound-file-input"
             type="file"
             accept="audio/*"
             className="hidden"
@@ -160,9 +161,10 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
           />
         </div>
 
-        {error && <p className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
+        {error && <p data-testid="sound-error" className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
 
         <button
+          data-testid="sound-add-cue"
           className="w-full rounded-lg py-2.5 text-sm font-bold tracking-wide"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", opacity: uploading ? 0.6 : 1 }}
           onClick={handleAdd}
@@ -184,6 +186,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
             {[...cues].sort((a, b) => b.clockSeconds - a.clockSeconds).map(cue => (
               <div
                 key={cue.id}
+                data-testid={`sound-cue-${cue.id}`}
                 className="flex items-center gap-3 rounded-lg px-3 py-2.5"
                 style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
               >
@@ -205,6 +208,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
                   {formatClockDisplay(cue.clockSeconds)}
                 </span>
                 <button
+                  data-testid={`sound-cue-test-${cue.id}`}
                   className="rounded px-2 py-1 text-xs font-bold flex-shrink-0"
                   style={{ background: "var(--bg-base)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                   onClick={() => handleTest(cue)}
@@ -213,6 +217,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
                   ▶
                 </button>
                 <button
+                  data-testid={`sound-cue-remove-${cue.id}`}
                   className="rounded px-2 py-1 text-xs font-bold flex-shrink-0"
                   style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "var(--danger)" }}
                   onClick={() => handleRemove(cue)}

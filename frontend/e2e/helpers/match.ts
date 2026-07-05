@@ -59,7 +59,7 @@ export async function openControl(page: Page, matchId: string): Promise<void> {
   await page.goto(`/control?matchId=${matchId}`);
 }
 
-export type DisplayKind = "basic" | "advanced" | "overlay" | "scorebug" | "fullscreen";
+export type DisplayKind = "basic" | "advanced" | "overlay" | "scorebug" | "fullscreen" | "graphics";
 
 export async function openDisplay(page: Page, opts: {
   kind: DisplayKind;

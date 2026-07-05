@@ -80,6 +80,13 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         NEXT_PUBLIC_RELAY_URL: ${NEXT_PUBLIC_RELAY_URL:-http://localhost:4000}
+        # Inlined into the client bundle at build time (Next.js NEXT_PUBLIC_*
+        # convention) — must be the test-mode publishable key (acct_1Tl1sw...
+        # per CLAUDE.md), never the live one, since this build is also what
+        # the e2e billing spec drives. Left unset by default like the other
+        # STRIPE_* vars below — the rest of the app works fine without
+        # billing configured; only /account's upgrade flow needs it.
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
     ports:
       - "3000:3000"
     environment:
@@ -95,6 +102,19 @@ services:
       # verify as trusted; Vercel sets its own trust signal automatically,
       # but this container needs it explicit or every /api/auth/* call 500s.
       AUTH_TRUST_HOST: "true"
+      # Test-mode Stripe account only (acct_1Tl1sw...) — required for the e2e
+      # billing spec (frontend/e2e/specs/billing.spec.ts) and for the
+      # Logos/Sounds/Graphics specs' plan-gated routes to be purchasable at
+      # all. Unset means /account's checkout button 500s with "not
+      # configured"; that's fine for e2e runs that don't touch billing.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_ID_PRO: ${STRIPE_PRICE_ID_PRO:-}
+      STRIPE_PRICE_ID_PRO_ANNUAL: ${STRIPE_PRICE_ID_PRO_ANNUAL:-}
+      STRIPE_PRICE_ID_VENUE: ${STRIPE_PRICE_ID_VENUE:-}
+      STRIPE_PRICE_ID_VENUE_ANNUAL: ${STRIPE_PRICE_ID_VENUE_ANNUAL:-}
+      STRIPE_PRICE_ID_GRAPHICS: ${STRIPE_PRICE_ID_GRAPHICS:-}
+      STRIPE_PRICE_ID_GRAPHICS_ANNUAL: ${STRIPE_PRICE_ID_GRAPHICS_ANNUAL:-}
     depends_on:
       postgres:
         condition: service_healthy
