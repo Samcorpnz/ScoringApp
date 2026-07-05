@@ -3,11 +3,15 @@ import { createMatch, endMatch, getOrgId, openDisplay, waitForLive } from "../he
 import { clickScoreIncrement, endPeriod, getScore } from "../helpers/score";
 import { SPORT_TEMPLATES } from "../../app/sport-templates";
 
-// Cricket, softball, indoor_cricket, and basketball get dedicated specs
-// (bespoke control panels or inline sport-specific behavior worth its own
-// assertions). Every other sport template renders through the fully generic
-// ScoreTab, so one parameterized test gives full coverage of that path.
-const BESPOKE_SPORTS = new Set(["cricket", "softball", "indoor_cricket", "basketball"]);
+// Cricket, softball, indoor_cricket, basketball, and netball get dedicated
+// specs (bespoke control panels or inline sport-specific behavior worth its
+// own assertions). Every other sport template renders through the fully
+// generic ScoreTab, so one parameterized test gives full (fast, always-run)
+// smoke coverage of that path. sport-rules.spec.ts goes deeper per remaining
+// sport (score labels, period-reset behavior, clock, possession) but is
+// tagged @full-sports and excluded from the default e2e run — see that
+// file's own comment.
+const BESPOKE_SPORTS = new Set(["cricket", "softball", "indoor_cricket", "basketball", "netball"]);
 const GENERIC_SPORTS = SPORT_TEMPLATES.filter(t => !BESPOKE_SPORTS.has(t.sport));
 
 test.describe("generic sport match creation", () => {

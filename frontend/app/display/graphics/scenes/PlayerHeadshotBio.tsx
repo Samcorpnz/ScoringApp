@@ -3,6 +3,8 @@
 import type { SceneProps } from "./LowerThird";
 import { findRosterMatch } from "../../../hooks/useRoster";
 
+const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
+
 // Headshot+bio scene. Prefers a matched roster entry's photo/bio (Phase C:
 // packages/db's Player model + /control/roster) and falls back to an
 // initials avatar/no-bio when the live feed player has no roster match —
@@ -23,6 +25,9 @@ export function PlayerHeadshotBio({ payload, state, roster }: SceneProps) {
 
   const rosterMatch = findRosterMatch(roster ?? [], player.id);
   const displayName = rosterMatch?.displayName || player.name;
+  const photoSrc = rosterMatch?.photoUrl
+    ? (rosterMatch.photoUrl.startsWith("/player-photos/") ? `${RELAY_URL}${rosterMatch.photoUrl}` : rosterMatch.photoUrl)
+    : null;
 
   const teamColor = player.team === "home"
     ? (state.home.color || "var(--home-color)")
@@ -38,9 +43,9 @@ export function PlayerHeadshotBio({ payload, state, roster }: SceneProps) {
   return (
     <Card>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {rosterMatch?.photoUrl ? (
+        {photoSrc ? (
           <img
-            src={rosterMatch.photoUrl}
+            src={photoSrc}
             alt={displayName}
             style={{
               width: 56,

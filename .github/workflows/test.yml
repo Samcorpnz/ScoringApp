@@ -68,3 +68,91 @@ jobs:
         env:
           AUTH_SECRET: ci-placeholder-secret
           NEXT_PUBLIC_RELAY_URL: https://scorehub-relay.fly.dev
+
+  # Playwright suite against a full docker-compose stack (postgres/redis/
+  # relay/frontend) — see frontend/e2e/playwright.config.ts and CLAUDE.md's
+  # "no hosted staging" note. New and untested as a CI job (previously only
+  # ever run manually), and it now also depends on a real external network
+  # call (Stripe test-mode API + CLI) on top of the relay-contention
+  # flakiness the suite's own comments already document even without Stripe
+  # in the mix — continue-on-error keeps it informational rather than a
+  # required check until it's proven stable over a bake-in period.
+  # `npm run test:e2e` excludes the @full-sports-tagged deep per-sport spec
+  # (frontend/e2e/specs/sport-rules.spec.ts) by default; that one runs via
+  # `npm run test:e2e:full-sports`, on demand, not in this job.
+  test-e2e:
+    name: E2E (Playwright, docker-compose)
+    runs-on: ubuntu-latest
+    needs: [test-relay, test-frontend]
+    continue-on-error: true
+    env:
+      AUTH_SECRET: ci-placeholder-secret
+      DATABASE_URL: postgresql://scorehub:scorehub@localhost:5432/scorehub
+      # Test-mode Stripe account only (acct_1Tl1sw... per CLAUDE.md) — named
+      # distinctly from any live-key secret so it's structurally impossible
+      # to wire the live key in here by mistake. Unconfigured secrets resolve
+      # to empty strings; docker-compose.yml defaults every STRIPE_* var to
+      # "" so the stack still boots and every non-billing spec still runs —
+      # only billing.spec.ts needs these actually set.
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_TEST_PRICE_ID_PRO }}
+      STRIPE_PRICE_ID_PRO_ANNUAL: ${{ secrets.STRIPE_TEST_PRICE_ID_PRO_ANNUAL }}
+      STRIPE_PRICE_ID_VENUE: ${{ secrets.STRIPE_TEST_PRICE_ID_VENUE }}
+      STRIPE_PRICE_ID_VENUE_ANNUAL: ${{ secrets.STRIPE_TEST_PRICE_ID_VENUE_ANNUAL }}
+      STRIPE_PRICE_ID_GRAPHICS: ${{ secrets.STRIPE_TEST_PRICE_ID_GRAPHICS }}
+      STRIPE_PRICE_ID_GRAPHICS_ANNUAL: ${{ secrets.STRIPE_TEST_PRICE_ID_GRAPHICS_ANNUAL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+
+      - name: Install Stripe CLI
+        if: env.STRIPE_SECRET_KEY != ''
+        run: |
+          curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee -a /etc/apt/sources.list.d/stripe.list
+          sudo apt-get update && sudo apt-get install -y stripe
+
+      # Forwards webhook events to the not-yet-running frontend container —
+      # `stripe listen` accepts --forward-to before the target exists and
+      # just retries delivery, so starting it before `docker compose up` is
+      # fine. Must run (and print its generated signing secret) before the
+      # frontend container boots, since STRIPE_WEBHOOK_SECRET has to be in
+      # its environment at startup, not injected after the fact.
+      - name: Start Stripe webhook forwarding
+        if: env.STRIPE_SECRET_KEY != ''
+        run: |
+          stripe listen --api-key "$STRIPE_SECRET_KEY" --forward-to http://localhost:3000/api/billing/webhook --print-secret > /tmp/whsec.txt &
+          sleep 3
+          echo "STRIPE_WEBHOOK_SECRET=$(cat /tmp/whsec.txt)" >> "$GITHUB_ENV"
+
+      # docker-compose.yml substitutes NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (and
+      # the other STRIPE_* vars) straight from this job's env — no
+      # --build-arg needed, same as how NEXT_PUBLIC_RELAY_URL is already
+      # wired through.
+      - run: docker compose build
+      - run: docker compose up -d
+      - name: Wait for the stack to become healthy
+        run: |
+          timeout 120 sh -c 'until curl -sf http://localhost:3000 && curl -sf http://localhost:4000/health; do sleep 2; done'
+
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+
+      - if: always()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down -v
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7

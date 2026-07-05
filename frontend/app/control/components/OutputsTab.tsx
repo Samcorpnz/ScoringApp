@@ -110,8 +110,16 @@ export function OutputsTab({ matchId }: { matchId?: string }) {
           live to your display outputs.
         </p>
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <GraphicsLinkCard href="/control/graphics" label="Graphics Control" desc="Switch scenes live during a match." />
-          <GraphicsLinkCard href="/control/roster" label="Player Roster" desc="Manage headshots and bios ahead of time." />
+          <GraphicsLinkCard
+            href={matchId ? `/control/graphics?matchId=${matchId}` : "/control/graphics"}
+            label="Graphics Control"
+            desc="Switch scenes live during a match."
+          />
+          <GraphicsLinkCard
+            href={matchId ? `/control/roster?matchId=${matchId}` : "/control/roster"}
+            label="Player Roster"
+            desc="Manage headshots and bios ahead of time."
+          />
         </div>
       </div>
 

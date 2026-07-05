@@ -613,9 +613,19 @@ export function createServer(options: ServerOptions = {}) {
   // player's id (provider+externalId) to a roster photo/bio. Returns the
   // org's whole roster rather than a per-player lookup since the scene
   // components already hold the full live player list client-side.
+  //
+  // Still gated by orgHasAddOn: this returns PII (names, bios, photo URLs),
+  // unlike /api/graphics/entitlement's plain boolean, so an org must actually
+  // hold the graphics-operator add-on before its roster is servable — closes
+  // it off for the vast majority of orgIds (the id itself is a UUID, not
+  // guessable, but shouldn't be the only thing standing between a URL and PII).
   app.get("/api/graphics/roster", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
     if (!process.env.DATABASE_URL) {
+      res.json({ players: [] });
+      return;
+    }
+    if (!(await orgHasAddOn(orgId, "graphics-operator"))) {
       res.json({ players: [] });
       return;
     }

@@ -4,6 +4,8 @@ import type { SceneProps } from "./LowerThird";
 import { formatStatLabel, orderStats } from "../../../sport-graphics-templates";
 import { findRosterMatch } from "../../../hooks/useRoster";
 
+const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
+
 // Generic player stat card: resolves payload.playerId against the live
 // graphicsFeed's flattened player stats (bridge/src/graphics/feedTransform.ts),
 // ordered/labeled per sport-graphics-templates.ts where one exists. Prefers a
@@ -25,6 +27,9 @@ export function PlayerStatCard({ payload, state, roster }: SceneProps) {
 
   const rosterMatch = findRosterMatch(roster ?? [], player.id);
   const displayName = rosterMatch?.displayName || player.name;
+  const photoSrc = rosterMatch?.photoUrl
+    ? (rosterMatch.photoUrl.startsWith("/player-photos/") ? `${RELAY_URL}${rosterMatch.photoUrl}` : rosterMatch.photoUrl)
+    : null;
   const teamColor = player.team === "home"
     ? (state.home.color || "var(--home-color)")
     : (state.visitor.color || "var(--visitor-color)");
@@ -34,8 +39,8 @@ export function PlayerStatCard({ payload, state, roster }: SceneProps) {
     <Card>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {rosterMatch?.photoUrl ? (
-            <img src={rosterMatch.photoUrl} alt={displayName} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `2px solid ${teamColor}` }} />
+          {photoSrc ? (
+            <img src={photoSrc} alt={displayName} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `2px solid ${teamColor}` }} />
           ) : (
             <span style={{ width: 4, height: 20, background: teamColor, borderRadius: 2, display: "inline-block" }} />
           )}

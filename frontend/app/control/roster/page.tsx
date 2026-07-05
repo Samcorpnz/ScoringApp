@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useControlToken } from "../../hooks/useControlToken";
+import { useGraphicsToken } from "../../hooks/useGraphicsToken";
 import { RELAY_URL } from "../lib/relay";
 
 interface Player {
@@ -20,7 +22,15 @@ interface Player {
 // Roster admin for the Graphics Operator add-on (Phase C) — a standalone
 // route (like control/graphics), not a tab on the scoring control panel,
 // since roster upkeep happens well before/after a live match, not during it.
-export default function RosterControl() {
+export default function RosterControlPage() {
+  return (
+    <Suspense>
+      <RosterControl />
+    </Suspense>
+  );
+}
+
+function RosterControl() {
   useSession({
     required: true,
     onUnauthenticated() {
@@ -30,8 +40,17 @@ export default function RosterControl() {
 
   const { data: session } = useSession();
   const orgId = session?.user?.activeOrgId;
+  // Photo uploads are a stateless REST call authorized by org alone (see
+  // /api/player-photo/:playerId) — no matchId scoping needed for that.
   const controlToken = useControlToken();
-  const { state } = useMatchState();
+  // Without ?matchId=, this scopes to the org's singleton "default" room
+  // instead of whichever match is actually live — same reasoning as
+  // control/graphics/page.tsx. Uses a graphics-role token (not controlToken
+  // above) so this read-only socket doesn't enter the scoring controller
+  // mutex alongside whoever's actually scoring the match.
+  const matchId = useSearchParams().get("matchId") ?? undefined;
+  const { token: graphicsToken } = useGraphicsToken(matchId);
+  const { state } = useMatchState({ secret: graphicsToken, role: "graphics" });
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +109,7 @@ export default function RosterControl() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 800 }}>Player Roster</h1>
         <button
+          data-testid="add-player-button"
           onClick={() => { setEditing(null); setPrefill(null); setShowForm(true); }}
           style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", borderRadius: 8, padding: "8px 14px", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}
         >
@@ -286,8 +306,9 @@ function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUplo
   };
 
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "flex", gap: 10 }}>
+    <div data-testid={`player-card-${player.id}`} style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "flex", gap: 10 }}>
       <div
+        data-testid={`player-photo-preview-${player.id}`}
         onClick={() => inputRef.current?.click()}
         style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--bg-elevated)", flexShrink: 0, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)" }}
       >
@@ -298,7 +319,7 @@ function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUplo
           <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>{uploading ? "…" : "+"}</span>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+      <input ref={inputRef} data-testid={`player-photo-input-${player.id}`} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 700 }}>{player.displayName || `${player.firstName} ${player.lastName}`}</div>
         {player.provider && (
@@ -358,8 +379,8 @@ function PlayerFormModal({ orgId, existing, prefill, onClose, onSaved }: {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, width: 360, display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ fontSize: "0.9rem", fontWeight: 800 }}>{existing ? "Edit Player" : "Add Player"}</h2>
-        <FormField label="First name"><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></FormField>
-        <FormField label="Last name"><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></FormField>
+        <FormField label="First name"><input data-testid="player-form-first-name" value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></FormField>
+        <FormField label="Last name"><input data-testid="player-form-last-name" value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></FormField>
         <FormField label="Display name (optional)"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></FormField>
         <FormField label="Provider"><input value={provider} onChange={e => setProvider(e.target.value)} placeholder="e.g. championdata" style={inputStyle} /></FormField>
         <FormField label="External ID"><input value={externalId} onChange={e => setExternalId(e.target.value)} style={inputStyle} /></FormField>
@@ -367,7 +388,7 @@ function PlayerFormModal({ orgId, existing, prefill, onClose, onSaved }: {
         {error && <p style={{ color: "var(--danger)", fontSize: "0.7rem" }}>{error}</p>}
         <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
           <button onClick={onClose} style={{ flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", borderRadius: 8, padding: "8px 0", fontSize: "0.8rem", cursor: "pointer" }}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{ flex: 1, background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", borderRadius: 8, padding: "8px 0", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}>
+          <button data-testid="player-form-save" onClick={save} disabled={saving} style={{ flex: 1, background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", borderRadius: 8, padding: "8px 0", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}>
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
