@@ -3,23 +3,20 @@ import { createMatch, endMatch, getOrgId, waitForLive } from "../helpers/match";
 import { clickScoreIncrement, getScore, undo } from "../helpers/score";
 
 test.describe("adversarial: try to break it", () => {
-  test("rapid double-click on a score button never corrupts the score, though it can be coalesced", async ({ page }) => {
+  test("rapid double-click on a score button applies both increments exactly", async ({ page }) => {
     await createMatch(page, { sport: "netball", matchName: "E2E Adversarial Double-click" });
     await waitForLive(page);
 
-    // Same class of race as the keyboard-spam test below: two clicks fired
-    // truly concurrently (Promise.all, no dispatch delay between them) can
-    // both read the same pre-round-trip stateRef.current.home.score and
-    // coalesce into a single net increment instead of two. Documenting the
-    // safe bound rather than asserting the exact count for the same reason.
+    // Score adjustments are sent as deltas (adjustScore) and applied by the
+    // relay against its own authoritative state, not computed client-side
+    // from a possibly-stale copy — so two truly concurrent clicks both land.
     await Promise.all([
       page.getByTestId("score-home-inc-1").click(),
       page.getByTestId("score-home-inc-1").click(),
     ]);
     await page.waitForTimeout(500);
     const finalScore = await getScore(page, "home");
-    expect(finalScore).toBeGreaterThanOrEqual(1);
-    expect(finalScore).toBeLessThanOrEqual(2);
+    expect(finalScore).toBe(2);
 
     await endMatch(page);
   });
@@ -136,25 +133,19 @@ test.describe("adversarial: try to break it", () => {
     expect(errors).toEqual([]);
   });
 
-  test("keyboard-shortcut spam never corrupts the score, even though rapid presses can be coalesced", async ({ page }) => {
+  test("keyboard-shortcut spam applies every press exactly, none lost", async ({ page }) => {
     await createMatch(page, { sport: "netball", matchName: "E2E Keyboard Spam" });
     await waitForLive(page);
 
-    // Known finding: ScoreTab's keydown handler (frontend/app/control/components/ScoreTab.tsx)
-    // computes each increment from stateRef.current, which only advances once
-    // the relay's matchStateChange broadcasts back over the socket. Presses
-    // fired faster than that round-trip read the same stale base score, so
-    // rapid-fire keyboard input can silently lose increments — reproduced
-    // here (10 presses of "1" reliably yields fewer than 10). This test
-    // pins down the safe part of that behavior (never negative, never
-    // exceeds the press count, no corruption) without asserting the exact
-    // count, since exact loss is itself timing-dependent.
+    // ScoreTab's keydown handler (frontend/app/control/components/ScoreTab.tsx)
+    // sends each press as an adjustScore delta, applied by the relay against
+    // its own authoritative state rather than a client-computed absolute
+    // value — so rapid-fire presses can't coalesce into fewer net increments.
     const presses = 10;
     for (let i = 0; i < presses; i++) await page.keyboard.press("1");
     await page.waitForTimeout(1_000);
     const finalScore = await getScore(page, "home");
-    expect(finalScore).toBeGreaterThan(0);
-    expect(finalScore).toBeLessThanOrEqual(presses);
+    expect(finalScore).toBe(presses);
 
     await endMatch(page);
   });

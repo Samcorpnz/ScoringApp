@@ -1,5 +1,5 @@
-const FRONTEND_URL = "http://localhost:3000";
-const RELAY_HEALTH_URL = "http://localhost:4000/health";
+const FRONTEND_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
+const RELAY_HEALTH_URL = process.env.E2E_RELAY_HEALTH_URL ?? "http://localhost:4000/health";
 const TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 1_000;
 

@@ -33,4 +33,27 @@ test.describe("indoor cricket", () => {
       await endMatch(page);
     });
   }
+
+  test("rapid double-click on Wicket applies both wickets atomically, not one", async ({ page }) => {
+    await createMatch(page, {
+      sport: "indoor_cricket",
+      matchConfig: { wicketPenalty: "5" },
+      matchName: "E2E Indoor Cricket Rapid Wicket",
+      homeName: "Vipers",
+      visitorName: "Cobras",
+    });
+    await waitForLive(page);
+
+    const wicketButton = page.getByTestId("score-home-wicket");
+    await Promise.all([wicketButton.click(), wicketButton.click()]);
+    await page.waitForTimeout(500);
+
+    // Two rapid wicket clicks: both the score decrement (2 x penalty) and
+    // the wicket-count increment (+2) are applied atomically server-side
+    // (indoorCricket:wicket), not coalesced into a single wicket.
+    await expect(page.getByTestId("score-home-wicket")).toContainText("· 2");
+    await expect(page.getByTestId("score-visitor-wicket")).toContainText("· 0");
+
+    await endMatch(page);
+  });
 });

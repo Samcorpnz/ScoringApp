@@ -458,6 +458,153 @@ describe("socket — control resetMatch", () => {
   });
 });
 
+describe("socket — control adjustScore", () => {
+  it("applies a single delta and broadcasts", async () => {
+    const control = await connectControl();
+    const { socket: viewer, initialState } = await connectAndWait();
+    try {
+      const broadcastPromise = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("adjustScore", { side: "home", delta: 1 });
+      const received = await broadcastPromise;
+      expect(received.home.score).toBe(initialState.home.score + 1);
+    } finally {
+      control.disconnect();
+      viewer.disconnect();
+    }
+  });
+
+  // The scenario that broke both the old client-side computation AND would
+  // break a naive server-side `await getState(...)`-based handler: two
+  // adjustments fired back-to-back with zero `await` between them. Both
+  // must apply — the relay's read-modify-write must stay fully synchronous
+  // (see relay/src/server.ts's adjustScore handler comment).
+  it("two adjustScore emits fired synchronously (no await between them) both apply", async () => {
+    const control = await connectControl();
+    const { initialState } = await connectAndWait();
+    try {
+      control.emit("adjustScore", { side: "home", delta: 1 });
+      control.emit("adjustScore", { side: "home", delta: 1 });
+      const { socket: viewer2, initialState: after } = await connectAndWait();
+      viewer2.disconnect();
+      expect(after.home.score).toBe(initialState.home.score + 2);
+    } finally {
+      control.disconnect();
+    }
+  });
+
+  it("rejects an out-of-range delta without broadcasting", async () => {
+    const control = await connectControl();
+    const viewer = (await connectAndWait()).socket;
+    try {
+      let broadcast = false;
+      viewer.once("matchStateChange", () => { broadcast = true; });
+      control.emit("adjustScore", { side: "home", delta: 1000 });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(broadcast).toBe(false);
+    } finally {
+      control.disconnect();
+      viewer.disconnect();
+    }
+  });
+
+  it("rejects adjustScore from a non-controller socket", async () => {
+    const control = await connectControl();
+    const nonController = ioClient(serverUrl, { auth: { secret: CONTROL_SECRET, role: "control" }, reconnection: false });
+    await nextEvent(nonController, "controllerConflict"); // connect-time conflict, since `control` already holds the token
+    try {
+      const conflictPromise = nextEvent(nonController, "controllerConflict");
+      nonController.emit("adjustScore", { side: "home", delta: 1 });
+      await conflictPromise;
+    } finally {
+      control.disconnect();
+      nonController.disconnect();
+    }
+  });
+
+  it("undo after adjustScore restores the pre-adjustment score", async () => {
+    const control = await connectControl();
+    const { socket: viewer, initialState } = await connectAndWait();
+    try {
+      const afterAdjust = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("adjustScore", { side: "home", delta: 3 });
+      await afterAdjust;
+
+      const afterUndo = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("undo");
+      const restored = await afterUndo;
+      expect(restored.home.score).toBe(initialState.home.score);
+    } finally {
+      control.disconnect();
+      viewer.disconnect();
+    }
+  });
+});
+
+describe("socket — control indoorCricket:wicket", () => {
+  it("decrements score by wicketPenalty and increments the wicket counter atomically", async () => {
+    await request(app)
+      .post("/manual")
+      .set("x-control-secret", CONTROL_SECRET)
+      .send({
+        sport: "indoor_cricket",
+        sportConfig: { wicketPenalty: 5 },
+        home: { score: 20 },
+        sportState: { sport: "indoor_cricket", wicketPenalty: 5, oversPerInnings: 8, homeWickets: 0, visitorWickets: 0 },
+      });
+
+    const control = await connectControl();
+    const { socket: viewer } = await connectAndWait();
+    try {
+      const broadcastPromise = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("indoorCricket:wicket", { side: "home" });
+      const received = await broadcastPromise;
+      expect(received.home.score).toBe(15);
+      expect((received.sportState as { homeWickets: number }).homeWickets).toBe(1);
+      expect((received.sportState as { visitorWickets: number }).visitorWickets).toBe(0);
+    } finally {
+      control.disconnect();
+      viewer.disconnect();
+    }
+  });
+
+  it("two synchronous wicket emits for the same side both apply", async () => {
+    const control = await connectControl();
+    const { initialState } = await connectAndWait();
+    const penalty = 5;
+    try {
+      control.emit("indoorCricket:wicket", { side: "home" });
+      control.emit("indoorCricket:wicket", { side: "home" });
+      const { socket: viewer2, initialState: after } = await connectAndWait();
+      viewer2.disconnect();
+      const startWickets = (initialState.sportState as { homeWickets?: number } | undefined)?.homeWickets ?? 0;
+      expect(after.home.score).toBe(Math.max(0, initialState.home.score - 2 * penalty));
+      expect((after.sportState as { homeWickets: number }).homeWickets).toBe(startWickets + 2);
+    } finally {
+      control.disconnect();
+    }
+  });
+
+  it("undo after a wicket restores both score and wicket count", async () => {
+    const control = await connectControl();
+    const { socket: viewer, initialState } = await connectAndWait();
+    const startWickets = (initialState.sportState as { homeWickets?: number } | undefined)?.homeWickets ?? 0;
+    try {
+      const afterWicket = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("indoorCricket:wicket", { side: "home" });
+      await afterWicket;
+
+      const afterUndo = nextEvent<MatchState>(viewer, "matchStateChange");
+      control.emit("undo");
+      const restored = await afterUndo;
+      expect(restored.home.score).toBe(initialState.home.score);
+      expect((restored.sportState as { homeWickets: number }).homeWickets).toBe(startWickets);
+    } finally {
+      control.disconnect();
+      viewer.disconnect();
+    }
+  });
+});
+
 describe("socket — requestControl", () => {
   it("grants control on request when no other controller is active", async () => {
     const control = await connectControl();
