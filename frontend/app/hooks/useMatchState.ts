@@ -27,6 +27,12 @@ export type ControllerStatus = "connecting" | "granted" | "conflict" | "revoked"
 // with neither controllerGranted nor controllerConflict, indefinitely.
 const CONTROL_REQUEST_RETRY_DELAYS_MS = [1_500, 3_000, 6_000];
 
+// How often to re-measure the client/relay clock offset (NTP-style
+// send/receive round trip). Recent samples are kept and the lowest-RTT one
+// used, since RTT jitter is the main source of offset-estimation error.
+const TIME_SYNC_INTERVAL_MS = 30_000;
+const TIME_SYNC_SAMPLE_WINDOW = 5;
+
 export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
@@ -38,6 +44,12 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const socketRef = useRef<Socket | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const disconnectedSinceRef = useRef<number | null>(null);
+  // Best current estimate of (relay clock − local clock), in ms. Used to
+  // timestamp operator click instants in server-clock terms so the relay's
+  // clock anchor isn't inflated by click→relay network latency (see
+  // resyncClock/applyManualUpdate on the relay).
+  const clockOffsetMsRef = useRef<number>(0);
+  const clockOffsetSamplesRef = useRef<{ offsetMs: number; rttMs: number }[]>([]);
   const stateRef = useRef(state);
   stateRef.current = state;
   const controllerStatusRef = useRef(controllerStatus);
@@ -70,12 +82,28 @@ export function useMatchState(auth?: { secret: string; role: string }) {
       controlRetryTimers.length = 0;
     };
 
+    const runTimeSync = () => {
+      const t0 = Date.now();
+      socket.emit("timeSync", { t0 });
+    };
+    socket.on("timeSyncResponse", (payload: { t0: number; serverNow: number }) => {
+      const t1 = Date.now();
+      const rttMs = t1 - payload.t0;
+      const offsetMs = payload.serverNow - (payload.t0 + t1) / 2;
+      const samples = clockOffsetSamplesRef.current;
+      samples.push({ offsetMs, rttMs });
+      if (samples.length > TIME_SYNC_SAMPLE_WINDOW) samples.shift();
+      clockOffsetMsRef.current = samples.reduce((best, s) => (s.rttMs < best.rttMs ? s : best)).offsetMs;
+    });
+    const timeSyncTimer = setInterval(runTimeSync, TIME_SYNC_INTERVAL_MS);
+
     socket.on("connect", () => {
       setStatus("connected");
       lastUpdateRef.current = Date.now();
       setFeedStale(false);
       disconnectedSinceRef.current = null;
       setRelayUnreachable(false);
+      runTimeSync();
 
       if (role === "control") {
         setControllerStatus("connecting");
@@ -118,7 +146,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     socket.on("controllerConflict", () => { clearControlRetries(); setControllerStatus("conflict"); });
     socket.on("controllerRevoked",  () => setControllerStatus("revoked"));
 
-    return () => { clearControlRetries(); socket.disconnect(); };
+    return () => { clearControlRetries(); clearInterval(timeSyncTimer); socket.disconnect(); };
   }, [secret, role]);
 
   useEffect(() => {
@@ -143,13 +171,20 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   // (e.g. the /setup wizard routing into /control) must await this, or the
   // navigation can unmount this hook and disconnect the socket before the
   // fire-and-forget emit ever reaches the relay, silently dropping the patch.
-  const sendManualUpdate = (patch: Partial<MatchState>): Promise<void> => {
+  const sendManualUpdate = (patch: Partial<MatchState> & { clientEventMs?: number }): Promise<void> => {
     return new Promise(resolve => {
       const socket = socketRef.current;
       if (!socket) { resolve(); return; }
       socket.timeout(3000).emit("manualUpdate", patch, () => resolve());
     });
   };
+
+  // Estimated current relay-clock time, in this client's best current
+  // estimate — use to timestamp an operator's click instant (e.g. Start/Stop)
+  // before the network round-trip to the relay, so the clock anchor it sets
+  // reflects the moment of the click rather than the moment the relay
+  // happened to receive it.
+  const estimateServerNow = () => Date.now() + clockOffsetMsRef.current;
 
   const sendReset = () => {
     socketRef.current?.emit("resetMatch");
@@ -190,6 +225,6 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   return {
     state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
     sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
-    sendScoreAdjust, sendIndoorCricketWicket,
+    sendScoreAdjust, sendIndoorCricketWicket, estimateServerNow,
   };
 }

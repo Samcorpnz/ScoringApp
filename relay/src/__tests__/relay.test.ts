@@ -177,6 +177,55 @@ describe("POST /manual", () => {
   });
 });
 
+describe("POST /action/start, /action/stop — clock precision (SA clock-accuracy fix)", () => {
+  const start = () => request(app).post("/action/start").set("x-control-secret", CONTROL_SECRET);
+  const stop  = () => request(app).post("/action/stop").set("x-control-secret", CONTROL_SECRET);
+  const wait  = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  it("banks a sub-second hold into clockCarryMs instead of discarding it", async () => {
+    await start();
+    await wait(300);
+    await stop();
+
+    const { body } = await request(app).get("/state");
+    // Real-timer test — allow generous tolerance for CI/event-loop jitter.
+    // The bug this guards against would leave clockCarryMs undefined/0 and
+    // clockSeconds completely unchanged for any hold under 1000ms.
+    expect(body.clockCarryMs).toBeGreaterThan(150);
+    expect(body.clockCarryMs).toBeLessThan(900);
+  });
+
+  // The no-cumulative-drift-across-cycles guarantee is covered deterministically
+  // (with simulated timestamps, no real waits) in clock.test.ts's
+  // "never discards elapsed time across a chain of stop/start cycles" test —
+  // a real-timer version here would be vulnerable to a pre-existing race
+  // between this suite's always-on background tick loop (relay/src/server.ts's
+  // 1s setInterval) and concurrent manual actions whenever a wait happens to
+  // straddle a tick boundary, unrelated to the precision fix itself.
+
+  it("ignores a clientEventMs wildly outside the skew tolerance, falling back to receive-time", async () => {
+    const controlSocket = await connectControl();
+    await request(app).post("/manual").set("x-control-secret", CONTROL_SECRET).send({ isRunning: false });
+
+    const ackPromise = new Promise<void>(resolve => {
+      controlSocket.timeout(3000).emit(
+        "manualUpdate",
+        { isRunning: true, clientEventMs: Date.now() - 60_000 }, // 60s stale — well outside tolerance
+        () => resolve()
+      );
+    });
+    await ackPromise;
+
+    const { body } = await request(app).get("/state");
+    expect(body.isRunning).toBe(true);
+    // A trusted 60s-stale anchor would make the clock appear to have been
+    // running for a full minute already — assert that didn't happen.
+    expect(Math.abs((body.clockAnchorMs ?? Date.now()) - Date.now())).toBeLessThan(2000);
+    controlSocket.disconnect();
+    await stop(); // leave the clock paused for subsequent test blocks
+  });
+});
+
 describe("POST /api/logo/:team", () => {
   it("rejects logo upload without secret", async () => {
     const res = await request(app)
@@ -334,6 +383,27 @@ describe("socket — bridge stateUpdate", () => {
       const received = await broadcastPromise;
       // relay preserves the control-set logo, ignoring the bridge's blank value
       expect(received.home.logoUrl).toBe("/logos/home.png");
+    } finally {
+      bridge.disconnect();
+      viewer.disconnect();
+    }
+  });
+
+  it("a bridge stateUpdate never populates clockAnchorMs/clockCarryMs (bridge is its own precise clock source)", async () => {
+    const { socket: bridge } = await connectAndWait("bridge");
+    const { socket: viewer } = await connectAndWait();
+    try {
+      const { body: current } = await request(app).get("/state");
+      const broadcastPromise = nextEvent<MatchState>(viewer, "matchStateChange");
+      bridge.emit("stateUpdate", {
+        ...DEFAULT_MATCH_STATE,
+        sequenceId: current.sequenceId + 100,
+        isRunning: true,
+        clockSeconds: 123,
+      });
+      const received = await broadcastPromise;
+      expect(received.clockAnchorMs).toBeUndefined();
+      expect(received.clockSeconds).toBe(123);
     } finally {
       bridge.disconnect();
       viewer.disconnect();

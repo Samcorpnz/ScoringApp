@@ -59,4 +59,30 @@ describe("useInterpolatedClock", () => {
     rerender({ clockSeconds: 42 });
     expect(result.current).toBe(42);
   });
+
+  it("returns the precise carry-adjusted value when the relay supplies an anchor/carry", () => {
+    const { result } = renderHook(() =>
+      useInterpolatedClock({
+        clockSeconds: 90, isRunning: false, countDown: true,
+        clockAnchorMs: Date.now(), clockCarryMs: 700,
+      })
+    );
+    // Countdown: 90s baseline minus 0.7s of already-elapsed carry = 89.3
+    expect(result.current).toBeCloseTo(89.3, 5);
+  });
+
+  it("does not snap backward to the bare integer when stopping with a non-zero carry", () => {
+    const { result, rerender } = renderHook(
+      ({ isRunning }) => useInterpolatedClock({
+        clockSeconds: 90, isRunning, countDown: true,
+        clockAnchorMs: Date.now(), clockCarryMs: 400,
+      }),
+      { initialProps: { isRunning: true } }
+    );
+    rerender({ isRunning: false });
+    // Precise value (90 - 0.4 = 89.6), not the bare integer (90) — no
+    // backward-then-forward jump at the instant of stop.
+    expect(result.current).toBeCloseTo(89.6, 5);
+    expect(result.current).not.toBe(90);
+  });
 });

@@ -9,19 +9,42 @@
 import { useEffect, useState } from "react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useGraphicsScene } from "../../hooks/useGraphicsScene";
+import { useDisplayTheme } from "../../hooks/useDisplayTheme";
+import { useRoster } from "../../hooks/useRoster";
 import { SCENE_REGISTRY } from "./scenes/sceneRegistry";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
+
+// Converts a "#rrggbb" theme color to an rgba() string at the given alpha,
+// falling back to the default dark scene-card tint for any non-hex input
+// (e.g. a stale/empty theme value) rather than producing invalid CSS.
+function hexToRgba(hex: string, alpha: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return `rgba(7,9,15,${alpha})`;
+  const int = parseInt(match[1], 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 export default function GraphicsDisplay() {
   const { state } = useMatchState();
   const { scene } = useGraphicsScene();
   const [entitled, setEntitled] = useState<boolean | null>(null);
+  const [org, setOrg] = useState<string | null>(null);
+  // Only the ids currently on the live feed are fetched from the roster
+  // endpoint (which returns nothing for ids it isn't given) — the whole-roster
+  // fetch would expose the org's people database to anyone with the share URL.
+  const feedPlayerIds = (state.graphicsFeed?.stats.players ?? []).map(p => p.id);
+  const roster = useRoster(org, feedPlayerIds);
+  const { backgroundColor, textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const org = params.get("org");
-    const url = org ? `${RELAY_URL}/api/graphics/entitlement?org=${encodeURIComponent(org)}` : `${RELAY_URL}/api/graphics/entitlement`;
+    const orgParam = params.get("org");
+    setOrg(orgParam);
+    const url = orgParam ? `${RELAY_URL}/api/graphics/entitlement?org=${encodeURIComponent(orgParam)}` : `${RELAY_URL}/api/graphics/entitlement`;
     fetch(url)
       .then(res => res.json())
       .then(data => setEntitled(Boolean(data.entitled)))
@@ -33,19 +56,24 @@ export default function GraphicsDisplay() {
   return (
     <div
       style={{
+        ...themeStyle,
+        // Themed vars (accent/font/scale) apply; background stays transparent
+        // for OBS/vMix compositing — the theme's backgroundColor is only used
+        // as a tint for scene card backgrounds via --graphics-card-bg below.
         background: "transparent",
+        "--graphics-card-bg": hexToRgba(backgroundColor ?? "#07090F", 0.92),
         width: "100vw",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         pointerEvents: "none",
-      }}
+      } as React.CSSProperties}
     >
       {entitled === false ? (
         <UpgradePrompt />
       ) : SceneComponent ? (
-        <SceneComponent payload={scene?.payload} state={state} />
+        <SceneComponent payload={scene?.payload} state={state} roster={roster} />
       ) : null}
     </div>
   );

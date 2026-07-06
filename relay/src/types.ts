@@ -16,6 +16,7 @@ export { DEFAULT_DISPLAY_THEME } from "@scorehub/types";
 export const DEFAULT_MATCH_STATE = {
   sequenceId: 0,
   clockSeconds: 0,
+  clockCarryMs: 0,
   countDown: false,
   period: "1",
   periodBreak: false,

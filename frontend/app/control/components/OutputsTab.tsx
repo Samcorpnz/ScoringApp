@@ -102,6 +102,27 @@ export function OutputsTab({ matchId }: { matchId?: string }) {
         })}
       </div>
 
+      {/* Graphics Operator add-on section */}
+      <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+        <SectionLabel>Graphics Control — Add-on</SectionLabel>
+        <p className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>
+          Broadcast-style lower thirds, player stat cards, and headshot bios, driven from a second device and pushed
+          live to your display outputs.
+        </p>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <GraphicsLinkCard
+            href={matchId ? `/control/graphics?matchId=${matchId}` : "/control/graphics"}
+            label="Graphics Control"
+            desc="Switch scenes live during a match."
+          />
+          <GraphicsLinkCard
+            href={matchId ? `/control/roster?matchId=${matchId}` : "/control/roster"}
+            label="Player Roster"
+            desc="Manage headshots and bios ahead of time."
+          />
+        </div>
+      </div>
+
       {/* Graphics software section */}
       <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
         <SectionLabel>Graphics Software — Data Feed</SectionLabel>
@@ -130,6 +151,22 @@ socket.on("matchStateChange", (state) => {
         </div>
       </div>
     </div>
+  );
+}
+
+function GraphicsLinkCard({ href, label, desc }: { href: string; label: string; desc: string }) {
+  return (
+    <a
+      href={href}
+      className="rounded-lg p-3 flex items-center justify-between gap-3"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", textDecoration: "none" }}
+    >
+      <div>
+        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{label}</p>
+        <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>{desc}</p>
+      </div>
+      <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>Open ↗</span>
+    </a>
   );
 }
 
