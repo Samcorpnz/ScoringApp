@@ -87,7 +87,6 @@ jobs:
     continue-on-error: true
     env:
       AUTH_SECRET: ci-placeholder-secret
-      DATABASE_URL: postgresql://scorehub:scorehub@localhost:5432/scorehub
       # Test-mode Stripe account only (acct_1Tl1sw... per CLAUDE.md) — named
       # distinctly from any live-key secret so it's structurally impossible
       # to wire the live key in here by mistake. Unconfigured secrets resolve
@@ -110,6 +109,10 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # The specs import @scorehub/db directly (e2e/helpers/billing.ts), so
+      # the workspace needs building on the runner host too — the containers
+      # only build their own copies.
+      - run: npm run build --workspace=packages/db
 
       - name: Install Stripe CLI
         if: env.STRIPE_SECRET_KEY != ''
@@ -143,7 +146,15 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
+      # DATABASE_URL is step-scoped, not job env: docker-compose.yml
+      # interpolates ${DATABASE_URL:-...@postgres:5432/...} from the shell
+      # running `docker compose up`, so a job-level localhost value would
+      # override the in-container default and point Prisma at the container's
+      # own localhost (no Postgres there). Only the Playwright process on the
+      # runner host needs it, via the published 5432 port (e2e/helpers/billing.ts).
       - run: npm run test:e2e
+        env:
+          DATABASE_URL: postgresql://scorehub:scorehub@localhost:5432/scorehub
 
       - if: always()
         run: docker compose logs

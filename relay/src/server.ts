@@ -579,7 +579,7 @@ export function createServer(options: ServerOptions = {}) {
 
   // Used by the Stream Deck plugin on startup: exchange a CONTROL token for
   // the orgId (and optional matchId) needed to open a viewer socket.
-  app.get("/api/me", async (req, res) => {
+  app.get("/api/me", controlRateLimit, async (req, res) => {
     const secret = req.headers["x-control-secret"];
     const result = await verifyActionSecret(typeof secret === "string" ? secret : undefined, CONTROL_SECRET);
     if (!result) {
