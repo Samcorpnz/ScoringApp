@@ -57,3 +57,18 @@ describe("controlRateLimit on /manual (SA-81)", () => {
     expect(res.status).toBe(429);
   });
 });
+
+describe("controlRateLimit on /api/me", () => {
+  it("rejects with 429 once the shared control limit is exhausted", async () => {
+    // Self-contained: sends enough requests to exhaust the budget regardless
+    // of how much the /manual tests above already consumed.
+    let lastStatus = 0;
+    for (let i = 0; i < 21; i++) {
+      const res = await request(app)
+        .get("/api/me")
+        .set("x-control-secret", CONTROL_SECRET);
+      lastStatus = res.status;
+    }
+    expect(lastStatus).toBe(429);
+  });
+});
