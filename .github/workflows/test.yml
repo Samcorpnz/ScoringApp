@@ -109,6 +109,10 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # The specs import @scorehub/db directly (e2e/helpers/billing.ts), so
+      # the workspace needs building on the runner host too — the containers
+      # only build their own copies.
+      - run: npm run build --workspace=packages/db
 
       - name: Install Stripe CLI
         if: env.STRIPE_SECRET_KEY != ''
