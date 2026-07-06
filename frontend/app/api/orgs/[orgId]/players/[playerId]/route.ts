@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@scorehub/db";
 import { auth } from "@/auth";
+import { validatePlayerField } from "@/lib/playerFields";
 
 const GRAPHICS_ROLES = ["ADMIN", "MANAGER", "OPERATOR"] as const;
 
@@ -54,7 +55,12 @@ export async function PATCH(
       if (value !== null && typeof value !== "string") {
         return NextResponse.json({ error: `${field} must be a string or null` }, { status: 400 });
       }
-      data[field] = typeof value === "string" ? value.trim() || null : null;
+      const trimmed = typeof value === "string" ? value.trim() : "";
+      if (trimmed) {
+        const err = validatePlayerField(field, trimmed);
+        if (err) return NextResponse.json({ error: err }, { status: 400 });
+      }
+      data[field] = trimmed || null;
     }
   }
   if ("firstName" in data && !data.firstName) {

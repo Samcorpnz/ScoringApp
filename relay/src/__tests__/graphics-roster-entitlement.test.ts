@@ -36,7 +36,11 @@ jest.mock("@scorehub/db", () => {
         }),
       },
       player: {
-        findMany: jest.fn(async ({ where }: { where: { orgId: string } }) => players.get(where.orgId) ?? []),
+        findMany: jest.fn(async ({ where }: { where: { orgId: string; externalId?: { in: string[] } } }) => {
+          const rows = (players.get(where.orgId) ?? []) as { externalId: string }[];
+          const ids = where.externalId?.in;
+          return ids ? rows.filter(r => ids.includes(r.externalId)) : rows;
+        }),
       },
     },
   };
@@ -85,22 +89,35 @@ describe("GET /api/graphics/roster — add-on gating", () => {
     seed("org-without", "account-without", []);
     seedPlayers("org-without", [{ externalId: "1", provider: "vega", firstName: "A", lastName: "B", displayName: null, photoUrl: null, bio: null }]);
 
-    const res = await request(app).get("/api/graphics/roster?org=org-without");
+    const res = await request(app).get("/api/graphics/roster?org=org-without&externalId=1");
     expect(res.status).toBe(200);
     expect(res.body.players).toEqual([]);
   });
 
-  it("returns the roster for an org with the graphics-operator add-on", async () => {
+  it("returns only the requested player(s) for an org with the graphics-operator add-on", async () => {
+    seed("org-with", "account-with", ["graphics-operator"]);
+    seedPlayers("org-with", [
+      { externalId: "1", provider: "vega", firstName: "A", lastName: "B", displayName: null, photoUrl: null, bio: null },
+      { externalId: "2", provider: "vega", firstName: "C", lastName: "D", displayName: null, photoUrl: null, bio: null },
+    ]);
+
+    const res = await request(app).get("/api/graphics/roster?org=org-with&externalId=1");
+    expect(res.status).toBe(200);
+    expect(res.body.players).toHaveLength(1);
+    expect(res.body.players[0].externalId).toBe("1");
+  });
+
+  it("returns an empty roster when no externalId is supplied, even with the add-on (no whole-roster dump)", async () => {
     seed("org-with", "account-with", ["graphics-operator"]);
     seedPlayers("org-with", [{ externalId: "1", provider: "vega", firstName: "A", lastName: "B", displayName: null, photoUrl: null, bio: null }]);
 
     const res = await request(app).get("/api/graphics/roster?org=org-with");
     expect(res.status).toBe(200);
-    expect(res.body.players).toHaveLength(1);
+    expect(res.body.players).toEqual([]);
   });
 
   it("returns an empty roster for an unknown org", async () => {
-    const res = await request(app).get("/api/graphics/roster?org=does-not-exist");
+    const res = await request(app).get("/api/graphics/roster?org=does-not-exist&externalId=1");
     expect(res.status).toBe(200);
     expect(res.body.players).toEqual([]);
   });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@scorehub/db";
 import { auth } from "@/auth";
+import { validatePlayerField, type PlayerField } from "@/lib/playerFields";
 
 const GRAPHICS_ROLES = ["ADMIN", "MANAGER", "OPERATOR"] as const;
 
@@ -60,6 +61,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const externalId = typeof body?.externalId === "string" ? body.externalId.trim() || null : null;
   const provider = typeof body?.provider === "string" ? body.provider.trim() || null : null;
   const bio = typeof body?.bio === "string" ? body.bio.trim() || null : null;
+
+  for (const [field, value] of Object.entries({ firstName, lastName, displayName, externalId, provider, bio })) {
+    if (value) {
+      const err = validatePlayerField(field as PlayerField, value);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+  }
 
   try {
     const player = await prisma.player.create({

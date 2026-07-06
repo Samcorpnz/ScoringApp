@@ -14,6 +14,7 @@ import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGrap
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, requireAddOn, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
+import { safeSegment, validateImageUpload, UploadValidationError } from "./uploads";
 import {
   matchStatePatchSchema, matchStateSchema, manualUpdateRequestSchema,
   cricketBallEventSchema, cricketOverCompleteEventSchema, cricketInningsChangeEventSchema, cricketDeclareEventSchema,
@@ -90,7 +91,16 @@ export function createServer(options: ServerOptions = {}) {
   app.set("trust proxy", 1);
   app.use(cors({ origin: ALLOWED_ORIGINS }));
   app.use(express.json());
-  app.use("/logos", express.static(UPLOAD_DIR));
+  // nosniff on all served uploads; SVGs (which can carry markup) get a
+  // locked-down CSP as belt-and-braces alongside upload-time sanitization.
+  const uploadStaticHeaders = (res: express.Response, filePath: string): void => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (filePath.toLowerCase().endsWith(".svg")) {
+      res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+      res.setHeader("Content-Disposition", "inline");
+    }
+  };
+  app.use("/logos", express.static(UPLOAD_DIR, { setHeaders: uploadStaticHeaders }));
 
   const httpServer = createHttpServer(app);
   const io = new Server(httpServer, {
@@ -259,26 +269,40 @@ export function createServer(options: ServerOptions = {}) {
   // chain) — logos/sounds are per-tenant, so a flat shared directory/bucket
   // prefix would leak one org's branding into every other org's display.
 
+  // All image uploads use memory storage so the handler can validate/sanitize
+  // the bytes (validateImageUpload) before persisting, and so filenames/keys
+  // are built from sanitized values rather than raw request params.
+  const imageFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+    const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
+    cb(null, allowed.includes(file.mimetype));
+  };
   const upload = multer({
-    storage: r2Enabled
-      ? multer.memoryStorage()
-      : multer.diskStorage({
-          destination: (req, _file, cb) => {
-            const dir = path.join(UPLOAD_DIR, (req as any).orgId);
-            fs.mkdirSync(dir, { recursive: true });
-            cb(null, dir);
-          },
-          filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname).toLowerCase() || ".png";
-            cb(null, `${(req as any).params.team}${ext}`);
-          },
-        }),
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
-      cb(null, allowed.includes(file.mimetype));
-    },
+    fileFilter: imageFileFilter,
   });
+
+  // Persist a validated image buffer under an org-scoped path, returning the
+  // public URL (relative for local disk, absolute CDN url for R2). `segment`
+  // is the base filename (already sanitized/validated by the caller).
+  async function storeImage(
+    prefix: "logos" | "player-photos",
+    orgId: string,
+    segment: string,
+    ext: string,
+    mimetype: string,
+    buffer: Buffer,
+  ): Promise<string> {
+    const key = `${prefix}/${orgId}/${segment}${ext}`;
+    if (r2Enabled) {
+      return putObject(key, buffer, mimetype);
+    }
+    const baseDir = prefix === "logos" ? UPLOAD_DIR : PLAYER_PHOTOS_DIR;
+    const dir = path.join(baseDir, orgId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${segment}${ext}`), buffer);
+    return `/${prefix}/${orgId}/${segment}${ext}`;
+  }
 
   async function controlAuth(
     req: express.Request,
@@ -324,15 +348,16 @@ export function createServer(options: ServerOptions = {}) {
       }
 
       const orgId = (req as any).orgId as string;
-      let logoUrl: string;
-      if (r2Enabled) {
-        const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
-        const cdnUrl = await putObject(`logos/${orgId}/${team}${ext}`, req.file.buffer, req.file.mimetype);
-        logoUrl = `${cdnUrl}?t=${Date.now()}`;
-      } else {
-        const ext = path.extname(req.file.filename).toLowerCase();
-        logoUrl = `/logos/${orgId}/${team}${ext}?t=${Date.now()}`;
+      let buffer: Buffer;
+      try {
+        buffer = validateImageUpload(req.file.mimetype, req.file.buffer);
+      } catch (err) {
+        if (err instanceof UploadValidationError) { res.status(400).json({ error: err.message }); return; }
+        throw err;
       }
+      const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+      const storedUrl = await storeImage("logos", orgId, team, ext, req.file.mimetype, buffer);
+      const logoUrl = `${storedUrl}?t=${Date.now()}`;
       const state = await getState(orgId);
 
       await applyManualUpdate(orgId, {
@@ -370,38 +395,24 @@ export function createServer(options: ServerOptions = {}) {
   // ─── Competition logo upload ──────────────────────────────────────────────────
 
   const compUpload = multer({
-    storage: r2Enabled
-      ? multer.memoryStorage()
-      : multer.diskStorage({
-          destination: (req, _file, cb) => {
-            const dir = path.join(UPLOAD_DIR, (req as any).orgId);
-            fs.mkdirSync(dir, { recursive: true });
-            cb(null, dir);
-          },
-          filename: (_req, file, cb) => {
-            const ext = path.extname(file.originalname).toLowerCase() || ".png";
-            cb(null, `competition${ext}`);
-          },
-        }),
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp", "image/gif"];
-      cb(null, allowed.includes(file.mimetype));
-    },
+    fileFilter: imageFileFilter,
   });
 
   app.post("/api/competition-logo", controlRateLimit, controlAuth, requirePlan(["pro", "venue"]), compUpload.single("logo"), async (req, res) => {
     if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
     const orgId = (req as any).orgId as string;
-    let competitionLogoUrl: string;
-    if (r2Enabled) {
-      const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
-      const cdnUrl = await putObject(`logos/${orgId}/competition${ext}`, req.file.buffer, req.file.mimetype);
-      competitionLogoUrl = `${cdnUrl}?t=${Date.now()}`;
-    } else {
-      const ext = path.extname(req.file.filename).toLowerCase();
-      competitionLogoUrl = `/logos/${orgId}/competition${ext}?t=${Date.now()}`;
+    let buffer: Buffer;
+    try {
+      buffer = validateImageUpload(req.file.mimetype, req.file.buffer);
+    } catch (err) {
+      if (err instanceof UploadValidationError) { res.status(400).json({ error: err.message }); return; }
+      throw err;
     }
+    const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+    const storedUrl = await storeImage("logos", orgId, "competition", ext, req.file.mimetype, buffer);
+    const competitionLogoUrl = `${storedUrl}?t=${Date.now()}`;
     const state = await getState(orgId);
     await applyManualUpdate(orgId, { displayTheme: { ...state.displayTheme, competitionLogoUrl } });
     res.json({ competitionLogoUrl });
@@ -432,22 +443,10 @@ export function createServer(options: ServerOptions = {}) {
 
   const PLAYER_PHOTOS_DIR = path.join(UPLOAD_DIR, "player-photos");
   fs.mkdirSync(PLAYER_PHOTOS_DIR, { recursive: true });
-  app.use("/player-photos", express.static(PLAYER_PHOTOS_DIR));
+  app.use("/player-photos", express.static(PLAYER_PHOTOS_DIR, { setHeaders: uploadStaticHeaders }));
 
   const playerPhotoUpload = multer({
-    storage: r2Enabled
-      ? multer.memoryStorage()
-      : multer.diskStorage({
-          destination: (req, _file, cb) => {
-            const dir = path.join(PLAYER_PHOTOS_DIR, (req as any).orgId);
-            fs.mkdirSync(dir, { recursive: true });
-            cb(null, dir);
-          },
-          filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname).toLowerCase() || ".png";
-            cb(null, `${(req as any).params.playerId}${ext}`);
-          },
-        }),
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowed = ["image/png", "image/jpeg", "image/webp"];
@@ -464,25 +463,26 @@ export function createServer(options: ServerOptions = {}) {
     async (req, res) => {
       if (!req.file) { res.status(400).json({ error: "no file uploaded" }); return; }
       const orgId = (req as any).orgId as string;
-      const playerId = req.params.playerId;
+      const playerId = safeSegment(req.params.playerId);
+      if (!playerId) { res.status(400).json({ error: "invalid playerId" }); return; }
 
-      let photoUrl: string;
-      if (r2Enabled) {
-        const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
-        const cdnUrl = await putObject(`player-photos/${orgId}/${playerId}${ext}`, req.file.buffer, req.file.mimetype);
-        photoUrl = `${cdnUrl}?t=${Date.now()}`;
-      } else {
-        const ext = path.extname(req.file.filename).toLowerCase();
-        photoUrl = `/player-photos/${orgId}/${playerId}${ext}?t=${Date.now()}`;
+      let buffer: Buffer;
+      try {
+        buffer = validateImageUpload(req.file.mimetype, req.file.buffer);
+      } catch (err) {
+        if (err instanceof UploadValidationError) { res.status(400).json({ error: err.message }); return; }
+        throw err;
       }
-
-      res.json({ photoUrl });
+      const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+      const storedUrl = await storeImage("player-photos", orgId, playerId, ext, req.file.mimetype, buffer);
+      res.json({ photoUrl: `${storedUrl}?t=${Date.now()}` });
     }
   );
 
   app.delete("/api/player-photo/:playerId", controlRateLimit, controlAuth, requireAddOn("graphics-operator"), async (req, res) => {
     const orgId = (req as any).orgId as string;
-    const playerId = req.params.playerId;
+    const playerId = safeSegment(req.params.playerId);
+    if (!playerId) { res.status(400).json({ error: "invalid playerId" }); return; }
     if (r2Enabled) {
       await deleteByPrefix(`player-photos/${orgId}/${playerId}.`);
     } else {
@@ -498,7 +498,7 @@ export function createServer(options: ServerOptions = {}) {
 
   const SOUNDS_DIR = path.join(UPLOAD_DIR, "sounds");
   fs.mkdirSync(SOUNDS_DIR, { recursive: true });
-  app.use("/sounds", express.static(SOUNDS_DIR));
+  app.use("/sounds", express.static(SOUNDS_DIR, { setHeaders: uploadStaticHeaders }));
 
   const soundUpload = multer({
     storage: r2Enabled
@@ -610,18 +610,24 @@ export function createServer(options: ServerOptions = {}) {
 
   // Public (no secret), same trust level as /api/graphics/entitlement above —
   // /display/graphics has no session and needs to resolve a live feed
-  // player's id (provider+externalId) to a roster photo/bio. Returns the
-  // org's whole roster rather than a per-player lookup since the scene
-  // components already hold the full live player list client-side.
+  // player's id (provider externalId) to a roster photo/bio.
   //
-  // Still gated by orgHasAddOn: this returns PII (names, bios, photo URLs),
-  // unlike /api/graphics/entitlement's plain boolean, so an org must actually
-  // hold the graphics-operator add-on before its roster is servable — closes
-  // it off for the vast majority of orgIds (the id itself is a UUID, not
-  // guessable, but shouldn't be the only thing standing between a URL and PII).
+  // Scoped to the specific externalId(s) the caller passes (the ids currently
+  // on the live feed), NOT the whole roster: this returns PII (names, bios,
+  // photo URLs), and the org id — though a cuid — is embedded in the shareable
+  // display URL, so returning every player would let anyone with that link dump
+  // the org's entire people database. Requiring the feed ids means a caller can
+  // only retrieve players whose id they already hold, not enumerate the roster.
+  // Still gated by orgHasAddOn on top of that.
   app.get("/api/graphics/roster", async (req, res) => {
     const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
-    if (!process.env.DATABASE_URL) {
+    // Accept repeated (?externalId=a&externalId=b) or comma-separated ids.
+    const raw = req.query.externalId;
+    const externalIds = (Array.isArray(raw) ? raw : [raw])
+      .flatMap(v => (typeof v === "string" ? v.split(",") : []))
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (!process.env.DATABASE_URL || externalIds.length === 0) {
       res.json({ players: [] });
       return;
     }
@@ -630,7 +636,7 @@ export function createServer(options: ServerOptions = {}) {
       return;
     }
     const players = await prisma.player.findMany({
-      where: { orgId },
+      where: { orgId, externalId: { in: externalIds } },
       select: { externalId: true, provider: true, firstName: true, lastName: true, displayName: true, photoUrl: true, bio: true },
     });
     res.json({ players });

@@ -118,7 +118,9 @@ describe("requirePlan — branding routes", () => {
     const res = await request(app)
       .post("/api/competition-logo")
       .set("x-control-secret", await controlToken("org-pro"))
-      .attach("logo", Buffer.from("fake"), "logo.png");
+      // Valid PNG signature — the upload route now rejects files whose bytes
+      // don't match their declared image type.
+      .attach("logo", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "logo.png");
     expect(res.status).toBe(200);
     expect(res.body.competitionLogoUrl).toMatch(/^\/logos\/org-pro\/competition/);
   });

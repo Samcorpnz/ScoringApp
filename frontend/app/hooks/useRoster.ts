@@ -14,20 +14,30 @@ export interface RosterPlayer {
   bio: string | null;
 }
 
-// Fetches the org's roster once from the relay's public /api/graphics/roster
-// route (same unauthenticated trust level as /api/graphics/entitlement,
-// since /display/graphics is an OBS Browser Source with no session) so scene
-// components can resolve a live graphicsFeed player to a photo/bio.
-export function useRoster(org?: string | null): RosterPlayer[] {
+// Fetches roster entries for the given live-feed player ids from the relay's
+// public /api/graphics/roster route (same unauthenticated trust level as
+// /api/graphics/entitlement, since /display/graphics is an OBS Browser Source
+// with no session) so scene components can resolve a live graphicsFeed player
+// to a photo/bio. Scoped to the ids currently on the feed rather than the
+// whole org roster — the endpoint only returns players whose id is passed, so
+// the shareable display URL can't be used to dump the org's people database.
+export function useRoster(org: string | null | undefined, externalIds: string[]): RosterPlayer[] {
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
+  // Stable dependency key so the effect only refetches when the actual set of
+  // ids changes, not on every render's fresh array identity.
+  const idsKey = [...externalIds].sort().join(",");
 
   useEffect(() => {
-    const url = org ? `${RELAY_URL}/api/graphics/roster?org=${encodeURIComponent(org)}` : `${RELAY_URL}/api/graphics/roster`;
+    if (!org || idsKey === "") {
+      setPlayers([]);
+      return;
+    }
+    const url = `${RELAY_URL}/api/graphics/roster?org=${encodeURIComponent(org)}&externalId=${encodeURIComponent(idsKey)}`;
     fetch(url)
       .then(res => res.json())
       .then(data => setPlayers(Array.isArray(data.players) ? data.players : []))
       .catch(() => setPlayers([]));
-  }, [org]);
+  }, [org, idsKey]);
 
   return players;
 }
