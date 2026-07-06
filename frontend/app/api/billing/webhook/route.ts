@@ -67,12 +67,19 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
 
       const plan = priceId ? planForPriceId(priceId) : null;
       const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
+      // Never fail open to a paid tier: if the price id can't be mapped to a
+      // known plan (unrecognized/mis-mapped price), record the customer and
+      // subscription but leave `plan` unchanged and log the misconfiguration
+      // rather than silently granting Pro.
+      if (!plan) {
+        console.error(`[billing] unmapped priceId on checkout.session.completed: ${priceId} (account ${accountId})`);
+      }
       await prisma.account.update({
         where: { id: accountId },
         data: {
           stripeCustomerId: session.customer,
           stripeSubscriptionId: subscription.id,
-          plan: plan ?? "pro",
+          ...(plan ? { plan } : {}),
           billingInterval: interval,
         },
       });

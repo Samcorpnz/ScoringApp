@@ -575,7 +575,9 @@ function canActOnRole(actorRole: string, targetRole: string): boolean {
   return ROLE_RANK[targetRole] < ROLE_RANK.MANAGER;
 }
 
-type Member = { userId: string; name: string; email: string; role: string; memberSince: string };
+// email is only present for callers who can manage members (see the members
+// API route); lower-privilege roles get names/roles without everyone's email.
+type Member = { userId: string; name: string; email?: string; role: string; memberSince: string };
 type PendingInvite = { id: string; email: string; role: string; createdAt: string; expiresAt: string };
 
 function TeamCard({ orgId, actorRole, actorUserId }: { orgId: string; actorRole: string; actorUserId: string }) {
@@ -658,7 +660,8 @@ function TeamCard({ orgId, actorRole, actorUserId }: { orgId: string; actorRole:
           <div key={m.userId} className="flex items-center justify-between gap-2 py-1">
             <div>
               <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                {m.name} <span style={{ color: "var(--text-dim)" }}>({m.email})</span>
+                {m.name}
+                {m.email && <span style={{ color: "var(--text-dim)" }}> ({m.email})</span>}
               </p>
             </div>
             <div className="flex items-center gap-2">

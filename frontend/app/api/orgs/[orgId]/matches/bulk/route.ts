@@ -58,6 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     return NextResponse.json({ error: "too many fixtures in one upload (max 500)" }, { status: 400 });
   }
 
+  const FIELD_MAX: Record<"home" | "visitor" | "competition" | "matchName", number> = {
+    home: 100, visitor: 100, competition: 200, matchName: 200,
+  };
   const errors: RowError[] = [];
   rows.forEach((row, i) => {
     if (!row.sport || !VALID_SPORTS.has(row.sport as SportType)) {
@@ -67,6 +70,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     if (!row.visitor?.trim()) errors.push({ row: i, error: "missing visitor team" });
     if (row.scheduledAt && Number.isNaN(Date.parse(row.scheduledAt))) {
       errors.push({ row: i, error: `invalid scheduledAt "${row.scheduledAt}"` });
+    }
+    for (const [field, max] of Object.entries(FIELD_MAX) as [keyof typeof FIELD_MAX, number][]) {
+      const value = row[field];
+      if (typeof value === "string" && value.trim().length > max) {
+        errors.push({ row: i, error: `${field} must be at most ${max} characters` });
+      }
     }
   });
   if (errors.length > 0) {

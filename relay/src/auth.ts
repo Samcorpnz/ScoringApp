@@ -15,6 +15,15 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+// Constant-time secret comparison for the legacy (no-DB) auth path. Hashing
+// first guarantees equal-length buffers for timingSafeEqual and avoids leaking
+// the secret's length via an early length-mismatch return.
+function secretsEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 // Bridge devices can't do an interactive login, so they authenticate with a
 // long-lived per-org token (see POST /api/orgs/[orgId]/tokens in the frontend).
 // Only its SHA-256 hash is ever stored.
@@ -25,7 +34,7 @@ export async function verifyBridgeSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
@@ -42,7 +51,7 @@ export async function verifyActionSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
   }
 
   // Accept long-lived CONTROL ScopedTokens first (Stream Deck use-case).
@@ -66,7 +75,7 @@ export async function verifyControlSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
   }
 
   const authSecret = process.env.AUTH_SECRET;
@@ -100,7 +109,7 @@ export async function verifyGraphicsSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secret === legacySecret ? { orgId: LEGACY_ROOM_ID } : null;
+    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });

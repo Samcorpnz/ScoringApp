@@ -12,7 +12,16 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
   return timestamps.length > limit;
 }
 
+// Derive the client IP from the trusted proxy position, NOT the first
+// X-Forwarded-For entry — that first value is client-supplied, so keying
+// limiters on it lets an attacker rotate a forged header per request and
+// bypass the throttle entirely. On Vercel the platform sets x-real-ip (and
+// appends the real IP as the LAST XFF hop), which the client can't spoof.
 export function clientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() ?? "unknown";
+  const real = req.headers.get("x-real-ip");
+  if (real?.trim()) return real.trim();
+  const xff = req.headers.get("x-forwarded-for");
+  if (!xff) return "unknown";
+  const parts = xff.split(",").map(s => s.trim()).filter(Boolean);
+  return parts[parts.length - 1] ?? "unknown";
 }

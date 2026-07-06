@@ -33,7 +33,11 @@ export default function GraphicsDisplay() {
   const { scene } = useGraphicsScene();
   const [entitled, setEntitled] = useState<boolean | null>(null);
   const [org, setOrg] = useState<string | null>(null);
-  const roster = useRoster(org);
+  // Only the ids currently on the live feed are fetched from the roster
+  // endpoint (which returns nothing for ids it isn't given) — the whole-roster
+  // fetch would expose the org's people database to anyone with the share URL.
+  const feedPlayerIds = (state.graphicsFeed?.stats.players ?? []).map(p => p.id);
+  const roster = useRoster(org, feedPlayerIds);
   const { backgroundColor, textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   useEffect(() => {
