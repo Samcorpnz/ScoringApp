@@ -18,6 +18,12 @@ import { grantPlan, fillEmbeddedCheckout } from "../helpers/billing";
 // flaky for state that doesn't need re-creating.
 test.describe.configure({ mode: "serial" });
 
+// Skip (don't fail) when the Stripe test-mode secrets aren't configured —
+// CI resolves missing STRIPE_TEST_* secrets to empty strings and skips the
+// `stripe listen` step, so checkout can never complete. Every non-billing
+// spec is designed to run without Stripe (see test.yml's e2e job env notes).
+test.skip(!process.env.STRIPE_SECRET_KEY, "STRIPE_SECRET_KEY not set — Stripe checkout cannot run");
+
 test.describe("billing", () => {
   let orgId: string;
 
