@@ -132,13 +132,15 @@ export default function AccountPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan, interval: billingInterval }),
       });
-      const data = await res.json();
-      if (data.clientSecret) {
+      const data = await res.json().catch(() => null);
+      if (data?.clientSecret) {
         setCheckoutKind("plan");
         setCheckoutSecret(data.clientSecret);
-      } else if (data.switched) {
+      } else if (data?.switched) {
         await refreshBillingStatus();
         setSwitchNotice(`Switched to the ${data.plan} plan.`);
+      } else {
+        setSwitchNotice(data?.error ?? "couldn't start checkout");
       }
     } finally {
       setBillingBusy(false);

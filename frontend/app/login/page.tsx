@@ -13,6 +13,15 @@ export default function LoginPage() {
   );
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fieldErrors(email: string, password: string) {
+  return {
+    email: !email ? "Email is required" : EMAIL_RE.test(email) ? "" : "Enter a valid email address",
+    password: password ? "" : "Password is required",
+  };
+}
+
 function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -22,9 +31,16 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [touched,  setTouched]  = useState<Record<string, boolean>>({});
+
+  const errors = fieldErrors(email, password);
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setTouched({ email: true, password: true });
+    if (Object.values(errors).some(Boolean)) return;
+
     setError("");
     setLoading(true);
 
@@ -88,6 +104,8 @@ function LoginForm() {
             onChange={setEmail}
             autoFocus
             autoComplete="email"
+            error={touched.email ? errors.email : ""}
+            onBlur={() => touch("email")}
           />
           <Field
             label="Password"
@@ -95,6 +113,8 @@ function LoginForm() {
             value={password}
             onChange={setPassword}
             autoComplete="current-password"
+            error={touched.password ? errors.password : ""}
+            onBlur={() => touch("password")}
           />
 
           {error && (
@@ -112,14 +132,14 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || !email || !password}
+            disabled={loading || Object.values(errors).some(Boolean)}
             className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase transition-opacity"
             style={{
               background: "var(--accent-dim)",
               border: "1px solid var(--border-accent)",
               color: "var(--accent)",
-              opacity: loading || !email || !password ? 0.5 : 1,
-              cursor: loading || !email || !password ? "not-allowed" : "pointer",
+              opacity: loading || Object.values(errors).some(Boolean) ? 0.5 : 1,
+              cursor: loading || Object.values(errors).some(Boolean) ? "not-allowed" : "pointer",
             }}
           >
             {loading ? "Signing in…" : "Sign In"}
@@ -138,7 +158,7 @@ function LoginForm() {
 }
 
 function Field({
-  label, type, value, onChange, autoFocus, autoComplete,
+  label, type, value, onChange, autoFocus, autoComplete, error, onBlur,
 }: {
   label: string;
   type: string;
@@ -146,7 +166,10 @@ function Field({
   onChange: (v: string) => void;
   autoFocus?: boolean;
   autoComplete?: string;
+  error?: string;
+  onBlur?: () => void;
 }) {
+  const borderColor = error ? "var(--danger)" : "var(--border)";
   return (
     <div>
       <label
@@ -159,19 +182,28 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => {
+          e.target.style.borderColor = borderColor;
+          onBlur?.();
+        }}
         autoFocus={autoFocus}
         autoComplete={autoComplete}
         required
+        aria-invalid={!!error}
         className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all"
         style={{
           background: "var(--bg-elevated)",
-          border: "1px solid var(--border)",
+          border: `1px solid ${borderColor}`,
           color: "var(--text-primary)",
           outline: "none",
         }}
         onFocus={(e) => (e.target.style.borderColor = "var(--border-accent)")}
-        onBlur={(e)  => (e.target.style.borderColor = "var(--border)")}
       />
+      {error && (
+        <p className="mt-1.5 text-xs font-semibold" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

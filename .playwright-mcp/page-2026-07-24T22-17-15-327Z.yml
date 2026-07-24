@@ -1,0 +1,16 @@
+- generic [active] [ref=f12e1]:
+  - generic [ref=f12e4]:
+    - generic [ref=f12e5]:
+      - generic [ref=f12e7]: SHA
+      - generic [ref=f12e9]:
+        - generic [ref=f12e10]: Sharks
+        - generic [ref=f12e11]: "1"
+    - generic [ref=f12e12]:
+      - generic [ref=f12e13]: "00.0"
+      - generic [ref=f12e14]: QTR 1
+    - generic [ref=f12e15]:
+      - generic [ref=f12e17]: MAG
+      - generic [ref=f12e19]:
+        - generic [ref=f12e20]: Magic
+        - generic [ref=f12e21]: "0"
+  - alert [ref=f12e22]

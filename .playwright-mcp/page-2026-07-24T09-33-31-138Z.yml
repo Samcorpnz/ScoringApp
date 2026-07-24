@@ -1,0 +1,48 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - generic [ref=f2e4]: ScoreHub
+      - generic [ref=f2e5]:
+        - generic [ref=f2e6]: QA Tester
+        - link "Account" [ref=f2e7] [cursor=pointer]:
+          - /url: /account
+        - button "Sign out" [ref=f2e8]
+        - link "Set Up a New Match" [ref=f2e9] [cursor=pointer]:
+          - /url: /setup
+    - generic [ref=f2e10]:
+      - heading "Matches" [level=1] [ref=f2e11]
+      - paragraph [ref=f2e12]: Upcoming fixtures, live matches, and history — click into a match to score it.
+      - generic [ref=f2e13]:
+        - button "live" [ref=f2e14]
+        - button "upcoming" [ref=f2e15]
+        - button "history" [ref=f2e16]
+      - generic [ref=f2e17]:
+        - combobox [ref=f2e18]:
+          - option "All sports" [selected]
+          - option "Netball"
+          - option "Basketball"
+          - option "Rugby Union"
+          - option "Rugby League"
+          - option "Volleyball"
+          - option "Football"
+          - option "Handball"
+          - option "Hockey"
+          - option "Water Polo"
+          - option "Tennis"
+          - option "Touch Rugby"
+          - option "Futsal"
+          - option "Pickleball"
+          - option "Badminton"
+          - option "Table Tennis"
+          - option "Floorball"
+          - option "Squash"
+          - option "Lawn Bowls"
+          - option "Indoor Cricket"
+          - option "Softball"
+          - option "Cricket"
+          - option "Custom"
+        - combobox [ref=f2e19]:
+          - option "All competitions" [selected]
+        - textbox "Search team name…" [ref=f2e20]
+      - paragraph [ref=f2e21]: Loading…
+  - alert [ref=f2e22]

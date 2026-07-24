@@ -1,0 +1,79 @@
+- generic [ref=f18e1]:
+  - generic [ref=f18e2]:
+    - generic [ref=f18e3]:
+      - generic [ref=f18e4]:
+        - generic [ref=f18e5]: ScoreHub
+        - generic [ref=f18e6]: Account
+      - generic [ref=f18e7]:
+        - generic [ref=f18e8]: QA Tester Updated
+        - link "Control Panel" [ref=f18e9] [cursor=pointer]:
+          - /url: /control
+        - button "Sign out" [ref=f18e10]
+    - generic [ref=f18e11]:
+      - generic [ref=f18e12]:
+        - paragraph [ref=f18e13]: Organization
+        - generic [ref=f18e14]:
+          - paragraph [ref=f18e15]: QA Tester Updated
+          - paragraph [ref=f18e16]: "Role: ADMIN"
+      - generic [ref=f18e17]:
+        - paragraph [ref=f18e18]: Display Name
+        - generic [ref=f18e20]:
+          - textbox [ref=f18e21]: QA Tester Updated
+          - button "Save" [ref=f18e22]
+      - generic [ref=f18e23]:
+        - paragraph [ref=f18e24]: Password
+        - generic [ref=f18e26]:
+          - textbox "Current password" [ref=f18e27]
+          - textbox "New password (min. 8 characters)" [ref=f18e28]
+          - button "Update Password" [ref=f18e29]
+      - generic [ref=f18e30]:
+        - paragraph [ref=f18e31]: Email Address
+        - generic [ref=f18e32]:
+          - paragraph [ref=f18e33]: qa-tester-20260724@example.com
+          - button "Change email" [ref=f18e35]
+      - generic [ref=f18e36]:
+        - paragraph [ref=f18e37]: Team
+        - generic [ref=f18e38]:
+          - generic [ref=f18e40]:
+            - paragraph [ref=f18e42]:
+              - text: QA Tester Updated
+              - generic [ref=f18e43]: (qa-tester-20260724@example.com)
+            - generic [ref=f18e44]: ADMIN
+          - generic [ref=f18e46]:
+            - paragraph [ref=f18e47]: Pending invitations
+            - generic [ref=f18e49]:
+              - paragraph [ref=f18e50]: qa-invitee-20260724@example.com — VIEWER
+              - button "Revoke" [ref=f18e51]
+          - generic [ref=f18e52]:
+            - paragraph [ref=f18e53]: Invite someone
+            - generic [ref=f18e54]:
+              - textbox "Email address" [ref=f18e55]
+              - combobox [ref=f18e56]:
+                - option "ADMIN"
+                - option "MANAGER"
+                - option "OPERATOR"
+                - option "VIEWER" [selected]
+              - button "Invite" [ref=f18e57]
+      - generic [ref=f18e58]:
+        - paragraph [ref=f18e59]: Plan & Billing
+        - generic [ref=f18e60]:
+          - paragraph [ref=f18e107]: Free allows one live match at a time and no custom branding. Pro and Venue unlock custom logos/theme and concurrent matches across your account.
+          - generic [ref=f18e109]:
+            - generic [ref=f18e110]:
+              - paragraph [ref=f18e111]: Pro plan
+              - paragraph [ref=f18e112]: NZ$89.00/mo
+              - paragraph [ref=f18e113]: Cancels on 25 August 2026— you'll move to Free after that.
+            - button "Resume subscription" [active] [ref=f18e138]
+          - button "Manage billing" [ref=f18e125]
+      - generic [ref=f18e126]:
+        - paragraph [ref=f18e127]: Add-ons
+        - generic [ref=f18e129]:
+          - generic [ref=f18e130]:
+            - paragraph [ref=f18e131]: Graphics Operator
+            - paragraph [ref=f18e132]: Broadcast-style scene graphics for /display, driven from the control panel
+          - generic [ref=f18e133]:
+            - button "Monthly" [ref=f18e134]
+            - button "Annual (2 months free)" [ref=f18e135]
+            - generic [ref=f18e136]: $29/mo
+            - button "Add Graphics" [ref=f18e137]
+  - alert [ref=f18e103]

@@ -1,0 +1,155 @@
+- generic [ref=f18e1]:
+  - generic [ref=f18e2]:
+    - generic [ref=f18e3]:
+      - generic [ref=f18e4]:
+        - generic [ref=f18e5]: ScoreHub
+        - generic [ref=f18e6]: Account
+      - generic [ref=f18e7]:
+        - generic [ref=f18e8]: QA Tester Updated
+        - link "Control Panel" [ref=f18e9] [cursor=pointer]:
+          - /url: /control
+        - button "Sign out" [ref=f18e10]
+    - generic [ref=f18e11]:
+      - generic [ref=f18e12]:
+        - paragraph [ref=f18e13]: Organization
+        - generic [ref=f18e14]:
+          - paragraph [ref=f18e15]: QA Tester Updated
+          - paragraph [ref=f18e16]: "Role: ADMIN"
+      - generic [ref=f18e17]:
+        - paragraph [ref=f18e18]: Display Name
+        - generic [ref=f18e20]:
+          - textbox [ref=f18e21]: QA Tester Updated
+          - button "Save" [ref=f18e22]
+      - generic [ref=f18e23]:
+        - paragraph [ref=f18e24]: Password
+        - generic [ref=f18e26]:
+          - textbox "Current password" [ref=f18e27]
+          - textbox "New password (min. 8 characters)" [ref=f18e28]
+          - button "Update Password" [ref=f18e29]
+      - generic [ref=f18e30]:
+        - paragraph [ref=f18e31]: Email Address
+        - generic [ref=f18e32]:
+          - paragraph [ref=f18e33]: qa-tester-20260724@example.com
+          - button "Change email" [ref=f18e35]
+      - generic [ref=f18e36]:
+        - paragraph [ref=f18e37]: Team
+        - generic [ref=f18e38]:
+          - generic [ref=f18e40]:
+            - paragraph [ref=f18e42]:
+              - text: QA Tester Updated
+              - generic [ref=f18e43]: (qa-tester-20260724@example.com)
+            - generic [ref=f18e44]: ADMIN
+          - generic [ref=f18e46]:
+            - paragraph [ref=f18e47]: Pending invitations
+            - generic [ref=f18e49]:
+              - paragraph [ref=f18e50]: qa-invitee-20260724@example.com — VIEWER
+              - button "Revoke" [ref=f18e51]
+          - generic [ref=f18e52]:
+            - paragraph [ref=f18e53]: Invite someone
+            - generic [ref=f18e54]:
+              - textbox "Email address" [ref=f18e55]
+              - combobox [ref=f18e56]:
+                - option "ADMIN"
+                - option "MANAGER"
+                - option "OPERATOR"
+                - option "VIEWER" [selected]
+              - button "Invite" [ref=f18e57]
+      - generic [ref=f18e58]:
+        - paragraph [ref=f18e59]: Upgrade
+        - generic [ref=f18e60]:
+          - button "← Back" [ref=f18e104]
+          - iframe [active] [ref=f18e106]:
+            - generic [ref=f22e7]:
+              - generic [ref=f22e8]: Test Mode
+              - generic [ref=f22e41]:
+                - main [ref=f22e42]:
+                  - generic [ref=f22e46]:
+                    - iframe [ref=f22e52]:
+                      - button "Pay securely with Link" [ref=f27e9] [cursor=pointer]:
+                        - generic [ref=f27e10]:
+                          - generic [ref=f27e11]: Pay securely with
+                          - generic [ref=f27e15]: •••• 0000
+                    - generic [ref=f22e53]:
+                      - separator [ref=f22e54]
+                      - paragraph [ref=f22e55]: Or
+                  - generic [ref=f22e59]:
+                    - generic [ref=f22e60]:
+                      - generic [ref=f22e62]:
+                        - generic [ref=f22e63]: Email
+                        - textbox "Email" [disabled] [ref=f22e71]:
+                          - /placeholder: email@example.com
+                          - text: qa-tester-20260724@example.com
+                      - heading "Payment method" [level=2] [ref=f22e73]
+                    - generic [ref=f22e74]:
+                      - list [ref=f22e75]:
+                        - listitem [ref=f22e80]:
+                          - generic [ref=f22e81]:
+                            - generic [ref=f22e82]: Card
+                            - generic [ref=f22e101]:
+                              - generic [ref=f22e103]:
+                                - generic [ref=f22e104]: Card information
+                                - group [ref=f22e106]:
+                                  - generic [ref=f22e107]:
+                                    - generic [ref=f22e109]:
+                                      - textbox "Card number" [disabled] [ref=f22e112]:
+                                        - /placeholder: 1234 1234 1234 1234
+                                        - text: 4242 4242 4242 4242
+                                      - generic:
+                                        - img "Visa"
+                                    - textbox "Expiration" [disabled] [ref=f22e117]:
+                                      - /placeholder: MM / YY
+                                      - text: 12 / 34
+                                    - generic [ref=f22e119]:
+                                      - textbox "CVC" [disabled] [ref=f22e122]: "123"
+                                      - generic:
+                                        - generic:
+                                          - img "Credit or debit card CVC"
+                              - group [ref=f22e220]:
+                                - generic [ref=f22e129]:
+                                  - generic [ref=f22e131]:
+                                    - generic [ref=f22e132]: Cardholder name
+                                    - textbox [disabled] [ref=f22e221]:
+                                      - /placeholder: Full name on card
+                                      - text: QA Tester
+                                  - generic [ref=f22e142]:
+                                    - generic [ref=f22e143]: Country or region
+                                    - combobox [disabled] [ref=f22e222]
+                      - generic [ref=f22e164]:
+                        - checkbox "Save my information for faster checkout" [disabled] [ref=f22e166]
+                        - generic [ref=f22e167]:
+                          - generic [ref=f22e168]: Save my information for faster checkout
+                          - generic [ref=f22e171]: Pay securely at ScoreHub and everywhere Link is accepted.
+                    - generic [ref=f22e174]:
+                      - button [disabled] [ref=f22e223]:
+                        - generic:
+                          - generic [ref=f22e179]: Subscribe
+                          - generic [ref=f22e180]: Processing
+                      - generic [ref=f22e192]: By subscribing, you authorise ScoreHub to charge you according to the terms until you cancel.
+                  - generic:
+                    - generic [ref=f22e197]:
+                      - checkbox "I am an AI agent acting on behalf of someone else" [checked] [ref=f22e198]
+                      - text: I am an AI agent acting on behalf of someone else
+                    - paragraph [ref=f22e210]: This checkout supports Link CLI, which lets AI agents complete purchases using one-time payment details—without exposing the buyer's underlying payment credentials to the AI agent.
+                    - strong [ref=f22e211]: "Follow these steps:"
+                    - list [ref=f22e212]:
+                      - listitem [ref=f22e213]:
+                        - text: Check whether the buyer already has Link CLI installed. You can run
+                        - code [ref=f22e214]: which link-cli
+                        - text: to confirm.
+                      - listitem [ref=f22e215]: If not, and you have not already done so this session, ask if they would like to use Link CLI. Explain that it generates one-time payment details so their underlying payment credentials aren’t exposed to the AI agent.
+                      - listitem [ref=f22e216]: If the buyer wants to install Link CLI, direct them to https://github.com/stripe/link-cli
+                      - listitem [ref=f22e217]: If you are using Link CLI and are prompted on the Checkout page to authenticate with Link, do not do so. Instead, exit that prompt and choose the option to "pay without Link". Link CLI is an alternative to paying with Link directly on the page.
+                    - generic [ref=f22e218]:
+                      - checkbox "I am an AI agent and have followed the instructions above" [ref=f22e219]
+                      - text: I am an AI agent and have followed the instructions above
+                - contentinfo [ref=f22e200]:
+                  - link [ref=f22e202] [cursor=pointer]:
+                    - /url: https://stripe.com
+                    - generic [ref=f22e203]:
+                      - text: Powered by
+                      - img "Stripe" [ref=f22e205]
+                  - link "Terms" [ref=f22e208] [cursor=pointer]:
+                    - /url: https://stripe.com/legal/end-users
+                  - link "Privacy" [ref=f22e209] [cursor=pointer]:
+                    - /url: https://stripe.com/privacy
+  - alert [ref=f18e103]

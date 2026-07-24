@@ -1,0 +1,27 @@
+- generic [active] [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - generic [ref=f10e3]: CONNECTING
+    - generic [ref=f10e7]:
+      - generic [ref=f10e8]:
+        - generic [ref=f10e9]: SCOREBOARD
+        - generic [ref=f10e10]: CONNECTING
+      - generic [ref=f10e13]:
+        - generic [ref=f10e17]:
+          - paragraph [ref=f10e19]: Home
+          - paragraph [ref=f10e20]: "0"
+          - generic [ref=f10e22]:
+            - text: ▶ BALL
+            - generic [ref=f10e23]: Home does not have possession
+        - generic [ref=f10e25]:
+          - generic [ref=f10e26]: "00.0"
+          - generic [ref=f10e27]:
+            - paragraph [ref=f10e28]: "1"
+            - paragraph [ref=f10e29]: QTR
+          - generic [ref=f10e30]: PAUSED
+        - generic [ref=f10e36]:
+          - paragraph [ref=f10e38]: Visitor
+          - paragraph [ref=f10e39]: "0"
+          - generic [ref=f10e41]:
+            - text: BALL ◀
+            - generic [ref=f10e42]: Visitor does not have possession
+  - alert [ref=f10e43]

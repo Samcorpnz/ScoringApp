@@ -590,8 +590,23 @@ export function createServer(options: ServerOptions = {}) {
   });
 
   app.get("/state", async (req, res) => {
-    const orgId = typeof req.query.org === "string" ? req.query.org : LEGACY_ROOM_ID;
+    let orgId = typeof req.query.org === "string" ? req.query.org : undefined;
     const matchId = typeof req.query.matchId === "string" ? req.query.matchId : undefined;
+    // A display link only carries matchId (org is optional sugar) — resolve
+    // orgId from the match row rather than falling through to LEGACY_ROOM_ID,
+    // which doesn't exist as a real org once DATABASE_URL is set and would
+    // otherwise 500 trying to auto-create a match under a non-existent org.
+    if (!orgId && matchId && process.env.DATABASE_URL) {
+      const row = await prisma.match.findUnique({ where: { id: matchId } });
+      if (row) orgId = row.orgId;
+    }
+    if (!orgId) {
+      if (process.env.DATABASE_URL) {
+        res.status(400).json({ error: "org (or a valid matchId) is required" });
+        return;
+      }
+      orgId = LEGACY_ROOM_ID;
+    }
     try {
       res.json(await getState(orgId, matchId));
     } catch (err) {
@@ -867,15 +882,24 @@ export function createServer(options: ServerOptions = {}) {
       }
     }
 
-    orgId = orgId ?? requestedOrgId ?? LEGACY_ROOM_ID;
+    orgId = orgId ?? requestedOrgId ?? null;
 
     // Viewer/display connections have no signed token — they pass orgId and
     // an optional matchId straight from the display URL's query params, so
     // matchId has to be validated against orgId here before it's trusted.
+    // If orgId is absent (a display link with only ?matchId=, e.g. hand-edited
+    // or from an older link format), resolve it from the match row instead of
+    // falling through to LEGACY_ROOM_ID — otherwise the lookup below always
+    // misses and the viewer silently joins the wrong (empty) room.
     if (!matchId && requestedMatchId && process.env.DATABASE_URL) {
       const row = await prisma.match.findUnique({ where: { id: requestedMatchId } });
-      if (row && row.orgId === orgId) matchId = requestedMatchId;
+      if (row && (!orgId || row.orgId === orgId)) {
+        matchId = requestedMatchId;
+        orgId = orgId ?? row.orgId;
+      }
     }
+
+    orgId = orgId ?? LEGACY_ROOM_ID;
 
     (socket as any).orgId = orgId;
     (socket as any).matchId = matchId;

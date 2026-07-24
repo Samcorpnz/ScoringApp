@@ -18,9 +18,12 @@ export function CricketSquadSetup({
   onBack: () => void;
   onSubmit: () => void;
 }) {
+  const MIN_PLAYERS = 2;
   const homeFilled = homeSquad.filter(n => n.trim()).length;
   const visitorFilled = visitorSquad.filter(n => n.trim()).length;
-  const canSubmit = homeFilled >= 2 && visitorFilled >= 2;
+  const homeError = homeFilled < MIN_PLAYERS ? `Add ${MIN_PLAYERS - homeFilled} more player${MIN_PLAYERS - homeFilled === 1 ? "" : "s"}` : "";
+  const visitorError = visitorFilled < MIN_PLAYERS ? `Add ${MIN_PLAYERS - visitorFilled} more player${MIN_PLAYERS - visitorFilled === 1 ? "" : "s"}` : "";
+  const canSubmit = !homeError && !visitorError;
 
   return (
     <div className="space-y-6">
@@ -33,8 +36,8 @@ export function CricketSquadSetup({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SquadColumn label={homeTeamName || "Home"} squad={homeSquad} onChange={onChangeHome} testIdPrefix="squad-home" />
-        <SquadColumn label={visitorTeamName || "Visitor"} squad={visitorSquad} onChange={onChangeVisitor} testIdPrefix="squad-visitor" />
+        <SquadColumn label={homeTeamName || "Home"} squad={homeSquad} onChange={onChangeHome} testIdPrefix="squad-home" error={homeError} />
+        <SquadColumn label={visitorTeamName || "Visitor"} squad={visitorSquad} onChange={onChangeVisitor} testIdPrefix="squad-visitor" error={visitorError} />
       </div>
 
       <div className="flex gap-3">
@@ -60,10 +63,17 @@ export function CricketSquadSetup({
   );
 }
 
-function SquadColumn({ label, squad, onChange, testIdPrefix }: { label: string; squad: string[]; onChange: (idx: number, name: string) => void; testIdPrefix: string }) {
+function SquadColumn({ label, squad, onChange, testIdPrefix, error }: {
+  label: string; squad: string[]; onChange: (idx: number, name: string) => void; testIdPrefix: string; error?: string;
+}) {
   return (
     <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
-      <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--text-dim)" }}>{label}</p>
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--text-dim)" }}>{label}</p>
+        {error && (
+          <p className="text-xs font-semibold" style={{ color: "var(--danger)" }}>{error}</p>
+        )}
+      </div>
       <div className="space-y-2">
         {squad.map((name, idx) => (
           <input

@@ -1,0 +1,23 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - generic [ref=f3e3]: LIVE
+    - generic [ref=f3e7]:
+      - generic [ref=f3e11]:
+        - paragraph [ref=f3e13]: Home
+        - paragraph [ref=f3e14]: "0"
+        - generic [ref=f3e16]:
+          - text: ▶ BALL
+          - generic [ref=f3e17]: Home does not have possession
+      - generic [ref=f3e19]:
+        - generic [ref=f3e20]: "00.0"
+        - generic [ref=f3e21]:
+          - paragraph [ref=f3e22]: "1"
+          - paragraph [ref=f3e23]: QTR
+        - generic [ref=f3e24]: PAUSED
+      - generic [ref=f3e28]:
+        - paragraph [ref=f3e30]: Visitor
+        - paragraph [ref=f3e31]: "0"
+        - generic [ref=f3e33]:
+          - text: BALL ◀
+          - generic [ref=f3e34]: Visitor does not have possession
+  - alert [ref=f3e36]

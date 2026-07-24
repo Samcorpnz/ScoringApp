@@ -1,0 +1,71 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - paragraph [ref=e5]: SAMCORP
+        - heading "ScoreHub" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Live sport display system
+      - generic [ref=e9]:
+        - link "Get Started" [ref=e10] [cursor=pointer]:
+          - /url: /signup
+        - link "Log In" [ref=e11] [cursor=pointer]:
+          - /url: /login
+      - paragraph [ref=e13]: See it in action
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - paragraph [ref=e17]: Basic Display
+            - paragraph [ref=e18]: Clean scoreboard panel for venue screens.
+          - generic [ref=e19]:
+            - generic [ref=e21]:
+              - generic [ref=e22]: S
+              - paragraph [ref=e23]: Sharks
+              - paragraph [ref=e24]: "47"
+            - generic [ref=e25]:
+              - paragraph [ref=e26]: 08:42
+              - paragraph [ref=e27]: Q3
+            - generic [ref=e28]:
+              - generic [ref=e29]: M
+              - paragraph [ref=e30]: Magic
+              - paragraph [ref=e31]: "42"
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - paragraph [ref=e35]: Advanced Display
+            - paragraph [ref=e36]: Full stats display with player roster and timeout pips.
+          - generic [ref=e38]:
+            - generic [ref=e39]:
+              - generic [ref=e40]: S
+              - generic [ref=e41]:
+                - paragraph [ref=e42]: Sharks
+                - paragraph [ref=e43]: "47"
+            - paragraph [ref=e44]: 08:42
+            - generic [ref=e45]:
+              - generic [ref=e46]:
+                - paragraph [ref=e47]: Magic
+                - paragraph [ref=e48]: "42"
+              - generic [ref=e49]: M
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - paragraph [ref=e57]: Lower-Third Overlay
+            - paragraph [ref=e58]: Transparent — OBS/vMix/Wirecast Browser Source (1920×120).
+          - generic [ref=e59]:
+            - generic [ref=e60]: S
+            - generic [ref=e61]: Sharks
+            - generic [ref=e62]: "47"
+            - generic [ref=e63]: –
+            - generic [ref=e64]: "42"
+            - generic [ref=e65]: Magic
+            - generic [ref=e66]: M
+            - generic [ref=e67]: Q3 08:42
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - paragraph [ref=e70]: Scorebug
+            - paragraph [ref=e71]: Compact corner widget for streaming overlays (?position=tr).
+          - generic [ref=e72]:
+            - generic [ref=e73]: S
+            - generic [ref=e74]: Sharks
+            - generic [ref=e75]: "47"
+            - generic [ref=e76]: "42"
+            - generic [ref=e77]: Magic
+            - generic [ref=e78]: M
+  - alert [ref=e79]

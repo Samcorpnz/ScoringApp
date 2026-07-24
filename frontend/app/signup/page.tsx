@@ -4,6 +4,17 @@ import { useState, FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fieldErrors(name: string, orgName: string, email: string, password: string) {
+  return {
+    name: name.trim() ? "" : "Name is required",
+    orgName: orgName.trim() ? "" : "Organization name is required",
+    email: !email ? "Email is required" : EMAIL_RE.test(email) ? "" : "Enter a valid email address",
+    password: !password ? "Password is required" : password.length >= 8 ? "" : "Must be at least 8 characters",
+  };
+}
+
 export default function SignupPage() {
   const router = useRouter();
 
@@ -13,9 +24,16 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [touched,  setTouched]  = useState<Record<string, boolean>>({});
+
+  const errors = fieldErrors(name, orgName, email, password);
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setTouched({ name: true, orgName: true, email: true, password: true });
+    if (Object.values(errors).some(Boolean)) return;
+
     setError("");
     setLoading(true);
 
@@ -40,7 +58,7 @@ export default function SignupPage() {
     }
   }
 
-  const canSubmit = name && orgName && email && password.length >= 8 && !loading;
+  const canSubmit = !Object.values(errors).some(Boolean) && !loading;
 
   return (
     <div
@@ -69,10 +87,27 @@ export default function SignupPage() {
           className="rounded-2xl p-8 space-y-5"
           style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", boxShadow: "0 0 40px rgba(0,0,0,0.4)" }}
         >
-          <Field label="Your name" type="text" value={name} onChange={setName} autoFocus autoComplete="name" />
-          <Field label="Organization name" type="text" value={orgName} onChange={setOrgName} autoComplete="organization" />
-          <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
-          <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
+          <Field
+            label="Your name" type="text" value={name} onChange={setName}
+            autoFocus autoComplete="name"
+            error={touched.name ? errors.name : ""} onBlur={() => touch("name")}
+          />
+          <Field
+            label="Organization name" type="text" value={orgName} onChange={setOrgName}
+            autoComplete="organization"
+            error={touched.orgName ? errors.orgName : ""} onBlur={() => touch("orgName")}
+          />
+          <Field
+            label="Email" type="email" value={email} onChange={setEmail}
+            autoComplete="email"
+            error={touched.email ? errors.email : ""} onBlur={() => touch("email")}
+          />
+          <Field
+            label="Password" type="password" value={password} onChange={setPassword}
+            autoComplete="new-password"
+            error={touched.password ? errors.password : ""} onBlur={() => touch("password")}
+            hint="At least 8 characters"
+          />
 
           {error && (
             <p
@@ -108,7 +143,7 @@ export default function SignupPage() {
 }
 
 function Field({
-  label, type, value, onChange, autoFocus, autoComplete,
+  label, type, value, onChange, autoFocus, autoComplete, error, hint, onBlur,
 }: {
   label: string;
   type: string;
@@ -116,7 +151,11 @@ function Field({
   onChange: (v: string) => void;
   autoFocus?: boolean;
   autoComplete?: string;
+  error?: string;
+  hint?: string;
+  onBlur?: () => void;
 }) {
+  const borderColor = error ? "var(--danger)" : "var(--border)";
   return (
     <div>
       <label
@@ -129,19 +168,32 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => {
+          e.target.style.borderColor = borderColor;
+          onBlur?.();
+        }}
         autoFocus={autoFocus}
         autoComplete={autoComplete}
         required
+        aria-invalid={!!error}
         className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all"
         style={{
           background: "var(--bg-elevated)",
-          border: "1px solid var(--border)",
+          border: `1px solid ${borderColor}`,
           color: "var(--text-primary)",
           outline: "none",
         }}
         onFocus={(e) => (e.target.style.borderColor = "var(--border-accent)")}
-        onBlur={(e)  => (e.target.style.borderColor = "var(--border)")}
       />
+      {error ? (
+        <p className="mt-1.5 text-xs font-semibold" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

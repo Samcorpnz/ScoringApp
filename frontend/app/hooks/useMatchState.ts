@@ -69,7 +69,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     const matchId = params?.get("matchId") ?? undefined;
 
     const socket = io(RELAY_URL, {
-      auth: secret !== undefined ? { secret, role } : orgId ? { orgId, matchId } : {},
+      auth: secret !== undefined ? { secret, role } : orgId || matchId ? { orgId, matchId } : {},
       reconnection: true,
       reconnectionDelay: 500,
       reconnectionDelayMax: 2000,

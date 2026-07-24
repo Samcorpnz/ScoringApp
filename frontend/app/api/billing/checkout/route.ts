@@ -47,8 +47,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "add-ons require an active Pro or Venue plan" }, { status: 400 });
   }
 
-  const stripe = getStripe();
-  const priceId = plan ? priceIdForPlan(plan, interval) : priceIdForAddOn(addOn!, interval);
+  let stripe, priceId;
+  try {
+    stripe = getStripe();
+    priceId = plan ? priceIdForPlan(plan, interval) : priceIdForAddOn(addOn!, interval);
+  } catch {
+    return NextResponse.json({ error: "billing is not configured" }, { status: 500 });
+  }
 
   // Already has an active subscription for this line (base plan or add-on)
   // — switch it in place (with proration) rather than starting a second

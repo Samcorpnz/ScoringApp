@@ -1,0 +1,24 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - generic [ref=f4e3]: LIVE
+    - generic [ref=f4e7]:
+      - generic [ref=f4e11]:
+        - paragraph [ref=f4e13]: Sharks
+        - paragraph [ref=f4e14]: "1"
+        - generic [ref=f4e16]:
+          - text: ▶ BALL
+          - generic [ref=f4e17]: Sharks does not have possession
+      - generic [ref=f4e19]:
+        - generic [ref=f4e20]: "00.0"
+        - generic [ref=f4e21]:
+          - paragraph [ref=f4e22]: "1"
+          - paragraph [ref=f4e23]: QTR
+        - generic [ref=f4e24]: LIVE
+      - generic [ref=f4e28]:
+        - paragraph [ref=f4e30]: Magic
+        - paragraph [ref=f4e31]: "0"
+        - generic [ref=f4e33]:
+          - text: BALL ◀
+          - generic [ref=f4e34]: Magic does not have possession
+    - paragraph [ref=f4e36]: "Source: manual"
+  - alert [ref=f4e37]

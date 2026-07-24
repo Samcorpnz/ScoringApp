@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { SPORT_TEMPLATES, getTemplate } from "../sport-templates";
 import type { SportType, CricketInningsState } from "../types";
 import { useControlToken } from "../hooks/useControlToken";
 import { useMatchState } from "../hooks/useMatchState";
 import { CricketSquadSetup, emptySquad } from "../control/components/CricketSquadSetup";
+import { PlanBadge } from "../components/PlanBadge";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 
 type SetupState = "form" | "squad-entry" | "provisioning" | "applying" | "upgrade-required" | "error";
 
@@ -30,6 +32,15 @@ export default function SetupPage() {
   const [message, setMessage] = useState("");
   const [homeSquad, setHomeSquad] = useState<string[]>(emptySquad());
   const [visitorSquad, setVisitorSquad] = useState<string[]>(emptySquad());
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const formErrors = {
+    matchName: matchName.trim() ? "" : "Match name is required",
+    homeName: homeName.trim() ? "" : "Home team name is required",
+    visitorName: visitorName.trim() ? "" : "Visitor team name is required",
+  };
+  const formValid = !Object.values(formErrors).some(Boolean);
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
   const [matchId, setMatchId] = useState<string | null>(null);
   const controlToken = useControlToken(matchId ?? undefined);
@@ -121,12 +132,40 @@ export default function SetupPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
       <div
-        className="flex items-center px-6 py-4"
+        className="flex items-center justify-between gap-4 px-6 py-4 flex-wrap"
         style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--border)" }}
       >
         <span className="font-black text-lg tracking-tight">
           Score<span style={{ color: "var(--accent)" }}>Hub</span>
         </span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <PlanBadge />
+          <OrgSwitcher />
+          {session?.user?.name && (
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{session.user.name}</span>
+          )}
+          <a
+            href="/dashboard"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Dashboard
+          </a>
+          <a
+            href="/account"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Account
+          </a>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-6 sm:p-10">
@@ -215,17 +254,32 @@ export default function SetupPage() {
             ))}
 
             <div className="rounded-xl p-5 space-y-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
-              <SetupField label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} testId="setup-match-name" />
-              <SetupField label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} testId="setup-home-name" />
-              <SetupField label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} testId="setup-visitor-name" />
+              <SetupField
+                label="Match name" placeholder="e.g. Round 1" value={matchName} onChange={setMatchName} testId="setup-match-name"
+                error={touched.matchName ? formErrors.matchName : ""} onBlur={() => touch("matchName")}
+              />
+              <SetupField
+                label="Home team" placeholder="e.g. Home" value={homeName} onChange={setHomeName} testId="setup-home-name"
+                error={touched.homeName ? formErrors.homeName : ""} onBlur={() => touch("homeName")}
+              />
+              <SetupField
+                label="Visitor team" placeholder="e.g. Visitor" value={visitorName} onChange={setVisitorName} testId="setup-visitor-name"
+                error={touched.visitorName ? formErrors.visitorName : ""} onBlur={() => touch("visitorName")}
+              />
             </div>
 
             <button
               data-testid="setup-submit"
-              className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase"
-              style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+              className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase transition-opacity"
+              style={{
+                background: "var(--accent-dim)",
+                border: "1px solid var(--border-accent)",
+                color: "var(--accent)",
+                opacity: !orgId || !formValid ? 0.5 : 1,
+                cursor: !orgId || !formValid ? "not-allowed" : "pointer",
+              }}
               onClick={() => sport === "cricket" ? setState("squad-entry") : handleSubmit()}
-              disabled={!orgId}
+              disabled={!orgId || !formValid}
             >
               {sport === "cricket" ? "Next: Squads →" : "Start Match →"}
             </button>
@@ -249,8 +303,9 @@ export default function SetupPage() {
   );
 }
 
-function SetupField({ label, placeholder, value, onChange, testId }: {
+function SetupField({ label, placeholder, value, onChange, testId, error, onBlur }: {
   label: string; placeholder: string; value: string; onChange: (v: string) => void; testId?: string;
+  error?: string; onBlur?: () => void;
 }) {
   return (
     <div>
@@ -258,11 +313,21 @@ function SetupField({ label, placeholder, value, onChange, testId }: {
       <input
         data-testid={testId}
         className="w-full rounded-lg px-3 py-2 text-sm font-semibold"
-        style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
+        style={{
+          background: "var(--bg-elevated)",
+          border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`,
+          color: "var(--text-primary)",
+          outline: "none",
+        }}
         placeholder={placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
+        onBlur={onBlur}
+        aria-invalid={!!error}
       />
+      {error && (
+        <p className="mt-1 text-xs font-semibold" style={{ color: "var(--danger)" }}>{error}</p>
+      )}
     </div>
   );
 }

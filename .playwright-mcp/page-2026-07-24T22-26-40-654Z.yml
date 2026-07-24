@@ -1,0 +1,57 @@
+- generic [active] [ref=f17e1]:
+  - alert [ref=f17e20]
+  - generic [ref=f17e21]:
+    - generic [ref=f17e22]:
+      - generic [ref=f17e23]: ScoreHub
+      - generic [ref=f17e24]:
+        - link "free" [ref=f17e25] [cursor=pointer]:
+          - /url: /account/billing
+        - generic [ref=f17e26]: QA Tester Updated
+        - link "Account" [ref=f17e27] [cursor=pointer]:
+          - /url: /account
+        - button "Sign out" [ref=f17e28]
+        - link "Set Up a New Match" [ref=f17e29] [cursor=pointer]:
+          - /url: /setup
+    - generic [ref=f17e30]:
+      - heading "Matches" [level=1] [ref=f17e31]
+      - paragraph [ref=f17e32]: Upcoming fixtures, live matches, and history — click into a match to score it.
+      - generic [ref=f17e33]:
+        - button "live" [ref=f17e34]
+        - button "upcoming" [ref=f17e35]
+        - button "history" [ref=f17e36]
+      - generic [ref=f17e37]:
+        - combobox [ref=f17e38]:
+          - option "All sports" [selected]
+          - option "Netball"
+          - option "Basketball"
+          - option "Rugby Union"
+          - option "Rugby League"
+          - option "Volleyball"
+          - option "Football"
+          - option "Handball"
+          - option "Hockey"
+          - option "Water Polo"
+          - option "Tennis"
+          - option "Touch Rugby"
+          - option "Futsal"
+          - option "Pickleball"
+          - option "Badminton"
+          - option "Table Tennis"
+          - option "Floorball"
+          - option "Squash"
+          - option "Lawn Bowls"
+          - option "Indoor Cricket"
+          - option "Softball"
+          - option "Cricket"
+          - option "Custom"
+        - combobox [ref=f17e39]:
+          - option "All competitions" [selected]
+        - textbox "Search team name…" [ref=f17e40]
+      - generic [ref=f17e42]:
+        - generic [ref=f17e43]:
+          - paragraph [ref=f17e44]: Sharks v Magic
+          - paragraph [ref=f17e45]: netball
+        - generic [ref=f17e46]:
+          - button "Copy display link" [ref=f17e47]
+          - link "Open Control →" [ref=f17e48] [cursor=pointer]:
+            - /url: /control?matchId=4d689e4a-1dd8-466f-a0dd-68191dc36968
