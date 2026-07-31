@@ -26,7 +26,8 @@
     "postinstall": "node scripts/patch-postcss-cve-2026-41305.js"
   },
   "overrides": {
-    "@prisma/dev": "0.24.14",
+    "@prisma/dev": "0.24.16",
+    "sharp": "^0.35.0",
     "postcss": "^8.5.10",
     "next": {
       "postcss": "^8.5.10"
