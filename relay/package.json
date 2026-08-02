@@ -11,7 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1090.0",
+    "@aws-sdk/client-s3": "^3.1098.0",
     "@scorehub/db": "*",
     "@scorehub/types": "*",
     "@sentry/node": "^10.62.0",
@@ -20,10 +20,10 @@
     "dompurify": "^3.4.12",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "ioredis": "^5.4.1",
-    "jose": "^6.2.3",
-    "jsdom": "^29.1.1",
+    "jose": "^6.2.5",
+    "jsdom": "^30.0.1",
     "multer": "^2.2.0",
     "socket.io": "^4.8.3",
     "zod": "^4.4.3"
@@ -35,13 +35,13 @@
     "@types/jest": "^30.0.0",
     "@types/jsdom": "^28.0.3",
     "@types/multer": "^2.2.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "@types/supertest": "^7.2.1",
     "jest": "^30.4.2",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.4.12",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
