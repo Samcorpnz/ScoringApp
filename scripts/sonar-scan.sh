@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Runs sonar-scanner against the local SonarQube instance
-# (docker-compose.sonarqube.yml), pulling SONAR_TOKEN from .env so it never
-# needs to be typed or committed. Used by `npm run scan:sonar` and the
-# pre-push hook (scripts/install-git-hooks.sh).
+# Runs sonar-scanner against the shared SonarQube instance
+# (sonar.samcorp.co.nz), pulling SONAR_TOKEN from .env so it never needs to
+# be typed or committed. Used by `npm run scan:sonar` and the pre-push hook
+# (scripts/install-git-hooks.sh).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -19,9 +19,8 @@ if [ -z "${SONAR_TOKEN:-}" ]; then
   exit 1
 fi
 
-if ! curl -s -o /dev/null -w '' "${SONAR_HOST_URL:-http://localhost:9000}/api/system/status" 2>/dev/null; then
-  echo "SonarQube not reachable at ${SONAR_HOST_URL:-http://localhost:9000} — start it with:" >&2
-  echo "  docker compose -f docker-compose.sonarqube.yml up -d" >&2
+if ! curl -s -o /dev/null -w '' "${SONAR_HOST_URL:-https://sonar.samcorp.co.nz}/api/system/status" 2>/dev/null; then
+  echo "SonarQube not reachable at ${SONAR_HOST_URL:-https://sonar.samcorp.co.nz}" >&2
   exit 1
 fi
 

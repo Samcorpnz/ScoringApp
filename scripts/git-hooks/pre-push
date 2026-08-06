@@ -16,4 +16,4 @@ if ! npm run --silent scan:sonar; then
   exit 1
 fi
 
-echo "SonarQube scan complete: http://localhost:9000/dashboard?id=scorehub"
+echo "SonarQube scan complete: https://sonar.samcorp.co.nz/dashboard?id=scorehub"

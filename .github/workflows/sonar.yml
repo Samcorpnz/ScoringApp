@@ -1,0 +1,37 @@
+name: SonarQube
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    name: Scan (shared SonarQube)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history so SonarQube can do blame-based new-code analysis.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run build --workspace=@scorehub/db
+
+      # Regenerate lcov reports so sonar.javascript.lcov.reportPaths (see
+      # sonar-project.properties) has fresh data.
+      - run: npm run test:coverage --workspace=frontend
+      - run: npm run test:coverage --workspace=relay
+      - run: npm run test:coverage --workspace=bridge
+
+      - uses: SonarSource/sonarqube-scan-action@689fb39b34b9aa95ebc5f8f119343ddd51542402 # v4
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

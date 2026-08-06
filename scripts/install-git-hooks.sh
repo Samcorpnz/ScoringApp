@@ -2,8 +2,8 @@
 # Installs local git hooks. .git/hooks isn't tracked by git, so this script
 # is what actually makes scripts/git-hooks/* effective — run it once after
 # cloning. Opt-in and per-machine on purpose: these hooks assume tooling
-# (e.g. a local SonarQube via docker-compose.sonarqube.yml) that not every
-# contributor runs.
+# (e.g. a SONAR_TOKEN for the shared sonar.samcorp.co.nz instance) that not
+# every contributor has configured.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
