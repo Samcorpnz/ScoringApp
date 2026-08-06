@@ -192,14 +192,14 @@ function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
             <div key={a.label} className="flex items-center gap-2 text-xs">
               <span className="w-24 shrink-0 font-semibold" style={{ color: "var(--text-secondary)" }}>{a.label}</span>
               <code
-                className="flex-1 p-1.5 rounded truncate cursor-pointer"
+                className="flex-1 p-1.5 rounded truncate"
                 style={{ background: "var(--bg-elevated)", color: "var(--text-dim)" }}
                 title={a.url}
-                onClick={() => navigator.clipboard.writeText(a.url)}
               >
                 {a.url}
               </code>
               <button
+                type="button"
                 className="shrink-0 rounded px-2 py-1 text-xs"
                 style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
                 onClick={() => navigator.clipboard.writeText(a.url)}

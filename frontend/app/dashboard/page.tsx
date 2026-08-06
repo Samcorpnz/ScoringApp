@@ -87,7 +87,7 @@ export default function DashboardPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
 
   const competitions = useMemo(
-    () => Array.from(new Set(matches.map(m => m.competition).filter((c): c is string => !!c))).sort(),
+    () => Array.from(new Set(matches.map(m => m.competition).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b)),
     [matches]
   );
 

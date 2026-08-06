@@ -65,15 +65,15 @@ const matchStateFields = {
   inputSource: z.string().max(50),
   home: teamStateSchema,
   visitor: teamStateSchema,
-  netballStats: z.object({}).passthrough().optional(),
-  sportState: z.object({}).passthrough().optional(),
+  netballStats: z.looseObject({}).optional(),
+  sportState: z.looseObject({}).optional(),
   sportConfig: z.record(z.string(), z.unknown()).optional(),
   // Graphics Operator add-on feed — flattened, provider-agnostic stat bag
   // produced by bridge/src/graphics/feedTransform.ts. Passthrough for the
   // same reason as netballStats/sportState: it's already validated (loosely,
   // by design — see that file) at the point it's produced, and is
   // graphics-only, never gates or drives scoring.
-  graphicsFeed: z.object({}).passthrough().optional(),
+  graphicsFeed: z.looseObject({}).optional(),
   displayTheme: displayThemeSchema,
 };
 

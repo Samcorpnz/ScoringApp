@@ -67,7 +67,7 @@ function ballLabel(payload: CricketBallEventPayload, wicketNullifiedByFreeHit: b
 export function applyCricketBall(current: MatchState, payload: CricketBallEventPayload): CricketState {
   const cs = getCricketState(current);
   const innings = cs.innings.slice();
-  const inn = cloneInnings(innings[innings.length - 1]);
+  const inn = cloneInnings(innings.at(-1)!);
 
   const legalDelivery = !payload.isWide && !payload.isNoBall;
   const batter1 = inn.batters[inn.currentBatter1Index] as CricketBatter | undefined;
@@ -164,7 +164,7 @@ export function applyCricketBall(current: MatchState, payload: CricketBallEventP
 export function applyOverComplete(current: MatchState, payload: CricketOverCompleteEventPayload): CricketState {
   const cs = getCricketState(current);
   const innings = cs.innings.slice();
-  const inn = cloneInnings(innings[innings.length - 1]);
+  const inn = cloneInnings(innings.at(-1)!);
   if (payload.nextBowlerIndex !== undefined) inn.currentBowlerIndex = payload.nextBowlerIndex;
   innings[innings.length - 1] = inn;
   return { ...cs, innings };
@@ -187,7 +187,7 @@ export function applyInningsChange(current: MatchState, payload: CricketInningsC
 function innings0Target(cs: CricketState, payload: CricketInningsChangeEventPayload): number | undefined {
   if (payload.target !== undefined) return payload.target;
   const priorForOtherTeam = cs.innings.filter(i => i.battingTeam !== payload.battingTeam);
-  const last = priorForOtherTeam[priorForOtherTeam.length - 1];
+  const last = priorForOtherTeam.at(-1);
   return last ? last.runs + 1 : undefined;
 }
 

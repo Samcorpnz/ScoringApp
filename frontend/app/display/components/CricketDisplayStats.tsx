@@ -14,7 +14,7 @@ export function CricketDisplayStats({ state, variant = "full" }: DisplayStatsPro
   const cricket = getCricketState(state);
   if (!cricket) return null;
 
-  const inn = cricket.innings[cricket.innings.length - 1];
+  const inn = cricket.innings.at(-1)!;
   const battingTeam = state[inn.battingTeam];
   const bowlingTeam = state[inn.battingTeam === "home" ? "visitor" : "home"];
   const batter1 = inn.batters[inn.currentBatter1Index];

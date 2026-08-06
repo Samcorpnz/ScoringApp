@@ -93,7 +93,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
       const samples = clockOffsetSamplesRef.current;
       samples.push({ offsetMs, rttMs });
       if (samples.length > TIME_SYNC_SAMPLE_WINDOW) samples.shift();
-      clockOffsetMsRef.current = samples.reduce((best, s) => (s.rttMs < best.rttMs ? s : best)).offsetMs;
+      clockOffsetMsRef.current = samples.reduce((best, s) => (s.rttMs < best.rttMs ? s : best), samples[0]).offsetMs;
     });
     const timeSyncTimer = setInterval(runTimeSync, TIME_SYNC_INTERVAL_MS);
 

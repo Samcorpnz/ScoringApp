@@ -25,7 +25,7 @@ export function useRoster(org: string | null | undefined, externalIds: string[])
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
   // Stable dependency key so the effect only refetches when the actual set of
   // ids changes, not on every render's fresh array identity.
-  const idsKey = [...externalIds].sort().join(",");
+  const idsKey = [...externalIds].sort((a, b) => a.localeCompare(b)).join(",");
 
   useEffect(() => {
     if (!org || idsKey === "") {

@@ -1,4 +1,107 @@
+"use client";
+
+import { useRef, useState } from "react";
+import Image from "next/image";
+
 export { Card, SectionLabel, SmallBtn } from "../../components/primitives";
+
+// Shared drop-zone + upload/remove UI for team and competition logos (LogosTab,
+// ThemeTab). Callers own the actual upload/remove network calls and where the
+// resulting logoUrl gets stored — this only owns the local uploading/error
+// state and the file-picker/drag-drop interaction.
+export function LogoUploadCard({ testId, logoSrc, alt, activeBorderColor, onUpload, onRemove }: {
+  readonly testId: string;
+  readonly logoSrc: string | null;
+  readonly alt: string;
+  readonly activeBorderColor?: string;
+  readonly onUpload: (file: File) => Promise<void>;
+  readonly onRemove: () => Promise<void>;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const uploadButtonLabel = logoSrc ? "Replace Logo" : "Upload Logo";
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    setError("");
+    try {
+      await onUpload(file);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setUploading(true);
+    try {
+      await onRemove();
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className="flex items-center justify-center rounded-xl w-full"
+        style={{
+          height: 140, background: "var(--bg-elevated)",
+          border: `1px dashed ${logoSrc ? (activeBorderColor ?? "var(--border-accent)") : "var(--border)"}`,
+          cursor: "pointer",
+        }}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+      >
+        {logoSrc ? (
+          <div data-testid={`${testId}-preview`} style={{ position: "relative", height: 110, width: "80%" }}>
+            <Image src={logoSrc} alt={alt} fill style={{ objectFit: "contain" }} />
+          </div>
+        ) : (
+          <div className="text-center">
+            <p className="text-2xl mb-1">⬆</p>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>Click or drag to upload</p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>PNG, JPG, SVG, WebP — max 5 MB</p>
+          </div>
+        )}
+      </button>
+
+      <input ref={inputRef} data-testid={`${testId}-input`} type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+
+      {error && <p data-testid={`${testId}-error`} className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          data-testid={`${testId}-upload-button`}
+          className="flex-1 rounded-lg py-2 text-sm font-bold"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)" }}
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? "Uploading…" : uploadButtonLabel}
+        </button>
+        {logoSrc && (
+          <button
+            type="button"
+            data-testid={`${testId}-remove-button`}
+            className="rounded-lg px-4 py-2 text-sm font-bold"
+            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "var(--danger)" }}
+            onClick={handleRemove}
+            disabled={uploading}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
 
 export function TemplateRow({ label, value }: { label: string; value: string }) {
   return (

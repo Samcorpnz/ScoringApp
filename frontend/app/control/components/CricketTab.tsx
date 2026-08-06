@@ -58,7 +58,7 @@ export function CricketTab({
   const [nextBowlerIdx, setNextBowlerIdx] = useState<number | "">("");
 
   const cricket = getCricketState(state);
-  const inn = cricket.innings[cricket.innings.length - 1];
+  const inn = cricket.innings.at(-1)!;
   const maxOvers = OVERS_PER_INNINGS[cricket.format];
   const battingSquad = inn.battingTeam === "home" ? cricket.homeSquad : cricket.visitorSquad;
   const bowlingSquad = inn.battingTeam === "home" ? cricket.visitorSquad : cricket.homeSquad;

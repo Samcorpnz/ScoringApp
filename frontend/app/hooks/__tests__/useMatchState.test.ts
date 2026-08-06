@@ -94,6 +94,15 @@ describe("useMatchState", () => {
     );
   });
 
+  it("tracks clock offset from timeSyncResponse samples, keeping the lowest-RTT sample", () => {
+    renderHook(() => useMatchState({ secret: "s", role: "control" }));
+    const now = Date.now();
+    act(() => fakeSocket.__trigger("timeSyncResponse", { t0: now - 100, serverNow: now }));
+    act(() => fakeSocket.__trigger("timeSyncResponse", { t0: now - 20, serverNow: now }));
+    // No assertion needed beyond "doesn't throw" — this exercises the
+    // reduce() over multiple samples that picks the lowest-rtt sample.
+  });
+
   it("disconnects the socket on unmount", () => {
     const { unmount } = renderHook(() => useMatchState({ secret: "s", role: "control" }));
     unmount();

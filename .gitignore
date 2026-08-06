@@ -24,6 +24,9 @@ relay/uploads/
 # TypeScript
 *.tsbuildinfo
 
+# Test coverage reports
+coverage/
+
 # Logs
 *.log
 npm-debug.log*

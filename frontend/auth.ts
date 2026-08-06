@@ -54,20 +54,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
-        if (!credentials?.email || !credentials?.password) return null;
+        const email = typeof credentials?.email === "string" ? credentials.email : undefined;
+        const password = typeof credentials?.password === "string" ? credentials.password : undefined;
+        if (!email || !password) return null;
 
         // Throttle by IP+email so credential stuffing against one account
         // from one source can't run unbounded (SA-81).
-        const key = `login:${clientIp(request)}:${String(credentials.email).toLowerCase()}`;
+        const key = `login:${clientIp(request)}:${email.toLowerCase()}`;
         if (isRateLimited(key, 10, 60_000)) return null;
 
         const user = await prisma.user.findUnique({
-          where: { email: String(credentials.email) },
+          where: { email },
           include: { memberships: { include: { org: true } } },
         });
         if (!user) return null;
 
-        const valid = await bcrypt.compare(String(credentials.password), user.passwordHash);
+        const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
         const memberships: SessionMembership[] = user.memberships.map((m) => ({

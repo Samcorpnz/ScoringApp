@@ -307,10 +307,11 @@ function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUplo
 
   return (
     <div data-testid={`player-card-${player.id}`} style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "flex", gap: 10 }}>
-      <div
+      <button
+        type="button"
         data-testid={`player-photo-preview-${player.id}`}
         onClick={() => inputRef.current?.click()}
-        style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--bg-elevated)", flexShrink: 0, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)" }}
+        style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--bg-elevated)", flexShrink: 0, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", padding: 0 }}
       >
         {player.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -318,7 +319,7 @@ function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUplo
         ) : (
           <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>{uploading ? "…" : "+"}</span>
         )}
-      </div>
+      </button>
       <input ref={inputRef} data-testid={`player-photo-input-${player.id}`} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 700 }}>{player.displayName || `${player.firstName} ${player.lastName}`}</div>

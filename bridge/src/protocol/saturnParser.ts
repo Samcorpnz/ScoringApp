@@ -58,7 +58,7 @@ function isValidFrame(frame: Buffer): boolean {
   if (frame.length < 4) return false;
   let crc = 0;
   for (let i = 0; i < frame.length - 1; i++) crc ^= frame[i];
-  return crc === frame[frame.length - 1];
+  return crc === frame.at(-1);
 }
 
 function extractMessage(frame: Buffer): SaturnMessage {
@@ -117,14 +117,14 @@ export function applySaturnMessage(
 function applyBase(raw: Buffer, state: MatchState): MatchState {
   const ascii = (i: number) => String.fromCharCode(raw[i]);
 
-  const clockStr = raw.slice(2, 7).toString("ascii");
-  const cm = clockStr.match(/^\s*(\d+):(\s*\d+)$/);
+  const clockStr = raw.subarray(2, 7).toString("ascii");
+  const cm = /^\s*(\d+):(\s*\d+)$/.exec(clockStr);
   const clockSeconds = cm
     ? parseInt(cm[1]) * 60 + parseInt(cm[2].trim())
     : state.clockSeconds;
 
-  const homeScore  = parsePaddedInt(raw.slice(8, 11)) ?? state.home.score;
-  const visScore   = parsePaddedInt(raw.slice(11, 14)) ?? state.visitor.score;
+  const homeScore  = parsePaddedInt(raw.subarray(8, 11)) ?? state.home.score;
+  const visScore   = parsePaddedInt(raw.subarray(11, 14)) ?? state.visitor.score;
   const homeFaults = parseSingleDigit(raw[14]) ?? state.home.faults;
   const visFaults  = parseSingleDigit(raw[15]) ?? state.visitor.faults;
   const homeTOs    = parseSingleDigit(raw[16]) ?? state.home.timeouts;
@@ -233,7 +233,7 @@ function applyNames(raw: Buffer, state: MatchState): MatchState {
   const name = (offset: number): string | null => {
     if (offset + 12 > raw.length) return null;
     // eslint-disable-next-line no-control-regex
-    const cleaned = raw.slice(offset, offset + 12).toString("ascii").replace(/[^\x20-\x7e]/g, "").trim();
+    const cleaned = raw.subarray(offset, offset + 12).toString("ascii").replace(/[^\x20-\x7e]/g, "").trim();
     return cleaned || null;
   };
 

@@ -48,7 +48,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
       if (!res.ok) throw new Error(await res.text());
       const { filename, originalName, url } = await res.json();
       addCue({
-        id:             `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id:             `${Date.now()}-${crypto.randomUUID()}`,
         label:          label.trim() || originalName,
         period,
         clockSeconds:   secs,
@@ -136,8 +136,9 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
 
         <div>
           <p className="text-xs mb-1" style={{ color: "var(--text-dim)" }}>Audio file</p>
-          <div
-            className="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer"
+          <button
+            type="button"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer w-full text-left"
             style={{ background: "var(--bg-elevated)", border: `1px solid ${file ? "var(--border-accent)" : "var(--border)"}` }}
             onClick={() => fileRef.current?.click()}
           >
@@ -150,7 +151,7 @@ export function AudioTab({ cues, addCue, removeCue, controlToken }: {
                 {(file.size / 1024).toFixed(0)} KB
               </span>
             )}
-          </div>
+          </button>
           <input
             ref={fileRef}
             data-testid="sound-file-input"

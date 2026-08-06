@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   const matchId = req.nextUrl.searchParams.get("matchId") ?? undefined;
   if (matchId) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });
-    if (!match || match.orgId !== session.user.activeOrgId) {
+    if (match?.orgId !== session.user.activeOrgId) {
       return NextResponse.json({ error: "match not found" }, { status: 404 });
     }
   }

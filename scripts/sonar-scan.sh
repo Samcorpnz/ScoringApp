@@ -25,4 +25,11 @@ if ! curl -s -o /dev/null -w '' "${SONAR_HOST_URL:-http://localhost:9000}/api/sy
   exit 1
 fi
 
+# Regenerate lcov reports so sonar.javascript.lcov.reportPaths (see
+# sonar-project.properties) has fresh data — otherwise coverage-based gate
+# conditions compare against a stale or missing report.
+npm run test:coverage --workspace=frontend
+npm run test:coverage --workspace=relay
+npm run test:coverage --workspace=bridge
+
 exec sonar-scanner -Dsonar.token="$SONAR_TOKEN"

@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import crypto from "node:crypto";
 import { createServer as createHttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
@@ -511,7 +512,7 @@ export function createServer(options: ServerOptions = {}) {
           },
           filename: (_req, file, cb) => {
             const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
-            const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
             cb(null, `${id}${ext}`);
           },
         }),
@@ -527,7 +528,7 @@ export function createServer(options: ServerOptions = {}) {
 
     if (r2Enabled) {
       const ext = path.extname(req.file.originalname).toLowerCase() || ".mp3";
-      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
       const url = await putObject(`sounds/${orgId}/${filename}`, req.file.buffer, req.file.mimetype);
       res.json({ filename, originalName: req.file.originalname, url });
       return;

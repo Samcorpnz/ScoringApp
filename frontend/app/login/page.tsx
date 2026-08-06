@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -36,7 +36,7 @@ function LoginForm() {
   const errors = fieldErrors(email, password);
   const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     setTouched({ email: true, password: true });
     if (Object.values(errors).some(Boolean)) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -29,7 +29,7 @@ export default function SignupPage() {
   const errors = fieldErrors(name, orgName, email, password);
   const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     setTouched({ name: true, orgName: true, email: true, password: true });
     if (Object.values(errors).some(Boolean)) return;

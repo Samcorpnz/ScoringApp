@@ -348,16 +348,16 @@
       <div class="section-title">Configuration</div>
 
       <div class="field">
-        <label>Relay URL</label>
+        <label for="relayUrl">Relay URL</label>
         <input type="text" id="relayUrl" placeholder="http://localhost:4000">
       </div>
       <div class="field">
-        <label>Bridge Secret</label>
+        <label for="bridgeSecret">Bridge Secret</label>
         <input type="password" id="bridgeSecret" placeholder="changeme">
       </div>
 
       <div class="field" style="margin-top: 18px;">
-        <label>Data Source</label>
+        <label for="sourceType">Data Source</label>
         <select id="sourceType" onchange="onSourceChange()">
           <option value="saturn">Saturn / Vega Serial</option>
           <option value="cd-json">ChampionData — JSON Feed</option>
@@ -368,7 +368,7 @@
       <!-- Saturn fields -->
       <div class="source-fields active" id="fields-saturn">
         <div class="field">
-          <label>Serial Port</label>
+          <label for="serialPort">Serial Port</label>
           <div class="port-refresh">
             <select id="serialPort">
               <option value="">Select port…</option>
@@ -377,7 +377,7 @@
           </div>
         </div>
         <div class="field">
-          <label>Baud Rate</label>
+          <label for="baudRate">Baud Rate</label>
           <select id="baudRate">
             <option value="9600">9600</option>
             <option value="19200">19200</option>
@@ -391,21 +391,21 @@
       <!-- CD JSON fields -->
       <div class="source-fields" id="fields-cd-json">
         <div class="field">
-          <label>Feed URL</label>
+          <label for="cdUrl">Feed URL</label>
           <input type="text" id="cdUrl" placeholder="https://api.example.com/match?id=1234">
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Username</label>
+            <label for="cdUsername">Username</label>
             <input type="text" id="cdUsername" placeholder="optional">
           </div>
           <div class="field">
-            <label>Password</label>
+            <label for="cdPassword">Password</label>
             <input type="password" id="cdPassword" placeholder="optional">
           </div>
         </div>
         <div class="field">
-          <label>Poll Interval (ms)</label>
+          <label for="cdPollMs">Poll Interval (ms)</label>
           <input type="number" id="cdPollMs" placeholder="2000" min="500" max="30000" step="500">
           <div class="hint">How often to fetch the feed (default 2000ms)</div>
         </div>
@@ -414,12 +414,12 @@
       <!-- CD Scrape fields -->
       <div class="source-fields" id="fields-cd-scrape">
         <div class="field">
-          <label>Page URL</label>
+          <label for="cdScrapeUrl">Page URL</label>
           <input type="text" id="cdScrapeUrl" placeholder="https://mc.championdata.com/…?competitionid=…&matchid=…">
           <div class="hint">The full ChampionData match page URL</div>
         </div>
         <div class="field">
-          <label>Poll Interval (ms)</label>
+          <label for="cdScrapePollMs">Poll Interval (ms)</label>
           <input type="number" id="cdScrapePollMs" placeholder="500" min="500" max="10000" step="500">
           <div class="hint">How often to reload the page (default 500ms)</div>
         </div>
