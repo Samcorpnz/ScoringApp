@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Runs a SonarQube scan before every push. Local-only (not committed to the
+# repo) — installed by scripts/install-git-hooks.sh. Blocks the push if the
+# scan itself fails to run (e.g. SonarQube down, bad token); does NOT block
+# on quality-gate findings, it just reports where to look.
+set -eo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "Running SonarQube scan before push..."
+if ! npm run --silent scan:sonar; then
+  echo ""
+  echo "SonarQube scan failed to run — push blocked."
+  echo "Fix the issue above, or skip with: git push --no-verify"
+  exit 1
+fi
+
+echo "SonarQube scan complete: http://localhost:9000/dashboard?id=scorehub"
