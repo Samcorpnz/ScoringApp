@@ -28,14 +28,19 @@
   "overrides": {
     "@prisma/dev": "0.24.16",
     "sharp": "^0.35.0",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.23",
     "next": {
-      "postcss": "^8.5.10"
+      "postcss": "^8.5.23"
     },
     "ws": ">=8.21.0",
     "qs": ">=6.15.2",
     "js-yaml": ">=4.2.0 <5.0.0",
     "form-data": ">=4.0.6",
+    "fast-uri": ">=3.1.5 <4.0.0",
+    "ip-address": ">=10.4.0",
+    "socket.io-parser": ">=4.2.7",
+    "undici": ">=7.29.0 <8.0.0",
+    "valibot": ">=1.4.2",
     "react": "^19",
     "react-dom": "^19",
     "eslint": {
