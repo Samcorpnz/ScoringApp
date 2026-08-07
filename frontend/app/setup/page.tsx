@@ -18,7 +18,7 @@ export default function SetupPage() {
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/setup";
+      router.push("/login?callbackUrl=/setup");
     },
   });
   const orgId = session?.user?.activeOrgId;

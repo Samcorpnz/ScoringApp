@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { PlanBadge } from "../components/PlanBadge";
 import { OrgSwitcher } from "../components/OrgSwitcher";
@@ -69,10 +70,11 @@ function parseFixtureCsv(text: string): { rows: FixtureRow[]; errors: string[] }
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/dashboard";
+      router.push("/login?callbackUrl=/dashboard");
     },
   });
   const orgId = session?.user?.activeOrgId;

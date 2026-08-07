@@ -909,6 +909,14 @@ export function createServer(options: ServerOptions = {}) {
       }
     }
 
+    // Same reasoning as /state above: LEGACY_ROOM_ID isn't a real org once
+    // DATABASE_URL is set, so falling through to it here would have every
+    // under-specified viewer connection (no org, no resolvable matchId)
+    // repeatedly fail to persist a Match row under a non-existent org.
+    if (!orgId && process.env.DATABASE_URL) {
+      next(new Error("org (or a valid matchId) is required"));
+      return;
+    }
     orgId = orgId ?? LEGACY_ROOM_ID;
 
     (socket as any).orgId = orgId;

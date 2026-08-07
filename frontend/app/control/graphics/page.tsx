@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useGraphicsToken } from "../../hooks/useGraphicsToken";
@@ -27,10 +27,11 @@ function connectionStatusClass(status: string): string {
 }
 
 function GraphicsControl() {
+  const router = useRouter();
   const { data: session } = useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/control/graphics";
+      router.push("/login?callbackUrl=/control/graphics");
     },
   });
   // Without ?matchId=, both the graphics token and the state socket below

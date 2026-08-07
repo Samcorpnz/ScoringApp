@@ -1,13 +1,15 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { OrgSwitcher } from "../components/OrgSwitcher";
 
 export default function AccountLayout({ children }: { readonly children: React.ReactNode }) {
+  const router = useRouter();
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/account";
+      router.push("/login?callbackUrl=/account");
     },
   });
 

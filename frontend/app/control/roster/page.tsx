@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useControlToken } from "../../hooks/useControlToken";
 import { useGraphicsToken } from "../../hooks/useGraphicsToken";
@@ -31,10 +31,11 @@ export default function RosterControlPage() {
 }
 
 function RosterControl() {
+  const router = useRouter();
   useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/control/roster";
+      router.push("/login?callbackUrl=/control/roster");
     },
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useControlToken } from "../../hooks/useControlToken";
@@ -15,6 +16,7 @@ const CLOCK_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 45].map(m => ({
 }));
 
 export default function MobileControl() {
+  const router = useRouter();
   const controlToken = useControlToken();
   const { state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, estimateServerNow } = useMatchState({
     secret: controlToken,
@@ -24,7 +26,7 @@ export default function MobileControl() {
   useSession({
     required: true,
     onUnauthenticated() {
-      globalThis.location.href = "/login?callbackUrl=/control/mobile";
+      router.push("/login?callbackUrl=/control/mobile");
     },
   });
 
