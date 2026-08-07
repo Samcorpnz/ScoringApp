@@ -1,10 +1,10 @@
-export function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({ children }: { readonly children: React.ReactNode }) {
   return (
     <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--text-dim)" }}>{children}</p>
   );
 }
 
-export function Card({ title, children }: { title: string; children: React.ReactNode }) {
+export function Card({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {
   return (
     <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
       <SectionLabel>{title}</SectionLabel>
@@ -14,7 +14,7 @@ export function Card({ title, children }: { title: string; children: React.React
 }
 
 export function SmallBtn({ label, onClick, primary = false, active = false, testId }: {
-  label: string; onClick: () => void; primary?: boolean; active?: boolean; testId?: string;
+  readonly label: string; readonly onClick: () => void; readonly primary?: boolean; readonly active?: boolean; readonly testId?: string;
 }) {
   return (
     <button className="rounded-lg px-3 py-1.5 text-xs font-bold"

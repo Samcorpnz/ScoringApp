@@ -19,7 +19,7 @@ export async function DELETE(
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { id: tokenId } });
-  if (!token || token.orgId !== orgId) {
+  if (token?.orgId !== orgId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 

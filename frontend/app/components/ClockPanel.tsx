@@ -17,9 +17,26 @@ interface Props {
   clockCarryMs?: number;
 }
 
+function clockTextShadow(isRunning: boolean, hornActive: boolean): string {
+  if (hornActive) return "0 0 30px rgba(239,68,68,0.5)";
+  if (isRunning) return "0 0 30px rgba(255,255,255,0.15)";
+  return "none";
+}
+
 export function ClockPanel({ clockSeconds, countDown, period, periodBreak, periodLabel = "QTR", isRunning, hornActive, matchName, size = "full", clockAnchorMs, clockCarryMs }: Props) {
   const isCompact = size === "compact";
   const display = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs, clockCarryMs });
+  let clockColor: string;
+  if (hornActive) clockColor = "var(--danger)";
+  else if (isRunning) clockColor = "var(--text-primary)";
+  else clockColor = "var(--text-secondary)";
+
+  let periodHeadline: string;
+  if (!periodBreak) periodHeadline = period;
+  else periodHeadline = periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`;
+
+  const periodSubtext = period === "E" ? "EXTRA TIME" : periodLabel;
+  const periodColor = periodBreak ? "rgb(251,146,60)" : "var(--accent)";
 
   return (
     <div className="flex flex-col items-center justify-center gap-2">
@@ -38,12 +55,8 @@ export function ClockPanel({ clockSeconds, countDown, period, periodBreak, perio
         className={`clock-digit ${hornActive ? "horn-active" : ""}`}
         style={{
           fontSize: isCompact ? "2rem" : "calc(4.5rem * var(--text-scale, 1))",
-          color: hornActive ? "var(--danger)" : isRunning ? "var(--text-primary)" : "var(--text-secondary)",
-          textShadow: isRunning && !hornActive
-            ? "0 0 30px rgba(255,255,255,0.15)"
-            : hornActive
-              ? "0 0 30px rgba(239,68,68,0.5)"
-              : "none",
+          color: clockColor,
+          textShadow: clockTextShadow(isRunning, hornActive),
         }}
       >
         {formatClockDisplay(display)}
@@ -53,44 +66,43 @@ export function ClockPanel({ clockSeconds, countDown, period, periodBreak, perio
       <div className="flex flex-col items-center gap-1">
         <p
           className="uppercase font-black tracking-widest"
-          style={{ fontSize: isCompact ? "1.2rem" : "calc(2rem * var(--text-scale, 1))", color: periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}
+          style={{ fontSize: isCompact ? "1.2rem" : "calc(2rem * var(--text-scale, 1))", color: periodColor }}
         >
-          {periodBreak
-            ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
-            : period}
+          {periodHeadline}
         </p>
         {!periodBreak && (
           <p
             className="uppercase tracking-widest font-semibold"
             style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}
           >
-            {period === "E" ? "EXTRA TIME" : periodLabel}
+            {periodSubtext}
           </p>
         )}
       </div>
 
       {/* Running indicator */}
-      {!isCompact && (
-        <div
-          className="flex items-center gap-1.5 rounded-full px-3 py-1"
-          style={{
-            background: isRunning ? "rgba(34,197,94,0.1)" : "rgba(148,163,184,0.08)",
-            border: `1px solid ${isRunning ? "rgba(34,197,94,0.25)" : "rgba(148,163,184,0.15)"}`,
-          }}
-        >
-          <span
-            className="status-dot"
-            style={{ background: isRunning ? "var(--running)" : "var(--stopped)",
-              boxShadow: isRunning ? "0 0 6px var(--running)" : "none" }}
-          />
-          <span
-            className="text-xs font-bold tracking-widest uppercase"
-            style={{ color: isRunning ? "var(--running)" : "var(--stopped)" }}
-          >
-            {isRunning ? "LIVE" : "PAUSED"}
-          </span>
-        </div>
-      )}
+      {!isCompact && <RunningIndicator isRunning={isRunning} />}
+    </div>
+  );
+}
+
+function RunningIndicator({ isRunning }: { readonly isRunning: boolean }) {
+  const stateColor = isRunning ? "var(--running)" : "var(--stopped)";
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-full px-3 py-1"
+      style={{
+        background: isRunning ? "rgba(34,197,94,0.1)" : "rgba(148,163,184,0.08)",
+        border: `1px solid ${isRunning ? "rgba(34,197,94,0.25)" : "rgba(148,163,184,0.15)"}`,
+      }}
+    >
+      <span
+        className="status-dot"
+        style={{ background: stateColor, boxShadow: isRunning ? "0 0 6px var(--running)" : "none" }}
+      />
+      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: stateColor }}>
+        {isRunning ? "LIVE" : "PAUSED"}
+      </span>
     </div>
   );
 }

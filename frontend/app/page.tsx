@@ -3,7 +3,7 @@
 const SAMPLE_HOME = { name: "Sharks", score: 47, color: "#3b82f6" };
 const SAMPLE_VISITOR = { name: "Magic", score: 42, color: "#ef4444" };
 
-function LogoBadge({ initial, color, size = 28 }: { initial: string; color: string; size?: number }) {
+function LogoBadge({ initial, color, size = 28 }: { readonly initial: string; readonly color: string; readonly size?: number }) {
   return (
     <div
       className="rounded-full flex items-center justify-center font-black text-white shrink-0"

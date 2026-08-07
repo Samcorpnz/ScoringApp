@@ -51,131 +51,136 @@ export async function POST(req: NextRequest) {
 
 async function handleEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const accountId = session.client_reference_id ?? session.metadata?.accountId;
-      if (!accountId || typeof session.customer !== "string" || typeof session.subscription !== "string") break;
-
-      const subscription = await getStripe().subscriptions.retrieve(session.subscription);
-      const priceId = subscription.items.data[0]?.price.id;
-      const addOn = session.metadata?.addOn as AddOn | undefined;
-
-      if (addOn) {
-        await addAddOn(accountId, addOn, subscription.id);
-        break;
-      }
-
-      const plan = priceId ? planForPriceId(priceId) : null;
-      const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
-      // Never fail open to a paid tier: if the price id can't be mapped to a
-      // known plan (unrecognized/mis-mapped price), record the customer and
-      // subscription but leave `plan` unchanged and log the misconfiguration
-      // rather than silently granting Pro.
-      if (!plan) {
-        console.error(`[billing] unmapped priceId on checkout.session.completed: ${priceId} (account ${accountId})`);
-      }
-      await prisma.account.update({
-        where: { id: accountId },
-        data: {
-          stripeCustomerId: session.customer,
-          stripeSubscriptionId: subscription.id,
-          ...(plan ? { plan } : {}),
-          billingInterval: interval,
-        },
-      });
+    case "checkout.session.completed":
+      await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
       break;
-    }
-
-    case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const accountId = subscription.metadata?.accountId;
-      const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
-      const priceId = subscription.items.data[0]?.price.id;
-
-      if (metadataAddOn || (priceId && addOnForPriceId(priceId))) {
-        const account = accountId
-          ? await prisma.account.findUnique({ where: { id: accountId } })
-          : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
-        if (!account) break;
-        const addOn = metadataAddOn ?? addOnForPriceId(priceId!)!;
-        if (subscription.status === "active") {
-          await addAddOn(account.id, addOn, subscription.id);
-        } else {
-          await removeAddOn(account.id, addOn);
-        }
-        break;
-      }
-
-      const account = accountId
-        ? await prisma.account.findUnique({ where: { id: accountId } })
-        : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
-      if (!account) break;
-
-      const plan = priceId ? planForPriceId(priceId) : null;
-      const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
-      const nextPlan = subscription.status === "active" ? (plan ?? account.plan) : "free";
-      await prisma.account.update({
-        where: { id: account.id },
-        data: {
-          stripeSubscriptionId: subscription.id,
-          plan: nextPlan,
-          billingInterval: subscription.status === "active" ? interval : null,
-        },
-      });
-      // Add-ons require an active paid plan — if the base plan just lapsed,
-      // cancel any running add-on subscription rather than leaving it billing
-      // for a feature the account can no longer use.
-      if (nextPlan === "free" && account.graphicsSubscriptionId) {
-        await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
-      }
+    case "customer.subscription.updated":
+      await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
       break;
-    }
-
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const accountId = subscription.metadata?.accountId;
-      const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
-
-      if (metadataAddOn) {
-        const account = accountId
-          ? await prisma.account.findUnique({ where: { id: accountId } })
-          : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
-        if (account) await removeAddOn(account.id, metadataAddOn);
-        break;
-      }
-
-      const account = accountId
-        ? await prisma.account.findUnique({ where: { id: accountId } })
-        : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
-      await prisma.account.updateMany({
-        where: accountId ? { id: accountId } : { stripeSubscriptionId: subscription.id },
-        data: { plan: "free", stripeSubscriptionId: null, billingInterval: null },
-      });
-      // Same cascade as the "updated" case above, for when the base plan
-      // subscription is cancelled outright rather than just lapsing.
-      if (account?.graphicsSubscriptionId) {
-        await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
-      }
+    case "customer.subscription.deleted":
+      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
       break;
-    }
-
-    case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      if (typeof invoice.customer !== "string") break;
-
-      const account = await prisma.account.findFirst({ where: { stripeCustomerId: invoice.customer } });
-      if (!account) break;
-
-      const admins = await prisma.membership.findMany({
-        where: { role: "ADMIN", org: { accountId: account.id } },
-        select: { user: { select: { email: true } } },
-        distinct: ["userId"],
-      });
-      const emails = [...new Set(admins.map(m => m.user.email))];
-      await sendPaymentFailedEmail({ to: emails });
+    case "invoice.payment_failed":
+      await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
       break;
-    }
   }
+}
+
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
+  const accountId = session.client_reference_id ?? session.metadata?.accountId;
+  if (!accountId || typeof session.customer !== "string" || typeof session.subscription !== "string") return;
+
+  const subscription = await getStripe().subscriptions.retrieve(session.subscription);
+  const priceId = subscription.items.data[0]?.price.id;
+  const addOn = session.metadata?.addOn as AddOn | undefined;
+
+  if (addOn) {
+    await addAddOn(accountId, addOn, subscription.id);
+    return;
+  }
+
+  const plan = priceId ? planForPriceId(priceId) : null;
+  const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
+  // Never fail open to a paid tier: if the price id can't be mapped to a
+  // known plan (unrecognized/mis-mapped price), record the customer and
+  // subscription but leave `plan` unchanged and log the misconfiguration
+  // rather than silently granting Pro.
+  if (!plan) {
+    console.error(`[billing] unmapped priceId on checkout.session.completed: ${priceId} (account ${accountId})`);
+  }
+  await prisma.account.update({
+    where: { id: accountId },
+    data: {
+      stripeCustomerId: session.customer,
+      stripeSubscriptionId: subscription.id,
+      ...(plan ? { plan } : {}),
+      billingInterval: interval,
+    },
+  });
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
+  const accountId = subscription.metadata?.accountId;
+  const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
+  const priceId = subscription.items.data[0]?.price.id;
+
+  if (metadataAddOn || (priceId && addOnForPriceId(priceId))) {
+    const account = accountId
+      ? await prisma.account.findUnique({ where: { id: accountId } })
+      : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
+    if (!account) return;
+    const addOn = metadataAddOn ?? addOnForPriceId(priceId!)!;
+    if (subscription.status === "active") {
+      await addAddOn(account.id, addOn, subscription.id);
+    } else {
+      await removeAddOn(account.id, addOn);
+    }
+    return;
+  }
+
+  const account = accountId
+    ? await prisma.account.findUnique({ where: { id: accountId } })
+    : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
+  if (!account) return;
+
+  const plan = priceId ? planForPriceId(priceId) : null;
+  const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
+  const nextPlan = subscription.status === "active" ? (plan ?? account.plan) : "free";
+  await prisma.account.update({
+    where: { id: account.id },
+    data: {
+      stripeSubscriptionId: subscription.id,
+      plan: nextPlan,
+      billingInterval: subscription.status === "active" ? interval : null,
+    },
+  });
+  // Add-ons require an active paid plan — if the base plan just lapsed,
+  // cancel any running add-on subscription rather than leaving it billing
+  // for a feature the account can no longer use.
+  if (nextPlan === "free" && account.graphicsSubscriptionId) {
+    await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
+  }
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
+  const accountId = subscription.metadata?.accountId;
+  const metadataAddOn = subscription.metadata?.addOn as AddOn | undefined;
+
+  if (metadataAddOn) {
+    const account = accountId
+      ? await prisma.account.findUnique({ where: { id: accountId } })
+      : await prisma.account.findFirst({ where: { graphicsSubscriptionId: subscription.id } });
+    if (account) await removeAddOn(account.id, metadataAddOn);
+    return;
+  }
+
+  const account = accountId
+    ? await prisma.account.findUnique({ where: { id: accountId } })
+    : await prisma.account.findFirst({ where: { stripeSubscriptionId: subscription.id } });
+  await prisma.account.updateMany({
+    where: accountId ? { id: accountId } : { stripeSubscriptionId: subscription.id },
+    data: { plan: "free", stripeSubscriptionId: null, billingInterval: null },
+  });
+  // Same cascade as the "updated" case above, for when the base plan
+  // subscription is cancelled outright rather than just lapsing.
+  if (account?.graphicsSubscriptionId) {
+    await cancelAddOnSubscription(account.id, account.graphicsSubscriptionId, "graphics-operator");
+  }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+  if (typeof invoice.customer !== "string") return;
+
+  const account = await prisma.account.findFirst({ where: { stripeCustomerId: invoice.customer } });
+  if (!account) return;
+
+  const admins = await prisma.membership.findMany({
+    where: { role: "ADMIN", org: { accountId: account.id } },
+    select: { user: { select: { email: true } } },
+    distinct: ["userId"],
+  });
+  const emails = [...new Set(admins.map(m => m.user.email))];
+  await sendPaymentFailedEmail({ to: emails });
 }
 
 async function addAddOn(accountId: string, addOn: AddOn, subscriptionId: string): Promise<void> {

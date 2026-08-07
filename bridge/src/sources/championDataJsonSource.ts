@@ -9,9 +9,9 @@
  */
 
 import fetch from "node-fetch";
-import dns, { LookupAddress } from "dns";
-import http from "http";
-import https from "https";
+import dns, { LookupAddress } from "node:dns";
+import http from "node:http";
+import https from "node:https";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
@@ -175,7 +175,7 @@ export function jsonSourceOptionsFromEnv(): JsonSourceOptions {
     url,
     username: process.env.CD_USERNAME,
     password: process.env.CD_PASSWORD,
-    pollMs: parseInt(process.env.CD_POLL_MS ?? "2000", 10),
+    pollMs: Number.parseInt(process.env.CD_POLL_MS ?? "2000", 10),
     provider: process.env.CD_PROVIDER ?? "championdata",
   };
 }

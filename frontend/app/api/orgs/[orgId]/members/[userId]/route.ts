@@ -3,7 +3,7 @@ import { prisma, Role } from "@scorehub/db";
 import { auth } from "@/auth";
 import { canManageMembers, canActOnRole } from "@/lib/roles";
 
-const VALID_ROLES: Role[] = ["ADMIN", "MANAGER", "OPERATOR", "VIEWER"];
+const VALID_ROLES: Set<Role> = new Set(["ADMIN", "MANAGER", "OPERATOR", "VIEWER"]);
 
 async function isLastAdmin(orgId: string, userId: string, currentRole: Role): Promise<boolean> {
   if (currentRole !== "ADMIN") return false;
@@ -31,7 +31,7 @@ export async function PATCH(
 
   const body = await req.json().catch(() => null);
   const newRole = typeof body?.role === "string" ? (body.role as Role) : undefined;
-  if (!newRole || !VALID_ROLES.includes(newRole)) {
+  if (!newRole || !VALID_ROLES.has(newRole)) {
     return NextResponse.json({ error: "a valid role is required" }, { status: 400 });
   }
 

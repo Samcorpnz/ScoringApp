@@ -4,14 +4,30 @@ import { useState, SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Bounded quantifiers (rather than unbounded `+`) cap backtracking cost even
+// though the three `[^\s@]` classes overlap — see typescript:S8786.
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}$/;
 
 function fieldErrors(name: string, orgName: string, email: string, password: string) {
+  let emailError = "";
+  if (!email) {
+    emailError = "Email is required";
+  } else if (!EMAIL_RE.test(email)) {
+    emailError = "Enter a valid email address";
+  }
+
+  let passwordError = "";
+  if (!password) {
+    passwordError = "Password is required";
+  } else if (password.length < 8) {
+    passwordError = "Must be at least 8 characters";
+  }
+
   return {
     name: name.trim() ? "" : "Name is required",
     orgName: orgName.trim() ? "" : "Organization name is required",
-    email: !email ? "Email is required" : EMAIL_RE.test(email) ? "" : "Enter a valid email address",
-    password: !password ? "Password is required" : password.length >= 8 ? "" : "Must be at least 8 characters",
+    email: emailError,
+    password: passwordError,
   };
 }
 
@@ -145,17 +161,31 @@ export default function SignupPage() {
 function Field({
   label, type, value, onChange, autoFocus, autoComplete, error, hint, onBlur,
 }: {
-  label: string;
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
-  autoFocus?: boolean;
-  autoComplete?: string;
-  error?: string;
-  hint?: string;
-  onBlur?: () => void;
+  readonly label: string;
+  readonly type: string;
+  readonly value: string;
+  readonly onChange: (v: string) => void;
+  readonly autoFocus?: boolean;
+  readonly autoComplete?: string;
+  readonly error?: string;
+  readonly hint?: string;
+  readonly onBlur?: () => void;
 }) {
   const borderColor = error ? "var(--danger)" : "var(--border)";
+  let fieldMessage: React.ReactNode = null;
+  if (error) {
+    fieldMessage = (
+      <p className="mt-1.5 text-xs font-semibold" style={{ color: "var(--danger)" }}>
+        {error}
+      </p>
+    );
+  } else if (hint) {
+    fieldMessage = (
+      <p className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+        {hint}
+      </p>
+    );
+  }
   return (
     <div>
       <label
@@ -185,15 +215,7 @@ function Field({
         }}
         onFocus={(e) => (e.target.style.borderColor = "var(--border-accent)")}
       />
-      {error ? (
-        <p className="mt-1.5 text-xs font-semibold" style={{ color: "var(--danger)" }}>
-          {error}
-        </p>
-      ) : hint ? (
-        <p className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-          {hint}
-        </p>
-      ) : null}
+      {fieldMessage}
     </div>
   );
 }

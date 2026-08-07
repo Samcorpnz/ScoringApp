@@ -25,7 +25,7 @@ process.on("unhandledRejection", (reason) => {
   captureException(reason);
 });
 
-const UI_PORT    = parseInt(process.env.UI_PORT ?? "4002", 10);
+const UI_PORT    = Number.parseInt(process.env.UI_PORT ?? "4002", 10);
 const AUTOSTART  = process.env.CD_AUTOSTART === "true";
 
 async function main(): Promise<void> {

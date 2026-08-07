@@ -20,7 +20,7 @@ export async function DELETE(
   }
 
   const invitation = await prisma.invitation.findUnique({ where: { id: invitationId } });
-  if (!invitation || invitation.orgId !== orgId) {
+  if (invitation?.orgId !== orgId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   if (!canActOnRole(session.user.activeRole, invitation.role)) {

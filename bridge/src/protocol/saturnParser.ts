@@ -62,8 +62,8 @@ function isValidFrame(frame: Buffer): boolean {
 }
 
 function extractMessage(frame: Buffer): SaturnMessage {
-  const c1 = String.fromCharCode(frame[1]);
-  const c2 = frame.length > 4 ? String.fromCharCode(frame[2]) : "";
+  const c1 = String.fromCodePoint(frame[1]);
+  const c2 = frame.length > 4 ? String.fromCodePoint(frame[2]) : "";
   const type =
     c1 === "F" && ["1", "2", "3", "4"].includes(c2) ? c1 + c2 : c1;
   return { type, raw: frame };
@@ -115,12 +115,12 @@ export function applySaturnMessage(
  *  27      CRC  (total 28 bytes including CRC)
  */
 function applyBase(raw: Buffer, state: MatchState): MatchState {
-  const ascii = (i: number) => String.fromCharCode(raw[i]);
+  const ascii = (i: number) => String.fromCodePoint(raw[i]);
 
   const clockStr = raw.subarray(2, 7).toString("ascii");
   const cm = /^\s*(\d+):(\s*\d+)$/.exec(clockStr);
   const clockSeconds = cm
-    ? parseInt(cm[1]) * 60 + parseInt(cm[2].trim())
+    ? Number.parseInt(cm[1]) * 60 + Number.parseInt(cm[2].trim())
     : state.clockSeconds;
 
   const homeScore  = parsePaddedInt(raw.subarray(8, 11)) ?? state.home.score;
@@ -272,8 +272,8 @@ function applyDateTime(raw: Buffer, state: MatchState): MatchState {
 function parsePaddedInt(buf: Buffer): number | null {
   const s = buf.toString("ascii").trim();
   if (s === "") return null;
-  const n = parseInt(s, 10);
-  return isNaN(n) ? null : n;
+  const n = Number.parseInt(s, 10);
+  return Number.isNaN(n) ? null : n;
 }
 
 function parseSingleDigit(byte: number): number | null {

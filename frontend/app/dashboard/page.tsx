@@ -6,7 +6,7 @@ import { PlanBadge } from "../components/PlanBadge";
 import { OrgSwitcher } from "../components/OrgSwitcher";
 import { SPORT_TEMPLATES } from "../sport-templates";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== "undefined" ? window.location.origin : "");
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (globalThis.window !== undefined ? globalThis.location.origin : "");
 
 type MatchStatus = "SCHEDULED" | "LIVE" | "ENDED";
 type TabKey = "upcoming" | "live" | "history";
@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/dashboard";
+      globalThis.location.href = "/login?callbackUrl=/dashboard";
     },
   });
   const orgId = session?.user?.activeOrgId;
@@ -239,6 +239,7 @@ export default function DashboardPage() {
               const title = `${m.homeName || "Home"} v ${m.visitorName || "Visitor"}`;
               const displayUrl = `${SITE_URL}/display/fullscreen?org=${orgId}&matchId=${m.id}`;
               const clickable = m.status !== "ENDED";
+              const controlLinkLabel = m.status === "LIVE" ? "Open Control →" : "Start →";
               return (
                 <div
                   key={m.id}
@@ -269,7 +270,7 @@ export default function DashboardPage() {
                         className="rounded-lg px-3 py-1.5 text-xs font-black whitespace-nowrap"
                         style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
                       >
-                        {m.status === "LIVE" ? "Open Control →" : "Start →"}
+                        {controlLinkLabel}
                       </a>
                     ) : (
                       <span className="text-xs font-bold px-3" style={{ color: "var(--text-dim)" }}>Ended</span>
@@ -285,7 +286,7 @@ export default function DashboardPage() {
   );
 }
 
-function FixtureUpload({ orgId, onDone }: { orgId: string; onDone: () => void }) {
+function FixtureUpload({ orgId, onDone }: { readonly orgId: string; readonly onDone: () => void }) {
   const [rows, setRows] = useState<FixtureRow[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState("");
@@ -336,15 +337,15 @@ function FixtureUpload({ orgId, onDone }: { orgId: string; onDone: () => void })
 
       {parseErrors.length > 0 && (
         <div className="text-xs mb-3" style={{ color: "var(--danger)" }}>
-          {parseErrors.map((e, i) => <p key={i}>{e}</p>)}
+          {parseErrors.map(e => <p key={e}>{e}</p>)}
         </div>
       )}
 
       {rows.length > 0 && (
         <>
           <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
-            {rows.map((r, i) => (
-              <div key={i} className="text-xs flex gap-2" style={{ color: "var(--text-secondary)" }}>
+            {rows.map(r => (
+              <div key={`${r.sport}-${r.home}-${r.visitor}-${r.scheduledAt ?? ""}`} className="text-xs flex gap-2" style={{ color: "var(--text-secondary)" }}>
                 <span>{r.sport}</span>
                 <span>·</span>
                 <span>{r.home} v {r.visitor}</span>

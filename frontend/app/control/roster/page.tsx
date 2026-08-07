@@ -34,7 +34,7 @@ function RosterControl() {
   useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/control/roster";
+      globalThis.location.href = "/login?callbackUrl=/control/roster";
     },
   });
 
@@ -154,11 +154,10 @@ function RosterControl() {
 
       <section>
         <SectionLabel>Roster ({players.length})</SectionLabel>
-        {loading ? (
-          <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 8 }}>Loading…</p>
-        ) : players.length === 0 ? (
-          <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 8 }}>No players yet — add one above.</p>
-        ) : (
+        {(() => {
+          if (loading) return <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 8 }}>Loading…</p>;
+          if (players.length === 0) return <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 8 }}>No players yet — add one above.</p>;
+          return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10, marginTop: 10 }}>
             {players.map(p => (
               <PlayerCard
@@ -172,7 +171,8 @@ function RosterControl() {
               />
             ))}
           </div>
-        )}
+          );
+        })()}
       </section>
 
       {showForm && orgId && (
@@ -188,7 +188,7 @@ function RosterControl() {
   );
 }
 
-function RosterUpsell({ isAdmin }: { isAdmin: boolean }) {
+function RosterUpsell({ isAdmin }: { readonly isAdmin: boolean }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24, display: "flex", justifyContent: "center" }}>
       <div style={{ maxWidth: 480, marginTop: "10vh", textAlign: "center" }}>
@@ -219,7 +219,7 @@ function RosterUpsell({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { readonly children: React.ReactNode }) {
   return (
     <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-dim)" }}>
       {children}
@@ -228,11 +228,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function UnmatchedCard({ name, team, players, onLinkExisting, onCreateNew }: {
-  name: string;
-  team: string;
-  players: Player[];
-  onLinkExisting: (playerId: string) => void;
-  onCreateNew: () => void;
+  readonly name: string;
+  readonly team: string;
+  readonly players: Player[];
+  readonly onLinkExisting: (playerId: string) => void;
+  readonly onCreateNew: () => void;
 }) {
   const [selected, setSelected] = useState("");
   return (
@@ -271,12 +271,12 @@ function UnmatchedCard({ name, team, players, onLinkExisting, onCreateNew }: {
 }
 
 function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUploaded }: {
-  player: Player;
-  orgId?: string | null;
-  controlToken: string;
-  onEdit: () => void;
-  onDelete: () => void;
-  onPhotoUploaded: () => void;
+  readonly player: Player;
+  readonly orgId?: string | null;
+  readonly controlToken: string;
+  readonly onEdit: () => void;
+  readonly onDelete: () => void;
+  readonly onPhotoUploaded: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -336,11 +336,11 @@ function PlayerCard({ player, orgId, controlToken, onEdit, onDelete, onPhotoUplo
 }
 
 function PlayerFormModal({ orgId, existing, prefill, onClose, onSaved }: {
-  orgId: string;
-  existing: Player | null;
-  prefill: { name?: string; externalId?: string } | null;
-  onClose: () => void;
-  onSaved: () => void;
+  readonly orgId: string;
+  readonly existing: Player | null;
+  readonly prefill: { name?: string; externalId?: string } | null;
+  readonly onClose: () => void;
+  readonly onSaved: () => void;
 }) {
   const [firstName, setFirstName] = useState(existing?.firstName ?? prefill?.name?.split(/\s+/)[0] ?? "");
   const [lastName, setLastName] = useState(existing?.lastName ?? prefill?.name?.split(/\s+/).slice(1).join(" ") ?? "");
@@ -398,7 +398,7 @@ function PlayerFormModal({ orgId, existing, prefill, onClose, onSaved }: {
   );
 }
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.7rem", color: "var(--text-dim)" }}>
       {label}

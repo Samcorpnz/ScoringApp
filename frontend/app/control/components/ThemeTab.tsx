@@ -11,7 +11,7 @@ const FONT_SUGGESTIONS = [
   "Anton", "Rajdhani", "Teko", "Exo 2", "Montserrat",
 ];
 
-export function ThemeTab({ state, push, controlToken }: { state: MatchState; push: (p: Partial<MatchState>) => void; controlToken: string }) {
+export function ThemeTab({ state, push, controlToken }: { readonly state: MatchState; readonly push: (p: Partial<MatchState>) => void; readonly controlToken: string }) {
   const theme: DisplayTheme = state.displayTheme ?? { ...DEFAULT_DISPLAY_THEME };
   const [showFontSuggestions, setShowFontSuggestions] = useState(false);
 
@@ -173,7 +173,7 @@ export function ThemeTab({ state, push, controlToken }: { state: MatchState; pus
               step={0.05}
               value={theme.textScale ?? 1}
               className="flex-1"
-              onChange={e => updateTheme({ textScale: parseFloat(e.target.value) })}
+              onChange={e => updateTheme({ textScale: Number.parseFloat(e.target.value) })}
             />
             <span className="text-xs font-mono w-8" style={{ color: "var(--text-dim)" }}>2×</span>
           </div>
@@ -219,13 +219,14 @@ export function ThemeTab({ state, push, controlToken }: { state: MatchState; pus
 }
 
 function CompetitionLogoUploader({ theme, updateTheme, controlToken }: {
-  theme: DisplayTheme;
-  updateTheme: (p: Partial<DisplayTheme>) => void;
-  controlToken: string;
+  readonly theme: DisplayTheme;
+  readonly updateTheme: (p: Partial<DisplayTheme>) => void;
+  readonly controlToken: string;
 }) {
-  const logoSrc = theme.competitionLogoUrl
-    ? theme.competitionLogoUrl.startsWith("/logos/") ? `${RELAY_URL}${theme.competitionLogoUrl}` : theme.competitionLogoUrl
-    : null;
+  let logoSrc: string | null = null;
+  if (theme.competitionLogoUrl) {
+    logoSrc = theme.competitionLogoUrl.startsWith("/logos/") ? `${RELAY_URL}${theme.competitionLogoUrl}` : theme.competitionLogoUrl;
+  }
 
   const handleUpload = async (file: File) => {
     const fd = new FormData();

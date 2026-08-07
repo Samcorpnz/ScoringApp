@@ -46,33 +46,48 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
   return NextResponse.json({ players });
 }
 
+type NewPlayerFields = {
+  firstName: string;
+  lastName: string;
+  displayName: string | null;
+  externalId: string | null;
+  provider: string | null;
+  bio: string | null;
+};
+
+// Trims and validates the new-player fields from the request body. Returns
+// either the parsed fields or a NextResponse to return as-is.
+function parseNewPlayer(body: unknown): NewPlayerFields | NextResponse {
+  const b = (body as Record<string, unknown>) ?? {};
+  const firstName = typeof b.firstName === "string" ? b.firstName.trim() : "";
+  const lastName = typeof b.lastName === "string" ? b.lastName.trim() : "";
+  if (!firstName || !lastName) {
+    return NextResponse.json({ error: "firstName and lastName are required" }, { status: 400 });
+  }
+  const displayName = typeof b.displayName === "string" ? b.displayName.trim() || null : null;
+  const externalId = typeof b.externalId === "string" ? b.externalId.trim() || null : null;
+  const provider = typeof b.provider === "string" ? b.provider.trim() || null : null;
+  const bio = typeof b.bio === "string" ? b.bio.trim() || null : null;
+
+  for (const [field, value] of Object.entries({ firstName, lastName, displayName, externalId, provider, bio })) {
+    if (!value) continue;
+    const err = validatePlayerField(field as PlayerField, value);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+  }
+  return { firstName, lastName, displayName, externalId, provider, bio };
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const { error } = await authorize(orgId);
   if (error) return error;
 
   const body = await req.json().catch(() => null);
-  const firstName = typeof body?.firstName === "string" ? body.firstName.trim() : "";
-  const lastName = typeof body?.lastName === "string" ? body.lastName.trim() : "";
-  if (!firstName || !lastName) {
-    return NextResponse.json({ error: "firstName and lastName are required" }, { status: 400 });
-  }
-  const displayName = typeof body?.displayName === "string" ? body.displayName.trim() || null : null;
-  const externalId = typeof body?.externalId === "string" ? body.externalId.trim() || null : null;
-  const provider = typeof body?.provider === "string" ? body.provider.trim() || null : null;
-  const bio = typeof body?.bio === "string" ? body.bio.trim() || null : null;
-
-  for (const [field, value] of Object.entries({ firstName, lastName, displayName, externalId, provider, bio })) {
-    if (value) {
-      const err = validatePlayerField(field as PlayerField, value);
-      if (err) return NextResponse.json({ error: err }, { status: 400 });
-    }
-  }
+  const fields = parseNewPlayer(body);
+  if (fields instanceof NextResponse) return fields;
 
   try {
-    const player = await prisma.player.create({
-      data: { orgId, firstName, lastName, displayName, externalId, provider, bio },
-    });
+    const player = await prisma.player.create({ data: { orgId, ...fields } });
     return NextResponse.json({ player }, { status: 201 });
   } catch (err: unknown) {
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {

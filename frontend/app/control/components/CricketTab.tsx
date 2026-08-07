@@ -14,6 +14,13 @@ const SESSIONS = ["morning", "afternoon", "evening"] as const;
 // for whether the follow-on decision is actually enforced).
 const FOLLOW_ON_THRESHOLD = 200;
 type Modifier = "none" | "wide" | "noBall" | "bye" | "legBye";
+const MODIFIER_LABELS: Record<Modifier, string> = {
+  none: "Normal",
+  wide: "Wide",
+  noBall: "No-ball",
+  bye: "Bye",
+  legBye: "Leg-bye",
+};
 
 function emptyBatter(id: number, name: string): CricketBatter {
   return { playerId: id, name, runs: 0, ballsFaced: 0, fours: 0, sixes: 0, dismissed: false };
@@ -204,7 +211,7 @@ export function CricketTab({
               {(["none", "wide", "noBall", "bye", "legBye"] as Modifier[]).map(m => (
                 <SmallBtn key={m}
                   testId={`cricket-modifier-${m}`}
-                  label={m === "none" ? "Normal" : m === "wide" ? "Wide" : m === "noBall" ? "No-ball" : m === "bye" ? "Bye" : "Leg-bye"}
+                  label={MODIFIER_LABELS[m]}
                   active={modifier === m} onClick={() => setModifier(m)} />
               ))}
             </div>

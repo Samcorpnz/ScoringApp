@@ -8,7 +8,7 @@ function getSoftballState(state: MatchState): SoftballState | undefined {
   return ss?.sport === "softball" ? ss : undefined;
 }
 
-export function SoftballDisplayStats({ state, variant = "full" }: DisplayStatsProps) {
+export function SoftballDisplayStats({ state, variant = "full" }: Readonly<DisplayStatsProps>) {
   const softball = getSoftballState(state);
   if (!softball) return null;
 

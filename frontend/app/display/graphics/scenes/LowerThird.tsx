@@ -5,16 +5,16 @@ import { formatStatLabel, orderStats } from "../../../sport-graphics-templates";
 import { RosterPlayer } from "../../../hooks/useRoster";
 
 export interface SceneProps {
-  payload?: Record<string, unknown>;
-  state: MatchState;
-  roster?: RosterPlayer[];
+  readonly payload?: Record<string, unknown>;
+  readonly state: MatchState;
+  readonly roster?: RosterPlayer[];
 }
 
 // Generic lower-third: team names/scores plus the top few team-level stats
 // the current provider mapping produced (bridge/src/graphics/feedMappings),
 // ordered/labeled per sport-graphics-templates.ts where one exists, falling
 // back to natural order + a camelCase-split label otherwise.
-export function LowerThird({ state }: SceneProps) {
+export function LowerThird({ state }: Pick<SceneProps, "state">) {
   const feed = state.graphicsFeed;
 
   return (
@@ -41,12 +41,12 @@ export function LowerThird({ state }: SceneProps) {
 function TeamBlock({
   sport, name, score, color, stats, align,
 }: {
-  sport: MatchState["sport"];
-  name: string;
-  score: string;
-  color: string;
-  stats?: Record<string, number | string>;
-  align: "left" | "right";
+  readonly sport: MatchState["sport"];
+  readonly name: string;
+  readonly score: string;
+  readonly color: string;
+  readonly stats?: Record<string, number | string>;
+  readonly align: "left" | "right";
 }) {
   const statEntries = orderStats(sport, stats, "lowerThirdStats", ["squadName"]).slice(0, 3);
   return (

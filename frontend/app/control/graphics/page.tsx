@@ -20,11 +20,17 @@ export default function GraphicsControlPage() {
   );
 }
 
+function connectionStatusClass(status: string): string {
+  if (status === "connected") return "connected";
+  if (status === "connecting") return "connecting";
+  return "disconnected";
+}
+
 function GraphicsControl() {
   const { data: session } = useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/control/graphics";
+      globalThis.location.href = "/login?callbackUrl=/control/graphics";
     },
   });
   // Without ?matchId=, both the graphics token and the state socket below
@@ -56,7 +62,7 @@ function GraphicsControl() {
     <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 800 }}>Graphics Control</h1>
-        <span className={`status-dot ${status === "connected" ? "connected" : status === "connecting" ? "connecting" : "disconnected"}`} />
+        <span className={`status-dot ${connectionStatusClass(status)}`} />
         <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>{state.matchName || "No match name set"}</span>
       </div>
 
@@ -117,7 +123,7 @@ function GraphicsControl() {
   );
 }
 
-function GraphicsUpsell({ isAdmin }: { isAdmin: boolean }) {
+function GraphicsUpsell({ isAdmin }: { readonly isAdmin: boolean }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)", padding: 24, display: "flex", justifyContent: "center" }}>
       <div style={{ maxWidth: 480, marginTop: "10vh", textAlign: "center" }}>
@@ -148,7 +154,7 @@ function GraphicsUpsell({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { readonly children: React.ReactNode }) {
   return (
     <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-dim)" }}>
       {children}
@@ -157,7 +163,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function SceneButton({ testId, label, sub, preview, active, onClick }: {
-  testId?: string; label: string; sub?: string; preview?: React.ReactNode; active: boolean; onClick: () => void;
+  readonly testId?: string; readonly label: string; readonly sub?: string; readonly preview?: React.ReactNode; readonly active: boolean; readonly onClick: () => void;
 }) {
   return (
     <button
@@ -189,7 +195,7 @@ function SceneButton({ testId, label, sub, preview, active, onClick }: {
 // preview would need a live graphicsFeed sample per thumbnail, which is more
 // than this control UI needs; these just give the operator a visual shape
 // to distinguish scene types at a glance.
-function ThumbShell({ children }: { children: React.ReactNode }) {
+function ThumbShell({ children }: { readonly children: React.ReactNode }) {
   return (
     <div style={{
       width: "100%", height: 44, borderRadius: 6, background: "rgba(255,255,255,0.04)",

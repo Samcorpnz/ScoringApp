@@ -8,8 +8,6 @@
 import { useMatchState } from "../../hooks/useMatchState";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
-import { ScorePanel } from "../../components/ScorePanel";
-import { ClockPanel } from "../../components/ClockPanel";
 import { formatClockDisplay, formatScore } from "../../types";
 import { getPeriodLabel, getTemplate } from "../../sport-templates";
 
@@ -20,6 +18,22 @@ export default function OverlayDisplay() {
   const DisplayStats = getTemplate(state.sport).displayStats;
   const displayClock = useInterpolatedClock({ clockSeconds, isRunning, countDown, clockAnchorMs: state.clockAnchorMs, clockCarryMs: state.clockCarryMs });
   const { backgroundColor: _bg, textScale: _ts, competitionLogoUrl: _cl, ...themeVars } = useDisplayTheme(state.displayTheme);
+
+  let clockColor: string;
+  if (hornActive) {
+    clockColor = "var(--danger)";
+  } else if (isRunning) {
+    clockColor = "#fff";
+  } else {
+    clockColor = "var(--text-secondary)";
+  }
+
+  let periodText: string;
+  if (state.periodBreak) {
+    periodText = periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`;
+  } else {
+    periodText = period === "E" ? "EXTRA" : `${periodLabel} ${period}`;
+  }
 
   return (
     <div
@@ -76,7 +90,7 @@ export default function OverlayDisplay() {
             className="clock-digit"
             style={{
               fontSize: "1.6rem",
-              color: hornActive ? "var(--danger)" : isRunning ? "#fff" : "var(--text-secondary)",
+              color: clockColor,
               lineHeight: 1,
             }}
           >
@@ -91,9 +105,7 @@ export default function OverlayDisplay() {
               textTransform: "uppercase",
             }}
           >
-            {state.periodBreak
-              ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
-              : (period === "E" ? "EXTRA" : `${periodLabel} ${period}`)}
+            {periodText}
           </span>
           {!isRunning && !state.periodBreak && (
             <span style={{ fontSize: "0.5rem", color: "var(--stopped)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
@@ -121,11 +133,11 @@ export default function OverlayDisplay() {
 function TeamBlock({
   name, score, color, hasPossession, align,
 }: {
-  name: string;
-  score: string;
-  color: string;
-  hasPossession: boolean;
-  align: "left" | "right";
+  readonly name: string;
+  readonly score: string;
+  readonly color: string;
+  readonly hasPossession: boolean;
+  readonly align: "left" | "right";
 }) {
   return (
     <div

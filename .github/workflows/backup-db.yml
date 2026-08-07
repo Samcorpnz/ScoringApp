@@ -17,7 +17,10 @@ jobs:
   backup:
     name: Dump Postgres and upload to R2
     runs-on: ubuntu-latest
-    environment: production
+    # Deliberately its own environment (no required_reviewers), separate from
+    # "production" which gates deploy.yml — a daily cron backup can't wait on
+    # manual approval. Secrets (DATABASE_URL, R2_*) live here, not in "production".
+    environment: backup
     steps:
       - name: Install postgresql-client
         run: |

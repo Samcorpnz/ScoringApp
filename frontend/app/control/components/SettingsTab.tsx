@@ -23,7 +23,17 @@ interface MatchOption {
   status: string;
 }
 
-function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
+function templateClockLabel(clockSeconds: number, countDown: boolean): string {
+  if (clockSeconds === 0) {
+    return countDown ? "0:00 (no clock)" : "Counts up from 0:00";
+  }
+  const direction = countDown ? "Counts down from" : "Counts up from";
+  const minutes = Math.floor(clockSeconds / 60);
+  const seconds = String(clockSeconds % 60).padStart(2, "0");
+  return `${direction} ${minutes}:${seconds}`;
+}
+
+function WebhookCard({ orgId, matchId }: { readonly orgId: string; readonly matchId?: string }) {
   const [tokens, setTokens] = useState<BridgeToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
@@ -80,18 +90,19 @@ function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
   };
 
   const qMatchId = matchId ? `?matchId=${matchId}` : "";
+  const ampMatchId = matchId ? `&matchId=${matchId}` : "";
   const baseUrl = RELAY_URL;
 
   const actions = [
     { label: "▶ Start",        url: `${baseUrl}/action/start${qMatchId}` },
     { label: "■ Stop",         url: `${baseUrl}/action/stop${qMatchId}` },
     { label: "⏯ Toggle",      url: `${baseUrl}/action/toggle${qMatchId}` },
-    { label: "Home +1",        url: `${baseUrl}/action/score/home?delta=1${matchId ? `&matchId=${matchId}` : ""}` },
-    { label: "Home +2",        url: `${baseUrl}/action/score/home?delta=2${matchId ? `&matchId=${matchId}` : ""}` },
-    { label: "Home −1",        url: `${baseUrl}/action/score/home?delta=-1${matchId ? `&matchId=${matchId}` : ""}` },
-    { label: "Visitor +1",     url: `${baseUrl}/action/score/visitor?delta=1${matchId ? `&matchId=${matchId}` : ""}` },
-    { label: "Visitor +2",     url: `${baseUrl}/action/score/visitor?delta=2${matchId ? `&matchId=${matchId}` : ""}` },
-    { label: "Visitor −1",     url: `${baseUrl}/action/score/visitor?delta=-1${matchId ? `&matchId=${matchId}` : ""}` },
+    { label: "Home +1",        url: `${baseUrl}/action/score/home?delta=1${ampMatchId}` },
+    { label: "Home +2",        url: `${baseUrl}/action/score/home?delta=2${ampMatchId}` },
+    { label: "Home −1",        url: `${baseUrl}/action/score/home?delta=-1${ampMatchId}` },
+    { label: "Visitor +1",     url: `${baseUrl}/action/score/visitor?delta=1${ampMatchId}` },
+    { label: "Visitor +2",     url: `${baseUrl}/action/score/visitor?delta=2${ampMatchId}` },
+    { label: "Visitor −1",     url: `${baseUrl}/action/score/visitor?delta=-1${ampMatchId}` },
     { label: "Period next",    url: `${baseUrl}/action/period/next${qMatchId}` },
     { label: "Period prev",    url: `${baseUrl}/action/period/prev${qMatchId}` },
     { label: "End period",     url: `${baseUrl}/action/period/end${qMatchId}` },
@@ -217,7 +228,7 @@ function WebhookCard({ orgId, matchId }: { orgId: string; matchId?: string }) {
   );
 }
 
-function BridgeTokensCard({ orgId }: { orgId: string }) {
+function BridgeTokensCard({ orgId }: { readonly orgId: string }) {
   const [tokens, setTokens] = useState<BridgeToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
@@ -344,11 +355,10 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
 
       {error && <p className="text-xs mb-3" style={{ color: "#EF4444" }}>{error}</p>}
 
-      {loading ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>Loading…</p>
-      ) : tokens.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>No bridge tokens yet.</p>
-      ) : (
+      {(() => {
+        if (loading) return <p className="text-xs" style={{ color: "var(--text-dim)" }}>Loading…</p>;
+        if (tokens.length === 0) return <p className="text-xs" style={{ color: "var(--text-dim)" }}>No bridge tokens yet.</p>;
+        return (
         <div className="space-y-1.5">
           {tokens.map(t => (
             <div key={t.id} className="flex items-center justify-between gap-2 text-xs p-2 rounded" style={{ background: "var(--bg-elevated)" }}>
@@ -370,16 +380,17 @@ function BridgeTokensCard({ orgId }: { orgId: string }) {
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
     </Card>
   );
 }
 
 export function SettingsTab({ state, push, matchId, onEnded }: {
-  state: MatchState;
-  push: (p: Partial<MatchState>) => void;
-  matchId?: string;
-  onEnded?: () => void;
+  readonly state: MatchState;
+  readonly push: (p: Partial<MatchState>) => void;
+  readonly matchId?: string;
+  readonly onEnded?: () => void;
 }) {
   const template = getTemplate(state.sport);
   const { data: session } = useSession();
@@ -389,7 +400,7 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
 
   async function handleEndMatch() {
     if (!orgId || !matchId) return;
-    if (!window.confirm("End this match? It will move to History and can't be scored again.")) return;
+    if (!globalThis.confirm("End this match? It will move to History and can't be scored again.")) return;
     setEnding(true);
     setEndError("");
     try {
@@ -478,9 +489,7 @@ export function SettingsTab({ state, push, matchId, onEnded }: {
         </p>
         <div className="space-y-1.5 mb-4">
           <TemplateRow label="Structure" value={template.structure} />
-          <TemplateRow label="Clock" value={template.clockSeconds === 0
-            ? (template.countDown ? "0:00 (no clock)" : "Counts up from 0:00")
-            : `${template.countDown ? "Counts down from" : "Counts up from"} ${Math.floor(template.clockSeconds / 60)}:${String(template.clockSeconds % 60).padStart(2, "0")}`} />
+          <TemplateRow label="Clock" value={templateClockLabel(template.clockSeconds, template.countDown)} />
           <TemplateRow label="Timeouts" value={template.timeoutsPerTeam === 0 ? "None" : `${template.timeoutsPerTeam} per team`} />
           <TemplateRow label="Possession" value={template.defaultPossession === "none" ? "Off" : "On"} />
         </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { prisma } from "@scorehub/db";
 import { auth } from "@/auth";
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
   if (matchId) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });
-    if (!match || match.orgId !== orgId) {
+    if (match?.orgId !== orgId) {
       return NextResponse.json({ error: "match not found" }, { status: 404 });
     }
   }

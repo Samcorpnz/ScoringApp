@@ -17,10 +17,10 @@ const PERIOD_OPTIONS = [
 ];
 
 export function AudioTab({ cues, addCue, removeCue, controlToken }: {
-  cues: SoundCue[];
-  addCue: (cue: SoundCue) => void;
-  removeCue: (id: string) => void;
-  controlToken: string;
+  readonly cues: SoundCue[];
+  readonly addCue: (cue: SoundCue) => void;
+  readonly removeCue: (id: string) => void;
+  readonly controlToken: string;
 }) {
   const [label,       setLabel]       = useState("");
   const [period,      setPeriod]      = useState("*");

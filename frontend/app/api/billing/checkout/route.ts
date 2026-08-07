@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { getAccountForOrg } from "@/lib/account";
 import { getStripe } from "@/lib/stripe";
 import { priceIdForPlan, priceIdForAddOn, PaidPlan, AddOn, BillingInterval } from "@/lib/plans";
 
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.activeOrgId) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  if (session.user.activeRole !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+type Account = NonNullable<Awaited<ReturnType<typeof getAccountForOrg>>>;
 
-  const body = await req.json().catch(() => null);
-  const plan = body?.plan as PaidPlan | undefined;
-  const addOn = body?.addOn as AddOn | undefined;
-  const interval = (body?.interval as BillingInterval | undefined) ?? "month";
+type CheckoutRequest = { plan?: PaidPlan; addOn?: AddOn; interval: BillingInterval };
+
+// Validates the request body against the plan/addOn/interval rules. Returns
+// either the parsed request or a NextResponse to return as-is.
+function parseCheckoutRequest(body: unknown): CheckoutRequest | NextResponse {
+  const plan = (body as Record<string, unknown> | null)?.plan as PaidPlan | undefined;
+  const addOn = (body as Record<string, unknown> | null)?.addOn as AddOn | undefined;
+  const interval = ((body as Record<string, unknown> | null)?.interval as BillingInterval | undefined) ?? "month";
 
   if (plan && addOn) {
     return NextResponse.json({ error: "specify either 'plan' or 'addOn', not both" }, { status: 400 });
@@ -34,61 +32,57 @@ export async function POST(req: NextRequest) {
   if (interval !== "month" && interval !== "year") {
     return NextResponse.json({ error: "interval must be 'month' or 'year'" }, { status: 400 });
   }
+  return { plan, addOn, interval };
+}
 
-  const account = await getAccountForOrg(session.user.activeOrgId);
-  if (!account) {
-    return NextResponse.json({ error: "account not found" }, { status: 404 });
+// Already has an active subscription for this line (base plan or add-on) —
+// switch it in place (with proration) rather than starting a second Checkout
+// Session, which would create a second subscription and double-bill the
+// customer.
+async function switchExistingSubscription(
+  stripe: Stripe,
+  account: Account,
+  existingSubscriptionId: string,
+  priceId: string,
+  plan: PaidPlan | undefined,
+  addOn: AddOn | undefined,
+  interval: BillingInterval,
+): Promise<NextResponse> {
+  const subscription = await stripe.subscriptions.retrieve(existingSubscriptionId);
+  const itemId = subscription.items.data[0]?.id;
+  if (!itemId) {
+    return NextResponse.json({ error: "existing subscription has no items" }, { status: 500 });
   }
 
-  // Add-ons ride on top of a paid base plan — Free accounts can't buy Graphics
-  // on its own, and there'd be no base subscription to attach billing-portal
-  // management to.
-  if (addOn && account.plan !== "pro" && account.plan !== "venue") {
-    return NextResponse.json({ error: "add-ons require an active Pro or Venue plan" }, { status: 400 });
+  const updateMetadata: Record<string, string> = plan
+    ? { accountId: account.id, plan }
+    : { accountId: account.id, addOn: addOn! };
+  await stripe.subscriptions.update(existingSubscriptionId, {
+    items: [{ id: itemId, price: priceId }],
+    proration_behavior: "create_prorations",
+    metadata: updateMetadata,
+  });
+
+  // Reflect the switch immediately; the customer.subscription.updated
+  // webhook will also fire and confirm the same state (idempotent).
+  if (plan) {
+    await prisma.account.update({ where: { id: account.id }, data: { plan, billingInterval: interval } });
+    return NextResponse.json({ switched: true, plan, interval });
   }
+  return NextResponse.json({ switched: true, addOn, interval });
+}
 
-  let stripe, priceId;
-  try {
-    stripe = getStripe();
-    priceId = plan ? priceIdForPlan(plan, interval) : priceIdForAddOn(addOn!, interval);
-  } catch {
-    return NextResponse.json({ error: "billing is not configured" }, { status: 500 });
-  }
-
-  // Already has an active subscription for this line (base plan or add-on)
-  // — switch it in place (with proration) rather than starting a second
-  // Checkout Session, which would create a second subscription and
-  // double-bill the customer.
-  const existingSubscriptionId = plan ? account.stripeSubscriptionId : account.graphicsSubscriptionId;
-  const hasExistingSubscription = plan
-    ? Boolean(existingSubscriptionId) && (account.plan === "pro" || account.plan === "venue")
-    : Boolean(existingSubscriptionId) && account.addOns.includes(addOn!);
-
-  if (hasExistingSubscription && existingSubscriptionId) {
-    const subscription = await stripe.subscriptions.retrieve(existingSubscriptionId);
-    const itemId = subscription.items.data[0]?.id;
-    if (!itemId) {
-      return NextResponse.json({ error: "existing subscription has no items" }, { status: 500 });
-    }
-
-    const updateMetadata: Record<string, string> = plan
-      ? { accountId: account.id, plan }
-      : { accountId: account.id, addOn: addOn! };
-    await stripe.subscriptions.update(existingSubscriptionId, {
-      items: [{ id: itemId, price: priceId }],
-      proration_behavior: "create_prorations",
-      metadata: updateMetadata,
-    });
-
-    // Reflect the switch immediately; the customer.subscription.updated
-    // webhook will also fire and confirm the same state (idempotent).
-    if (plan) {
-      await prisma.account.update({ where: { id: account.id }, data: { plan, billingInterval: interval } });
-      return NextResponse.json({ switched: true, plan, interval });
-    }
-    return NextResponse.json({ switched: true, addOn, interval });
-  }
-
+// Embedded mode keeps the customer on /control instead of redirecting to a
+// Stripe-hosted page. redirect_on_completion "never" + the client-side
+// onComplete callback handles completion in place, so no return_url is
+// needed — the control panel is already a single-page tab-switching UI.
+async function createNewCheckoutSession(
+  stripe: Stripe,
+  account: Account,
+  priceId: string,
+  plan: PaidPlan | undefined,
+  addOn: AddOn | undefined,
+): Promise<NextResponse> {
   let customerId = account.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -99,10 +93,6 @@ export async function POST(req: NextRequest) {
     await prisma.account.update({ where: { id: account.id }, data: { stripeCustomerId: customerId } });
   }
 
-  // Embedded mode keeps the customer on /control instead of redirecting to a
-  // Stripe-hosted page. redirect_on_completion "never" + the client-side
-  // onComplete callback handles completion in place, so no return_url is
-  // needed — the control panel is already a single-page tab-switching UI.
   const metadata: Record<string, string> = plan
     ? { accountId: account.id, plan }
     : { accountId: account.id, addOn: addOn! };
@@ -124,4 +114,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "failed to create checkout session" }, { status: 500 });
   }
   return NextResponse.json({ clientSecret: checkoutSession.client_secret });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.activeOrgId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (session.user.activeRole !== "ADMIN") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => null);
+  const parsed = parseCheckoutRequest(body);
+  if (parsed instanceof NextResponse) return parsed;
+  const { plan, addOn, interval } = parsed;
+
+  const account = await getAccountForOrg(session.user.activeOrgId);
+  if (!account) {
+    return NextResponse.json({ error: "account not found" }, { status: 404 });
+  }
+
+  // Add-ons ride on top of a paid base plan — Free accounts can't buy Graphics
+  // on its own, and there'd be no base subscription to attach billing-portal
+  // management to.
+  if (addOn && account.plan !== "pro" && account.plan !== "venue") {
+    return NextResponse.json({ error: "add-ons require an active Pro or Venue plan" }, { status: 400 });
+  }
+
+  let stripe, priceId;
+  try {
+    stripe = getStripe();
+    priceId = plan ? priceIdForPlan(plan, interval) : priceIdForAddOn(addOn!, interval);
+  } catch {
+    return NextResponse.json({ error: "billing is not configured" }, { status: 500 });
+  }
+
+  const existingSubscriptionId = plan ? account.stripeSubscriptionId : account.graphicsSubscriptionId;
+  const hasExistingSubscription = plan
+    ? Boolean(existingSubscriptionId) && (account.plan === "pro" || account.plan === "venue")
+    : Boolean(existingSubscriptionId) && account.addOns.includes(addOn!);
+
+  if (hasExistingSubscription && existingSubscriptionId) {
+    return switchExistingSubscription(stripe, account, existingSubscriptionId, priceId, plan, addOn, interval);
+  }
+
+  return createNewCheckoutSession(stripe, account, priceId, plan, addOn);
 }

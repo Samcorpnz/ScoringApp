@@ -17,7 +17,7 @@ export interface SoundCue {
 
 export function useSoundCues() {
   const [cues, setCues] = useState<SoundCue[]>(() => {
-    if (typeof window === "undefined") return [];
+    if (globalThis.window === undefined) return [];
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     } catch {

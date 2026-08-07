@@ -11,8 +11,8 @@
  */
 
 import puppeteer, { Browser, Page } from "puppeteer";
-import dns from "dns";
-import { promisify } from "util";
+import dns from "node:dns";
+import { promisify } from "node:util";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
@@ -213,6 +213,6 @@ export function scrapeSourceOptionsFromEnv(): ScrapeSourceOptions {
   if (!url) throw new Error("CD_SCRAPE_URL is required for cd-scrape source");
   return {
     url,
-    pollMs: parseInt(process.env.CD_POLL_MS ?? "500", 10),
+    pollMs: Number.parseInt(process.env.CD_POLL_MS ?? "500", 10),
   };
 }

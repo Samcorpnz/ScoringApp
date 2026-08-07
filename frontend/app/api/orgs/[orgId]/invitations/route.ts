@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { prisma, Role } from "@scorehub/db";
 import { auth } from "@/auth";
 import { isRateLimited } from "@/lib/rateLimit";
 import { canManageMembers, canActOnRole } from "@/lib/roles";
 import { sendInvitationEmail } from "@/lib/email";
 
-const VALID_ROLES: Role[] = ["ADMIN", "MANAGER", "OPERATOR", "VIEWER"];
+const VALID_ROLES: Set<Role> = new Set(["ADMIN", "MANAGER", "OPERATOR", "VIEWER"]);
 const INVITATION_EXPIRY_MS = 7 * 24 * 60 * 60_000; // 7 days
 
 // Invites someone into this org by email. ADMIN/MANAGER only, and the
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const role = typeof body?.role === "string" ? (body.role as Role) : undefined;
 
-  if (!email || !role || !VALID_ROLES.includes(role)) {
+  if (!email || !role || !VALID_ROLES.has(role)) {
     return NextResponse.json({ error: "email and a valid role are required" }, { status: 400 });
   }
   if (!canActOnRole(session.user.activeRole, role)) {

@@ -18,7 +18,7 @@ export default function SetupPage() {
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/setup";
+      globalThis.location.href = "/login?callbackUrl=/setup";
     },
   });
   const orgId = session?.user?.activeOrgId;
@@ -304,8 +304,8 @@ export default function SetupPage() {
 }
 
 function SetupField({ label, placeholder, value, onChange, testId, error, onBlur }: {
-  label: string; placeholder: string; value: string; onChange: (v: string) => void; testId?: string;
-  error?: string; onBlur?: () => void;
+  readonly label: string; readonly placeholder: string; readonly value: string; readonly onChange: (v: string) => void; readonly testId?: string;
+  readonly error?: string; readonly onBlur?: () => void;
 }) {
   return (
     <div>

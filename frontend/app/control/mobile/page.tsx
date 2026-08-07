@@ -24,7 +24,7 @@ export default function MobileControl() {
   useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/control/mobile";
+      globalThis.location.href = "/login?callbackUrl=/control/mobile";
     },
   });
 
@@ -56,7 +56,7 @@ export default function MobileControl() {
 
   const clockRunning = state.isRunning;
   const increments   = getTemplate(state.sport).scoreIncrements;
-  const period       = parseInt(state.period || "1", 10);
+  const period       = Number.parseInt(state.period || "1", 10);
 
   return (
     <div style={{
@@ -215,7 +215,7 @@ export default function MobileControl() {
               />
               <button
                 onClick={() => {
-                  const total = (parseInt(customMins || "0", 10) * 60) + parseInt(customSecs || "0", 10);
+                  const total = (Number.parseInt(customMins || "0", 10) * 60) + Number.parseInt(customSecs || "0", 10);
                   if (total > 0) setClockTo(total);
                 }}
                 style={{
@@ -286,13 +286,13 @@ export default function MobileControl() {
 // ── Team Column ───────────────────────────────────────────────────────────────
 
 function TeamColumn({ label, score, color, faults, increments, onScore, onFault }: {
-  label: string;
-  score: number;
-  color: string;
-  faults: number;
-  increments: number[];
-  onScore: (d: number) => void;
-  onFault: () => void;
+  readonly label: string;
+  readonly score: number;
+  readonly color: string;
+  readonly faults: number;
+  readonly increments: number[];
+  readonly onScore: (d: number) => void;
+  readonly onFault: () => void;
 }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -356,7 +356,7 @@ function TeamColumn({ label, score, color, faults, increments, onScore, onFault 
 
 // ── Tiny Button ───────────────────────────────────────────────────────────────
 
-function TinyBtn({ label, onClick }: { label: string; onClick: () => void }) {
+function TinyBtn({ label, onClick }: { readonly label: string; readonly onClick: () => void }) {
   return (
     <button
       onClick={onClick}

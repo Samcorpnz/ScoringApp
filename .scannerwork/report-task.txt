@@ -2,5 +2,5 @@ projectKey=scorehub
 serverUrl=http://localhost:9000
 serverVersion=26.8.0.126808
 dashboardUrl=http://localhost:9000/dashboard?id=scorehub
-ceTaskId=166ad2b7-871a-4f13-8602-0b03b0f45e81
-ceTaskUrl=http://localhost:9000/api/ce/task?id=166ad2b7-871a-4f13-8602-0b03b0f45e81
+ceTaskId=2c0adfd9-56c8-48a5-a3a8-13b8c6acc536
+ceTaskUrl=http://localhost:9000/api/ce/task?id=2c0adfd9-56c8-48a5-a3a8-13b8c6acc536

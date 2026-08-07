@@ -1,5 +1,5 @@
 import { jwtVerify } from "jose";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { prisma } from "@scorehub/db";
 
 // Used when DATABASE_URL is unset (local dev / Jest) — every connection
@@ -38,7 +38,7 @@ export async function verifyBridgeSecret(
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
-  if (!token || token.type !== "BRIDGE" || token.revokedAt) return null;
+  if (token?.type !== "BRIDGE" || token?.revokedAt) return null;
   return { orgId: token.orgId, matchId: token.matchId ?? undefined };
 }
 
@@ -56,7 +56,7 @@ export async function verifyActionSecret(
 
   // Accept long-lived CONTROL ScopedTokens first (Stream Deck use-case).
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
-  if (token && token.type === "CONTROL" && !token.revokedAt) {
+  if (token?.type === "CONTROL" && !token?.revokedAt) {
     return { orgId: token.orgId, matchId: token.matchId ?? undefined };
   }
 
@@ -113,7 +113,7 @@ export async function verifyGraphicsSecret(
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
-  if (token && token.type === "GRAPHICS" && !token.revokedAt) {
+  if (token?.type === "GRAPHICS" && !token?.revokedAt) {
     return { orgId: token.orgId, matchId: token.matchId ?? undefined };
   }
 

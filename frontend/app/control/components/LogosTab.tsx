@@ -4,7 +4,7 @@ import { MatchState, TeamState } from "../../types";
 import { RELAY_URL } from "../lib/relay";
 import { LogoUploadCard, SectionLabel } from "./primitives";
 
-export function LogosTab({ state, push, controlToken }: { state: MatchState; push: (p: Partial<MatchState>) => void; controlToken: string }) {
+export function LogosTab({ state, push, controlToken }: { readonly state: MatchState; readonly push: (p: Partial<MatchState>) => void; readonly controlToken: string }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
       <LogoUploader team="home" teamState={state.home} push={push} state={state} controlToken={controlToken} />
@@ -14,17 +14,18 @@ export function LogosTab({ state, push, controlToken }: { state: MatchState; pus
 }
 
 function LogoUploader({ team, teamState, push, state, controlToken }: {
-  team: "home" | "visitor";
-  teamState: TeamState;
-  push: (p: Partial<MatchState>) => void;
-  state: MatchState;
-  controlToken: string;
+  readonly team: "home" | "visitor";
+  readonly teamState: TeamState;
+  readonly push: (p: Partial<MatchState>) => void;
+  readonly state: MatchState;
+  readonly controlToken: string;
 }) {
   const color = teamState.color || (team === "home" ? "#F59E0B" : "#818CF8");
 
-  const logoSrc = teamState.logoUrl
-    ? teamState.logoUrl.startsWith("/logos/") ? `${RELAY_URL}${teamState.logoUrl}` : teamState.logoUrl
-    : null;
+  let logoSrc: string | null = null;
+  if (teamState.logoUrl) {
+    logoSrc = teamState.logoUrl.startsWith("/logos/") ? `${RELAY_URL}${teamState.logoUrl}` : teamState.logoUrl;
+  }
 
   const handleUpload = async (file: File) => {
     const fd = new FormData();

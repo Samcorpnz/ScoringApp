@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, SubmitEvent } from "react";
+import { useState, Suspense, SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
 export default function LoginPage() {
   return (
@@ -13,11 +12,19 @@ export default function LoginPage() {
   );
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Bounded quantifiers (rather than unbounded `+`) cap backtracking cost even
+// though the three `[^\s@]` classes overlap — see typescript:S8786.
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}$/;
 
 function fieldErrors(email: string, password: string) {
+  let emailError = "";
+  if (!email) {
+    emailError = "Email is required";
+  } else if (!EMAIL_RE.test(email)) {
+    emailError = "Enter a valid email address";
+  }
   return {
-    email: !email ? "Email is required" : EMAIL_RE.test(email) ? "" : "Enter a valid email address",
+    email: emailError,
     password: password ? "" : "Password is required",
   };
 }
@@ -160,14 +167,14 @@ function LoginForm() {
 function Field({
   label, type, value, onChange, autoFocus, autoComplete, error, onBlur,
 }: {
-  label: string;
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
-  autoFocus?: boolean;
-  autoComplete?: string;
-  error?: string;
-  onBlur?: () => void;
+  readonly label: string;
+  readonly type: string;
+  readonly value: string;
+  readonly onChange: (v: string) => void;
+  readonly autoFocus?: boolean;
+  readonly autoComplete?: string;
+  readonly error?: string;
+  readonly onBlur?: () => void;
 }) {
   const borderColor = error ? "var(--danger)" : "var(--border)";
   return (

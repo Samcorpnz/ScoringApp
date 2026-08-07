@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   MatchState,
-  NetballMatchStats,
   NetballTeamStats,
   NetballPlayerStats,
   TeamPlayer,
@@ -101,11 +100,13 @@ const cdPayloadSchema = z.object({
 type CdTeam = z.infer<typeof cdTeamSchema>;
 type CdPlayer = z.infer<typeof cdPlayerSchema>;
 
+const DEFAULT_EXISTING_MATCH_STATE: Readonly<MatchState> = { ...DEFAULT_MATCH_STATE };
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function parseChampionDataJson(
   json: unknown,
-  existing: MatchState = { ...DEFAULT_MATCH_STATE }
+  existing: MatchState = DEFAULT_EXISTING_MATCH_STATE
 ): MatchState {
   const parsed = cdPayloadSchema.safeParse(json);
   if (!parsed.success) {
@@ -117,7 +118,6 @@ export function parseChampionDataJson(
   }
 
   const [homeTeam, awayTeam] = ms.team;
-  const venueName = parsed.data.sport?.venueName ?? "";
   const competitionName = parsed.data.sport?.competitionName ?? "";
   const matchName = competitionName
     ? `${ms.homeSquadName} v ${ms.awaySquadName} — ${competitionName}`
@@ -128,7 +128,6 @@ export function parseChampionDataJson(
 
   // Clock: periodSeconds is the quarter duration; we don't get elapsed time
   // from this feed, so we only update clock from running state.
-  const clockSeconds = ms.periodSeconds ?? existing.clockSeconds;
 
   return {
     ...existing,

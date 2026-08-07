@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { NetballMatchStats, NetballPlayerStats, NetballTeamStats } from "../../types";
+import type { NetballPlayerStats, NetballTeamStats } from "../../types";
 import type { DisplayStatsProps } from "../../sport-templates";
 
-export function NetballDisplayStats({ state, variant = "full" }: DisplayStatsProps) {
+export function NetballDisplayStats({ state, variant = "full" }: Readonly<DisplayStatsProps>) {
   const [showOnCourtOnly, setShowOnCourtOnly] = useState(true);
   const stats = state.netballStats;
   if (!stats) return null;
@@ -57,7 +57,7 @@ export function NetballDisplayStats({ state, variant = "full" }: DisplayStatsPro
   );
 }
 
-function CompactTeamLine({ team, color }: { team: NetballTeamStats; color: string }) {
+function CompactTeamLine({ team, color }: { readonly team: NetballTeamStats; readonly color: string }) {
   const pct = team.goalAttempts > 0 ? `${team.shootingPercentage.toFixed(1)}%` : "–";
   return (
     <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
@@ -66,7 +66,7 @@ function CompactTeamLine({ team, color }: { team: NetballTeamStats; color: strin
   );
 }
 
-function TeamSummaryBar({ team, color, align }: { team: NetballTeamStats; color: string; align: "left" | "right" }) {
+function TeamSummaryBar({ team, color, align }: { readonly team: NetballTeamStats; readonly color: string; readonly align: "left" | "right" }) {
   const pct = team.goalAttempts > 0 ? `${team.shootingPercentage.toFixed(1)}%` : "–";
   const cpEff = team.centrePassReceives > 0 ? `${team.goalsFromCentrePass}/${team.centrePassReceives}` : "–";
 
@@ -104,7 +104,7 @@ function positionOrder(pos: string): number {
   return order[pos] ?? 8;
 }
 
-function PlayerStatsTable({ team, color, showOnCourtOnly }: { team: NetballTeamStats; color: string; showOnCourtOnly: boolean }) {
+function PlayerStatsTable({ team, color, showOnCourtOnly }: { readonly team: NetballTeamStats; readonly color: string; readonly showOnCourtOnly: boolean }) {
   const filtered = team.players
     .filter(p => !showOnCourtOnly || isOnCourt(p))
     .sort((a, b) => positionOrder(a.currentPosition) - positionOrder(b.currentPosition));
@@ -145,7 +145,7 @@ function PlayerStatsTable({ team, color, showOnCourtOnly }: { team: NetballTeamS
   );
 }
 
-function PlayerRow({ player, color, onCourt }: { player: NetballPlayerStats; color: string; onCourt: boolean }) {
+function PlayerRow({ player, color, onCourt }: { readonly player: NetballPlayerStats; readonly color: string; readonly onCourt: boolean }) {
   const pct = player.goalAttempts > 0 ? `${player.shootingPercentage.toFixed(0)}%` : "–";
 
   return (
@@ -178,7 +178,7 @@ function PlayerRow({ player, color, onCourt }: { player: NetballPlayerStats; col
   );
 }
 
-function StatCell({ value, highlight = false, color }: { value: string | number; highlight?: boolean; color?: string }) {
+function StatCell({ value, highlight = false, color }: { readonly value: string | number; readonly highlight?: boolean; readonly color?: string }) {
   return (
     <span className="text-right font-mono" style={{ color: highlight && color ? color : "var(--text-secondary)" }}>
       {value}

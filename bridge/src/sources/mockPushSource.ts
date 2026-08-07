@@ -12,7 +12,7 @@
  * from a websocket "message" handler, a message queue consumer, etc.
  */
 
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { buildGraphicsFeed, GraphicsFeed } from "../graphics/feedTransform";

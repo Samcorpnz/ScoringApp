@@ -25,7 +25,7 @@ const stores = new Map<string, MatchStore>();
 // free-tier concurrent-LIVE-match gate, so the check lives in one place.
 async function createLiveMatch(orgId: string): Promise<string> {
   const account = await getOrgAccount(orgId);
-  if (account && account.plan === "free") {
+  if (account?.plan === "free") {
     const liveElsewhere = await prisma.match.count({
       where: { status: "LIVE", org: { accountId: account.accountId } },
     });
@@ -67,10 +67,10 @@ export function getMatchStore(orgId: string, matchId?: string): MatchStore | nul
 
     if (matchId) {
       const row = await prisma.match.findUnique({ where: { id: matchId } });
-      if (!row || row.orgId !== orgId) throw new MatchNotFoundError();
+      if (row?.orgId !== orgId) throw new MatchNotFoundError();
       if (row.status === "SCHEDULED") {
         const account = await getOrgAccount(orgId);
-        if (account && account.plan === "free") {
+        if (account?.plan === "free") {
           const liveElsewhere = await prisma.match.count({
             where: { status: "LIVE", org: { accountId: account.accountId } },
           });

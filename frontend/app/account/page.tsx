@@ -46,6 +46,8 @@ const GRAPHICS_ADDON = {
   tagline: "Broadcast-style scene graphics for /display, driven from the control panel",
 };
 
+type BillingInterval = "month" | "year";
+
 export default function AccountPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.activeRole === "ADMIN";
@@ -55,11 +57,11 @@ export default function AccountPage() {
     currentPeriodEnd: number | null;
     amount: number | null;
     currency: string | null;
-    interval: "month" | "year" | null;
+    interval: BillingInterval | null;
   };
   const [billingStatus, setBillingStatus] = useState<{
     plan: string;
-    billingInterval: "month" | "year" | null;
+    billingInterval: BillingInterval | null;
     hasStripeCustomer: boolean;
     subscription: SubscriptionInfo | null;
     addOns: string[];
@@ -68,8 +70,8 @@ export default function AccountPage() {
   const [billingBusy, setBillingBusy] = useState(false);
   const [checkoutSecret, setCheckoutSecret] = useState<string | null>(null);
   const [checkoutKind, setCheckoutKind] = useState<"plan" | "addOn" | null>(null);
-  const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
-  const [graphicsInterval, setGraphicsInterval] = useState<"month" | "year">("month");
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>("month");
+  const [graphicsInterval, setGraphicsInterval] = useState<BillingInterval>("month");
   const [switchNotice, setSwitchNotice] = useState<string | null>(null);
   const [finishingUp, setFinishingUp] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -190,7 +192,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) globalThis.location.href = data.url;
     } finally {
       setBillingBusy(false);
     }
@@ -294,6 +296,28 @@ export default function AccountPage() {
                 {PLANS.map(plan => {
                   const isCurrentPlan = billingStatus?.plan === plan.id;
                   const isCurrent = isCurrentPlan && (plan.id === "free" || billingStatus?.billingInterval === billingInterval);
+                  let priceSuffix: string;
+                  if (plan.id === "free") {
+                    priceSuffix = "";
+                  } else if (billingInterval === "month") {
+                    priceSuffix = "/mo";
+                  } else {
+                    priceSuffix = "/yr";
+                  }
+                  let planAction: React.ReactNode;
+                  if (isCurrent) {
+                    planAction = <SmallBtn label="Current plan" onClick={() => {}} active />;
+                  } else if (plan.id !== "free" && isAdmin) {
+                    planAction = (
+                      <SmallBtn
+                        label={billingBusy ? "Loading…" : `Upgrade to ${plan.name}`}
+                        onClick={() => upgrade(plan.id)}
+                        primary
+                      />
+                    );
+                  } else {
+                    planAction = null;
+                  }
                   return (
                     <div
                       key={plan.id}
@@ -311,7 +335,7 @@ export default function AccountPage() {
                           {billingInterval === "month" ? plan.monthlyPrice : plan.annualPrice}
                         </span>
                         <span className="text-xs" style={{ color: "var(--text-dim)" }}>
-                          {plan.id === "free" ? "" : billingInterval === "month" ? "/mo" : "/yr"}
+                          {priceSuffix}
                         </span>
                       </p>
                       <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{plan.tagline}</p>
@@ -321,15 +345,7 @@ export default function AccountPage() {
                         ))}
                       </ul>
                       <div className="mt-4">
-                        {isCurrent ? (
-                          <SmallBtn label="Current plan" onClick={() => {}} active />
-                        ) : plan.id !== "free" && isAdmin ? (
-                          <SmallBtn
-                            label={billingBusy ? "Loading…" : `Upgrade to ${plan.name}`}
-                            onClick={() => upgrade(plan.id)}
-                            primary
-                          />
-                        ) : null}
+                        {planAction}
                       </div>
                     </div>
                   );
@@ -372,7 +388,7 @@ function GraphicsAddOnCard({
   onCancel,
   onResume,
 }: {
-  billingStatus: {
+  readonly billingStatus: {
     plan: string;
     addOns: string[];
     graphicsSubscription: {
@@ -381,16 +397,16 @@ function GraphicsAddOnCard({
       currentPeriodEnd: number | null;
       amount: number | null;
       currency: string | null;
-      interval: "month" | "year" | null;
+      interval: BillingInterval | null;
     } | null;
   };
-  isAdmin: boolean;
-  graphicsInterval: "month" | "year";
-  setGraphicsInterval: (interval: "month" | "year") => void;
-  graphicsBusy: boolean;
-  onPurchase: () => void;
-  onCancel: () => void;
-  onResume: () => void;
+  readonly isAdmin: boolean;
+  readonly graphicsInterval: BillingInterval;
+  readonly setGraphicsInterval: (interval: BillingInterval) => void;
+  readonly graphicsBusy: boolean;
+  readonly onPurchase: () => void;
+  readonly onCancel: () => void;
+  readonly onResume: () => void;
 }) {
   const hasBasePlan = billingStatus.plan === "pro" || billingStatus.plan === "venue";
   const isActive = billingStatus.addOns.includes(GRAPHICS_ADDON.id);
@@ -399,63 +415,106 @@ function GraphicsAddOnCard({
   return (
     <Card title="Add-ons">
       {isActive && sub ? (
-        <div
-          className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-accent)" }}
-        >
-          <div>
-            <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--accent)" }}>
-              {GRAPHICS_ADDON.name}
-            </p>
-            <p className="text-lg font-black mt-1" style={{ color: "var(--text-primary)" }}>
-              {formatAmount(sub.amount, sub.currency, sub.interval)}
-            </p>
-            {sub.cancelAtPeriodEnd ? (
-              <p className="text-xs mt-1" style={{ color: "var(--danger, #e05252)" }}>
-                Cancels on {formatRenewalDate(sub.currentPeriodEnd)}.
-              </p>
-            ) : (
-              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                Renews {formatRenewalDate(sub.currentPeriodEnd)}
-              </p>
-            )}
-          </div>
-          {isAdmin && (
-            <div className="flex flex-wrap gap-2">
-              {sub.cancelAtPeriodEnd ? (
-                <SmallBtn label={graphicsBusy ? "Loading…" : "Resume add-on"} onClick={onResume} primary />
-              ) : (
-                <SmallBtn label={graphicsBusy ? "Loading…" : "Cancel add-on"} onClick={onCancel} />
-              )}
-            </div>
-          )}
-        </div>
+        <ActiveGraphicsAddOn sub={sub} isAdmin={isAdmin} graphicsBusy={graphicsBusy} onCancel={onCancel} onResume={onResume} />
       ) : (
-        <div
-          className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
-        >
-          <div>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{GRAPHICS_ADDON.name}</p>
-            <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{GRAPHICS_ADDON.tagline}</p>
-            {!hasBasePlan && (
-              <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>Requires a Pro or Venue plan.</p>
-            )}
-          </div>
-          {hasBasePlan && isAdmin && (
-            <div className="flex items-center gap-2">
-              <SmallBtn label="Monthly" onClick={() => setGraphicsInterval("month")} active={graphicsInterval === "month"} />
-              <SmallBtn label="Annual (2 months free)" onClick={() => setGraphicsInterval("year")} active={graphicsInterval === "year"} />
-              <span className="text-sm font-black" style={{ color: "var(--accent)" }}>
-                {graphicsInterval === "month" ? GRAPHICS_ADDON.monthlyPrice : GRAPHICS_ADDON.annualPrice}
-                <span className="text-xs" style={{ color: "var(--text-dim)" }}>{graphicsInterval === "month" ? "/mo" : "/yr"}</span>
-              </span>
-              <SmallBtn label={graphicsBusy ? "Loading…" : "Add Graphics"} onClick={onPurchase} primary />
-            </div>
+        <InactiveGraphicsAddOn
+          hasBasePlan={hasBasePlan}
+          isAdmin={isAdmin}
+          graphicsInterval={graphicsInterval}
+          setGraphicsInterval={setGraphicsInterval}
+          graphicsBusy={graphicsBusy}
+          onPurchase={onPurchase}
+        />
+      )}
+    </Card>
+  );
+}
+
+function ActiveGraphicsAddOn({
+  sub, isAdmin, graphicsBusy, onCancel, onResume,
+}: {
+  readonly sub: NonNullable<{
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: number | null;
+    amount: number | null;
+    currency: string | null;
+    interval: "month" | "year" | null;
+  }>;
+  readonly isAdmin: boolean;
+  readonly graphicsBusy: boolean;
+  readonly onCancel: () => void;
+  readonly onResume: () => void;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-accent)" }}
+    >
+      <div>
+        <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--accent)" }}>
+          {GRAPHICS_ADDON.name}
+        </p>
+        <p className="text-lg font-black mt-1" style={{ color: "var(--text-primary)" }}>
+          {formatAmount(sub.amount, sub.currency, sub.interval)}
+        </p>
+        {sub.cancelAtPeriodEnd ? (
+          <p className="text-xs mt-1" style={{ color: "var(--danger, #e05252)" }}>
+            Cancels on {formatRenewalDate(sub.currentPeriodEnd)}.
+          </p>
+        ) : (
+          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+            Renews {formatRenewalDate(sub.currentPeriodEnd)}
+          </p>
+        )}
+      </div>
+      {isAdmin && (
+        <div className="flex flex-wrap gap-2">
+          {sub.cancelAtPeriodEnd ? (
+            <SmallBtn label={graphicsBusy ? "Loading…" : "Resume add-on"} onClick={onResume} primary />
+          ) : (
+            <SmallBtn label={graphicsBusy ? "Loading…" : "Cancel add-on"} onClick={onCancel} />
           )}
         </div>
       )}
-    </Card>
+    </div>
+  );
+}
+
+function InactiveGraphicsAddOn({
+  hasBasePlan, isAdmin, graphicsInterval, setGraphicsInterval, graphicsBusy, onPurchase,
+}: {
+  readonly hasBasePlan: boolean;
+  readonly isAdmin: boolean;
+  readonly graphicsInterval: "month" | "year";
+  readonly setGraphicsInterval: (interval: "month" | "year") => void;
+  readonly graphicsBusy: boolean;
+  readonly onPurchase: () => void;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
+    >
+      <div>
+        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{GRAPHICS_ADDON.name}</p>
+        <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{GRAPHICS_ADDON.tagline}</p>
+        {!hasBasePlan && (
+          <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>Requires a Pro or Venue plan.</p>
+        )}
+      </div>
+      {hasBasePlan && isAdmin && (
+        <div className="flex items-center gap-2">
+          <SmallBtn label="Monthly" onClick={() => setGraphicsInterval("month")} active={graphicsInterval === "month"} />
+          <SmallBtn label="Annual (2 months free)" onClick={() => setGraphicsInterval("year")} active={graphicsInterval === "year"} />
+          <span className="text-sm font-black" style={{ color: "var(--accent)" }}>
+            {graphicsInterval === "month" ? GRAPHICS_ADDON.monthlyPrice : GRAPHICS_ADDON.annualPrice}
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{graphicsInterval === "month" ? "/mo" : "/yr"}</span>
+          </span>
+          <SmallBtn label={graphicsBusy ? "Loading…" : "Add Graphics"} onClick={onPurchase} primary />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -481,19 +540,19 @@ function SubscriptionPanel({
   onCancel,
   onResume,
 }: {
-  billingStatus: {
+  readonly billingStatus: {
     plan: string;
-    billingInterval: "month" | "year" | null;
+    billingInterval: BillingInterval | null;
     subscription: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null; amount: number | null; currency: string | null } | null;
   };
-  billingInterval: "month" | "year";
-  setBillingInterval: (interval: "month" | "year") => void;
-  isAdmin: boolean;
-  billingBusy: boolean;
-  cancelBusy: boolean;
-  onUpgrade: (plan: "pro" | "venue") => void;
-  onCancel: () => void;
-  onResume: () => void;
+  readonly billingInterval: BillingInterval;
+  readonly setBillingInterval: (interval: BillingInterval) => void;
+  readonly isAdmin: boolean;
+  readonly billingBusy: boolean;
+  readonly cancelBusy: boolean;
+  readonly onUpgrade: (plan: "pro" | "venue") => void;
+  readonly onCancel: () => void;
+  readonly onResume: () => void;
 }) {
   const plan = PLANS.find(p => p.id === billingStatus.plan);
   const nextTier = billingStatus.plan === "pro" ? PLANS.find(p => p.id === "venue") : null;
@@ -582,7 +641,7 @@ function canActOnRole(actorRole: string, targetRole: string): boolean {
 type Member = { userId: string; name: string; email?: string; role: string; memberSince: string };
 type PendingInvite = { id: string; email: string; role: string; createdAt: string; expiresAt: string };
 
-function TeamCard({ orgId, actorRole, actorUserId }: { orgId: string; actorRole: string; actorUserId: string }) {
+function TeamCard({ orgId, actorRole, actorUserId }: { readonly orgId: string; readonly actorRole: string; readonly actorUserId: string }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -738,13 +797,13 @@ function TeamCard({ orgId, actorRole, actorUserId }: { orgId: string; actorRole:
   );
 }
 
-function StatusText({ message, isError }: { message: string; isError?: boolean }) {
+function StatusText({ message, isError }: { readonly message: string; readonly isError?: boolean }) {
   return (
     <p className="text-xs mt-2" style={{ color: isError ? "var(--danger)" : "var(--text-secondary)" }}>{message}</p>
   );
 }
 
-function DisplayNameCard({ initialName }: { initialName: string }) {
+function DisplayNameCard({ initialName }: { readonly initialName: string }) {
   const [name, setName] = useState(initialName);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
@@ -837,7 +896,7 @@ function PasswordCard() {
   );
 }
 
-function EmailCard({ currentEmail }: { currentEmail: string }) {
+function EmailCard({ currentEmail }: { readonly currentEmail: string }) {
   const [pending, setPending] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [newEmail, setNewEmail] = useState("");

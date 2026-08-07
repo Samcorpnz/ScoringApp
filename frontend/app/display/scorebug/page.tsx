@@ -29,6 +29,22 @@ export default function ScorebugPage() {
   );
 }
 
+function scorebugScale(size: string): number {
+  if (size === "sm") return 0.75;
+  if (size === "lg") return 1.3;
+  return 1;
+}
+
+function resolveScorebugLogo(logoUrl: string | undefined): string | null {
+  if (!logoUrl) return null;
+  return logoUrl.startsWith("/logos/") ? `${RELAY_URL}${logoUrl}` : logoUrl;
+}
+
+function scorebugPeriodText(periodBreak: boolean | undefined, periodLabel: string, period: string): string {
+  if (periodBreak) return periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`;
+  return period === "E" ? "EXTRA" : `${periodLabel} ${period}`;
+}
+
 function Scorebug() {
   const params   = useSearchParams();
   const position = (params.get("position") as string) || "tr";
@@ -43,13 +59,15 @@ function Scorebug() {
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
 
-  const scale = size === "sm" ? 0.75 : size === "lg" ? 1.3 : 1;
+  const scale = scorebugScale(size);
 
   const align = position.includes("l") ? "flex-start" : "flex-end";
   const vAlign = position.includes("b") ? "flex-end" : "flex-start";
 
-  const homeLogo    = home.logoUrl    ? (home.logoUrl.startsWith("/logos/")    ? `${RELAY_URL}${home.logoUrl}`    : home.logoUrl)    : null;
-  const visitorLogo = visitor.logoUrl ? (visitor.logoUrl.startsWith("/logos/") ? `${RELAY_URL}${visitor.logoUrl}` : visitor.logoUrl) : null;
+  const homeLogo    = resolveScorebugLogo(home.logoUrl);
+  const visitorLogo = resolveScorebugLogo(visitor.logoUrl);
+  const clockColor  = hornActive ? "#EF4444" : isRunning ? "#fff" : "#94A3B8";
+  const periodText  = scorebugPeriodText(state.periodBreak, periodLabel, period);
 
   return (
     <div style={{
@@ -100,7 +118,7 @@ function Scorebug() {
               fontVariantNumeric: "tabular-nums",
               fontSize: "1.4rem",
               fontWeight: 700,
-              color: hornActive ? "#EF4444" : isRunning ? "#fff" : "#94A3B8",
+              color: clockColor,
               letterSpacing: "0.05em",
               lineHeight: 1,
             }}>
@@ -113,9 +131,7 @@ function Scorebug() {
               color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)",
               textTransform: "uppercase",
             }}>
-              {state.periodBreak
-                ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`)
-                : (period === "E" ? "EXTRA" : `${periodLabel} ${period}`)}
+              {periodText}
             </span>
             {!isRunning && !state.periodBreak && (
               <span style={{ fontSize: "0.5rem", color: "#94A3B8", letterSpacing: "0.15em", textTransform: "uppercase" }}>PAUSED</span>

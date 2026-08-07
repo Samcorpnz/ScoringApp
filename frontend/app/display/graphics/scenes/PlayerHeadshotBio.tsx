@@ -25,9 +25,14 @@ export function PlayerHeadshotBio({ payload, state, roster }: SceneProps) {
 
   const rosterMatch = findRosterMatch(roster ?? [], player.id);
   const displayName = rosterMatch?.displayName || player.name;
-  const photoSrc = rosterMatch?.photoUrl
-    ? (rosterMatch.photoUrl.startsWith("/player-photos/") ? `${RELAY_URL}${rosterMatch.photoUrl}` : rosterMatch.photoUrl)
-    : null;
+  let photoSrc: string | null;
+  if (!rosterMatch?.photoUrl) {
+    photoSrc = null;
+  } else if (rosterMatch.photoUrl.startsWith("/player-photos/")) {
+    photoSrc = `${RELAY_URL}${rosterMatch.photoUrl}`;
+  } else {
+    photoSrc = rosterMatch.photoUrl;
+  }
 
   const teamColor = player.team === "home"
     ? (state.home.color || "var(--home-color)")
@@ -92,7 +97,7 @@ export function PlayerHeadshotBio({ payload, state, roster }: SceneProps) {
   );
 }
 
-function Card({ children }: { children: React.ReactNode }) {
+function Card({ children }: { readonly children: React.ReactNode }) {
   return (
     <div
       style={{

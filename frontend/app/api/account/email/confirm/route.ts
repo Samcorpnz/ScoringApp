@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { prisma } from "@scorehub/db";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
 

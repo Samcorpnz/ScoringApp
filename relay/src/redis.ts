@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
 
 const TICK_LOCK_TTL_MS = 2500;

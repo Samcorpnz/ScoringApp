@@ -13,7 +13,6 @@ import Image from "next/image";
 import { useMatchState } from "../../hooks/useMatchState";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
-import { ScorePanel } from "../../components/ScorePanel";
 import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatClockDisplay, formatScore } from "../../types";
@@ -48,13 +47,13 @@ export default function FullscreenDisplay() {
       if (e.key === "3") setLayout("minimal");
       if (e.key === "h" || e.key === "H") setShowHud(v => !v);
     };
-    window.addEventListener("keydown", handler);
+    globalThis.addEventListener("keydown", handler);
 
     const fsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", fsChange);
 
     return () => {
-      window.removeEventListener("keydown", handler);
+      globalThis.removeEventListener("keydown", handler);
       document.removeEventListener("fullscreenchange", fsChange);
     };
   }, [toggleFullscreen]);
@@ -63,9 +62,9 @@ export default function FullscreenDisplay() {
   useEffect(() => {
     let timer: NodeJS.Timeout;
     const show = () => { setShowHud(true); clearTimeout(timer); timer = setTimeout(() => setShowHud(false), 3000); };
-    window.addEventListener("mousemove", show);
+    globalThis.addEventListener("mousemove", show);
     timer = setTimeout(() => setShowHud(false), 3000);
-    return () => { window.removeEventListener("mousemove", show); clearTimeout(timer); };
+    return () => { globalThis.removeEventListener("mousemove", show); clearTimeout(timer); };
   }, []);
 
   return (
@@ -110,10 +109,8 @@ export default function FullscreenDisplay() {
 
 // ─── Layout: Wide (default) ───────────────────────────────────────────────────
 
-function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchState>["state"]; relayUrl: string }) {
+function WideLayout({ state, relayUrl }: { readonly state: ReturnType<typeof useMatchState>["state"]; readonly relayUrl: string }) {
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName, possession } = state;
-  const homeColor    = home.color    || "#F59E0B";
-  const visitorColor = visitor.color || "#818CF8";
   const periodLabel  = getPeriodLabel(state);
   const DisplayStats = getTemplate(state.sport).displayStats;
 
@@ -144,13 +141,18 @@ function WideLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchStat
   );
 }
 
-function TeamSide({ team, side, possession, relayUrl, scoreText }: { team: TeamState; side: "home" | "visitor"; possession: Possession; relayUrl: string; scoreText: string }) {
+function TeamSide({ team, side, possession, relayUrl, scoreText }: { readonly team: TeamState; readonly side: "home" | "visitor"; readonly possession: Possession; readonly relayUrl: string; readonly scoreText: string }) {
   const color = team.color || (side === "home" ? "#F59E0B" : "#818CF8");
   const hasPossession = possession === side || possession === "both";
 
-  const logoSrc = team.logoUrl
-    ? team.logoUrl.startsWith("/logos/") ? `${relayUrl}${team.logoUrl}` : team.logoUrl
-    : null;
+  let logoSrc: string | null;
+  if (!team.logoUrl) {
+    logoSrc = null;
+  } else if (team.logoUrl.startsWith("/logos/")) {
+    logoSrc = `${relayUrl}${team.logoUrl}`;
+  } else {
+    logoSrc = team.logoUrl;
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6" style={{ position: "relative" }}>
@@ -186,7 +188,7 @@ function TeamSide({ team, side, possession, relayUrl, scoreText }: { team: TeamS
 
 // ─── Layout: Stacked ─────────────────────────────────────────────────────────
 
-function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchState>["state"]; relayUrl: string }) {
+function StackedLayout({ state, relayUrl }: { readonly state: ReturnType<typeof useMatchState>["state"]; readonly relayUrl: string }) {
   const { home, visitor, clockSeconds, period, isRunning, hornActive, matchName } = state;
   const periodLabel = getPeriodLabel(state);
   const DisplayStats = getTemplate(state.sport).displayStats;
@@ -212,7 +214,7 @@ function StackedLayout({ state, relayUrl }: { state: ReturnType<typeof useMatchS
 
 // ─── Layout: Minimal ─────────────────────────────────────────────────────────
 
-function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["state"] }) {
+function MinimalLayout({ state }: { readonly state: ReturnType<typeof useMatchState>["state"] }) {
   const { home, visitor, clockSeconds, countDown, period, isRunning } = state;
   const homeColor    = home.color    || "#F59E0B";
   const visitorColor = visitor.color || "#818CF8";
@@ -235,7 +237,10 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
             {formatClockDisplay(displayClock)}
           </p>
           <p className="font-black tracking-widest" style={{ fontSize: "calc(2rem * var(--text-scale, 1))", color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}>
-            {state.periodBreak ? (periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`) : `${periodLabel} ${period}`}
+            {(() => {
+              if (!state.periodBreak) return `${periodLabel} ${period}`;
+              return periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`;
+            })()}
           </p>
         </div>
         <div className="text-center">
@@ -247,7 +252,7 @@ function MinimalLayout({ state }: { state: ReturnType<typeof useMatchState>["sta
   );
 }
 
-function LayoutPicker({ layout, setLayout }: { layout: Layout; setLayout: (l: Layout) => void }) {
+function LayoutPicker({ layout, setLayout }: { readonly layout: Layout; readonly setLayout: (l: Layout) => void }) {
   const options: { key: Layout; label: string }[] = [
     { key: "wide",    label: "Wide [1]"    },
     { key: "stacked", label: "Stack [2]"   },

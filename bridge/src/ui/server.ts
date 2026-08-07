@@ -1,6 +1,6 @@
 import express from "express";
-import { createServer } from "http";
-import path from "path";
+import { createServer } from "node:http";
+import path from "node:path";
 import { BridgeController, BridgeConfig } from "../controller";
 import { addSseClient, removeSseClient } from "../logger";
 

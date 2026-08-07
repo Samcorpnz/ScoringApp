@@ -40,10 +40,10 @@ const DISPLAYS = [
   },
 ];
 
-export function OutputsTab({ matchId }: { matchId?: string }) {
+export function OutputsTab({ matchId }: { readonly matchId?: string }) {
   const { data: session } = useSession();
   const orgId = session?.user?.activeOrgId;
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin = typeof globalThis.window !== "undefined" ? globalThis.window.location.origin : "";
 
   // Display pages scope themselves to a tenant via ?org= (see useMatchState) —
   // without it the relay falls back to the legacy single-tenant room, which
@@ -154,7 +154,7 @@ socket.on("matchStateChange", (state) => {
   );
 }
 
-function GraphicsLinkCard({ href, label, desc }: { href: string; label: string; desc: string }) {
+function GraphicsLinkCard({ href, label, desc }: { readonly href: string; readonly label: string; readonly desc: string }) {
   return (
     <a
       href={href}
@@ -170,7 +170,7 @@ function GraphicsLinkCard({ href, label, desc }: { href: string; label: string; 
   );
 }
 
-function DataFeedRow({ label, value, desc }: { label: string; value: string; desc: string }) {
+function DataFeedRow({ label, value, desc }: { readonly label: string; readonly value: string; readonly desc: string }) {
   return (
     <div className="flex items-start gap-3">
       <span className="text-xs font-bold tracking-wide pt-0.5 flex-shrink-0" style={{ color: "var(--text-dim)", minWidth: 180 }}>{label}</span>

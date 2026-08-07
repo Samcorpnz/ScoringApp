@@ -30,6 +30,42 @@ async function authorize(orgId: string) {
   return { error: null };
 }
 
+const PATCHABLE_FIELDS = ["firstName", "lastName", "displayName", "externalId", "provider", "bio", "photoUrl"] as const;
+
+// Validates and trims a single field's incoming value. Returns the
+// normalized value (string or null), or an error message.
+function normalizePatchField(field: (typeof PATCHABLE_FIELDS)[number], value: unknown): { value: string | null } | { error: string } {
+  if (value !== null && typeof value !== "string") {
+    return { error: `${field} must be a string or null` };
+  }
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (trimmed) {
+    const err = validatePlayerField(field, trimmed);
+    if (err) return { error: err };
+  }
+  return { value: trimmed || null };
+}
+
+// Validates and normalizes the patchable fields present in the request body.
+// Returns either the Prisma update data or a NextResponse to return as-is.
+function parsePlayerPatch(body: unknown): Record<string, string | null> | NextResponse {
+  const data: Record<string, string | null> = {};
+  const source = (body as Record<string, unknown>) ?? {};
+  for (const field of PATCHABLE_FIELDS) {
+    if (!(field in source)) continue;
+    const result = normalizePatchField(field, source[field]);
+    if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+    data[field] = result.value;
+  }
+  if ("firstName" in data && !data.firstName) {
+    return NextResponse.json({ error: "firstName cannot be empty" }, { status: 400 });
+  }
+  if ("lastName" in data && !data.lastName) {
+    return NextResponse.json({ error: "lastName cannot be empty" }, { status: 400 });
+  }
+  return data;
+}
+
 // Edits roster fields, including linking/unlinking a live feed identity
 // (provider/externalId) and setting photoUrl (set by the relay's
 // player-photo upload route, PATCHed here afterward — mirrors how logo
@@ -43,32 +79,13 @@ export async function PATCH(
   if (error) return error;
 
   const existing = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!existing || existing.orgId !== orgId) {
+  if (existing?.orgId !== orgId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
   const body = await req.json().catch(() => null);
-  const data: Record<string, string | null> = {};
-  for (const field of ["firstName", "lastName", "displayName", "externalId", "provider", "bio", "photoUrl"] as const) {
-    if (field in (body ?? {})) {
-      const value = body[field];
-      if (value !== null && typeof value !== "string") {
-        return NextResponse.json({ error: `${field} must be a string or null` }, { status: 400 });
-      }
-      const trimmed = typeof value === "string" ? value.trim() : "";
-      if (trimmed) {
-        const err = validatePlayerField(field, trimmed);
-        if (err) return NextResponse.json({ error: err }, { status: 400 });
-      }
-      data[field] = trimmed || null;
-    }
-  }
-  if ("firstName" in data && !data.firstName) {
-    return NextResponse.json({ error: "firstName cannot be empty" }, { status: 400 });
-  }
-  if ("lastName" in data && !data.lastName) {
-    return NextResponse.json({ error: "lastName cannot be empty" }, { status: 400 });
-  }
+  const data = parsePlayerPatch(body);
+  if (data instanceof NextResponse) return data;
 
   try {
     const player = await prisma.player.update({ where: { id: playerId }, data });
@@ -90,7 +107,7 @@ export async function DELETE(
   if (error) return error;
 
   const existing = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!existing || existing.orgId !== orgId) {
+  if (existing?.orgId !== orgId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   }
 
   const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true, status: true } });
-  if (!match || match.orgId !== orgId) {
+  if (match?.orgId !== orgId) {
     return NextResponse.json({ error: "match not found" }, { status: 404 });
   }
   if (match.status === "ENDED") {

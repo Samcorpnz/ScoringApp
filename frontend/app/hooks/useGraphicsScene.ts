@@ -21,21 +21,30 @@ export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 // unauthenticated (org/matchId from the page's query params, same as a
 // viewer connecting to useMatchState) by /display/graphics to just listen.
 export function useGraphicsScene(auth?: { secret: string; role: "control" | "graphics" }) {
-  const [scene, setSceneState] = useState<GraphicsScene | null>(null);
+  const [sceneState, setSceneState] = useState<GraphicsScene | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const socketRef = useRef<Socket | null>(null);
   const secret = auth?.secret;
   const role = auth?.role;
 
   useEffect(() => {
-    const params = secret === undefined && typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search)
+    const params = secret === undefined && globalThis.window !== undefined
+      ? new URLSearchParams(globalThis.location.search)
       : undefined;
     const orgId = params?.get("org") ?? undefined;
     const matchId = params?.get("matchId") ?? undefined;
 
+    let socketAuth: { secret: string; role: "control" | "graphics" | undefined } | { orgId: string; matchId?: string } | Record<string, never>;
+    if (secret !== undefined) {
+      socketAuth = { secret, role };
+    } else if (orgId) {
+      socketAuth = { orgId, matchId };
+    } else {
+      socketAuth = {};
+    }
+
     const socket = io(RELAY_URL, {
-      auth: secret !== undefined ? { secret, role } : orgId ? { orgId, matchId } : {},
+      auth: socketAuth,
       reconnection: true,
       reconnectionDelay: 500,
       reconnectionDelayMax: 2000,
@@ -57,5 +66,5 @@ export function useGraphicsScene(auth?: { secret: string; role: "control" | "gra
     socketRef.current?.emit("setScene", { sceneType, payload });
   };
 
-  return { scene, status, setScene };
+  return { scene: sceneState, status, setScene };
 }

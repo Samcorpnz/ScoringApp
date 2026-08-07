@@ -10,7 +10,7 @@ function getCricketState(state: MatchState): CricketState | undefined {
   return cs?.sport === "cricket" ? cs : undefined;
 }
 
-export function CricketDisplayStats({ state, variant = "full" }: DisplayStatsProps) {
+export function CricketDisplayStats({ state, variant = "full" }: Readonly<DisplayStatsProps>) {
   const cricket = getCricketState(state);
   if (!cricket) return null;
 
@@ -40,7 +40,7 @@ export function CricketDisplayStats({ state, variant = "full" }: DisplayStatsPro
         </span>
         <div className="flex gap-1.5">
           {inn.thisOverBalls.length ? inn.thisOverBalls.map((b, i) => (
-            <span key={i} className="text-xs font-bold px-1.5" style={{ color: "var(--text-primary)" }}>{b}</span>
+            <span key={`${i}-${b}`} className="text-xs font-bold px-1.5" style={{ color: "var(--text-primary)" }}>{b}</span>
           )) : <span className="text-xs" style={{ color: "var(--text-dim)" }}>—</span>}
         </div>
       </div>
@@ -106,7 +106,7 @@ export function CricketDisplayStats({ state, variant = "full" }: DisplayStatsPro
         <div className="flex gap-2 flex-wrap">
           {inn.thisOverBalls.length ? inn.thisOverBalls.map((b, i) => (
             <span
-              key={i}
+              key={`${i}-${b}`}
               className="rounded-lg px-3 py-1.5 text-sm font-bold"
               style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
             >

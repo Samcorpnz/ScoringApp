@@ -79,10 +79,10 @@ export default function AdvancedDisplay() {
 function TeamColumn({
   team, side, possession, scoreText,
 }: {
-  team: TeamState;
-  side: "home" | "visitor";
-  possession: Possession;
-  scoreText: string;
+  readonly team: TeamState;
+  readonly side: "home" | "visitor";
+  readonly possession: Possession;
+  readonly scoreText: string;
 }) {
   const color = side === "home" ? "var(--home-color)" : "var(--visitor-color)";
   return (
@@ -94,7 +94,7 @@ function TeamColumn({
           <div className="flex gap-2 mt-4">
             {Array.from({ length: Math.max(team.timeouts, 3) }).map((_, i) => (
               <div
-                key={i}
+                key={`${side}-timeout-${i}`}
                 className="rounded-full"
                 style={{
                   width: 10,
@@ -113,7 +113,7 @@ function TeamColumn({
 
 // ─── Fallback player strip (sports with no displayStats override) ────────────
 
-function PlayerStrip({ homeTeam, visitorTeam }: { homeTeam: TeamState; visitorTeam: TeamState }) {
+function PlayerStrip({ homeTeam, visitorTeam }: { readonly homeTeam: TeamState; readonly visitorTeam: TeamState }) {
   const homePlayers = homeTeam.players.filter(p => p.onCourt);
   const visPlayers  = visitorTeam.players.filter(p => p.onCourt);
   if (homePlayers.length === 0 && visPlayers.length === 0) return null;
@@ -130,7 +130,7 @@ function PlayerStrip({ homeTeam, visitorTeam }: { homeTeam: TeamState; visitorTe
   );
 }
 
-function PlayerList({ players, color, label }: { players: TeamState["players"]; color: string; label: string }) {
+function PlayerList({ players, color, label }: { readonly players: TeamState["players"]; readonly color: string; readonly label: string }) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
       <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: "var(--text-dim)" }}>

@@ -12,14 +12,22 @@ export function ConnectionBadge({
   feedStale,
   relayUnreachable,
 }: {
-  status: ConnectionStatus;
-  feedStale?: boolean;
-  relayUnreachable?: boolean;
+  readonly status: ConnectionStatus;
+  readonly feedStale?: boolean;
+  readonly relayUnreachable?: boolean;
 }) {
+  let statusColor: string;
+  if (status === "connected") {
+    statusColor = "var(--running)";
+  } else if (status === "connecting") {
+    statusColor = "var(--accent)";
+  } else {
+    statusColor = "var(--stopped)";
+  }
   return (
     <div data-testid="connection-badge" className="flex items-center gap-2 text-xs font-semibold tracking-widest uppercase">
       <span className={`status-dot ${status}`} />
-      <span data-testid="connection-status" style={{ color: status === "connected" ? "var(--running)" : status === "connecting" ? "var(--accent)" : "var(--stopped)" }}>
+      <span data-testid="connection-status" style={{ color: statusColor }}>
         {labels[status]}
       </span>
       {feedStale && (

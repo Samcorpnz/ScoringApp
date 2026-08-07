@@ -62,14 +62,23 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     // ?org= query param so multiple tenants on one relay stay isolated.
     // An optional &matchId= further scopes them to one specific match
     // instead of the org's singleton "default" match.
-    const params = secret === undefined && typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search)
+    const params = secret === undefined && globalThis.window !== undefined
+      ? new URLSearchParams(globalThis.location.search)
       : undefined;
     const orgId = params?.get("org") ?? undefined;
     const matchId = params?.get("matchId") ?? undefined;
 
+    let socketAuth: { secret: string; role: string | undefined } | { orgId?: string; matchId?: string } | Record<string, never>;
+    if (secret !== undefined) {
+      socketAuth = { secret, role };
+    } else if (orgId || matchId) {
+      socketAuth = { orgId, matchId };
+    } else {
+      socketAuth = {};
+    }
+
     const socket = io(RELAY_URL, {
-      auth: secret !== undefined ? { secret, role } : orgId || matchId ? { orgId, matchId } : {},
+      auth: socketAuth,
       reconnection: true,
       reconnectionDelay: 500,
       reconnectionDelayMax: 2000,

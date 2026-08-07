@@ -21,7 +21,7 @@ const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 function hexToRgba(hex: string, alpha: number): string {
   const match = /^#([0-9a-f]{6})$/i.exec(hex);
   if (!match) return `rgba(7,9,15,${alpha})`;
-  const int = parseInt(match[1], 16);
+  const int = Number.parseInt(match[1], 16);
   const r = (int >> 16) & 255;
   const g = (int >> 8) & 255;
   const b = int & 255;
@@ -41,7 +41,7 @@ export default function GraphicsDisplay() {
   const { backgroundColor, textScale: _textScale, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const orgParam = params.get("org");
     setOrg(orgParam);
     const url = orgParam ? `${RELAY_URL}/api/graphics/entitlement?org=${encodeURIComponent(orgParam)}` : `${RELAY_URL}/api/graphics/entitlement`;
@@ -70,11 +70,11 @@ export default function GraphicsDisplay() {
         pointerEvents: "none",
       } as React.CSSProperties}
     >
-      {entitled === false ? (
-        <UpgradePrompt />
-      ) : SceneComponent ? (
-        <SceneComponent payload={scene?.payload} state={state} roster={roster} />
-      ) : null}
+      {(() => {
+        if (entitled === false) return <UpgradePrompt />;
+        if (SceneComponent) return <SceneComponent payload={scene?.payload} state={state} roster={roster} />;
+        return null;
+      })()}
     </div>
   );
 }

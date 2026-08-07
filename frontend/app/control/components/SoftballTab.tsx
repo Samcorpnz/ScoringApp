@@ -30,7 +30,7 @@ export function SoftballTab({ state, push, sendReset, sendUndo, sendScoreAdjust 
   const sb = getSoftballState(state);
   const start = STARTING_COUNT[sb.format];
   const maxInnings = MAX_INNINGS[sb.format];
-  const inning = parseInt(state.period, 10) || 1;
+  const inning = Number.parseInt(state.period, 10) || 1;
 
   const battingSide: "home" | "visitor" = sb.inningHalf === "top" ? "visitor" : "home";
 

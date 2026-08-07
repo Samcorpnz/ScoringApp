@@ -22,7 +22,7 @@ export function OrgSwitcher() {
     });
     if (!res.ok) return;
     await update({ activeOrgId: orgId });
-    window.location.reload();
+    globalThis.location.reload();
   }
 
   return (

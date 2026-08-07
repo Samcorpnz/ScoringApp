@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
-import fs from "fs";
+import path from "node:path";
+import fs from "node:fs";
 import crypto from "node:crypto";
-import { createServer as createHttpServer } from "http";
+import { createServer as createHttpServer } from "node:http";
 import { Server, Socket } from "socket.io";
 import multer from "multer";
 import { rateLimit } from "express-rate-limit";
@@ -58,13 +58,30 @@ function requireSecret(name: "BRIDGE_SECRET" | "CONTROL_SECRET", value: string |
 // requests rather than defaulting to "*", which would let any site read
 // control-panel/control-secret-gated responses (SA code-scanning #14).
 function requireAllowedOrigins(value: string | string[] | undefined): string[] {
-  const list = Array.isArray(value) ? value : value ? [value] : [];
+  let list: string[];
+  if (Array.isArray(value)) {
+    list = value;
+  } else if (value) {
+    list = [value];
+  } else {
+    list = [];
+  }
   if (list.length === 0 || list.includes("*")) {
     throw new Error(
       "ALLOWED_ORIGINS must be set to one or more explicit origins (comma-separated) — refusing to start with a wildcard/missing CORS origin. See relay/.env.example."
     );
   }
   return list;
+}
+
+// Per-(org, match) in-memory state and the active bridge connection for
+// that room. This is what makes match state genuinely tenant-scoped: one
+// relay process can serve many orgs (and many matches per org), each
+// isolated to its own Socket.io room. Omitting matchId addresses the
+// org's singleton "default" room — unchanged from before multi-match
+// support existed, so bridges/displays/old links never had to change.
+function roomFor(orgId: string, matchId?: string): string {
+  return matchId ? `match:${matchId}` : orgId;
 }
 
 export function createServer(options: ServerOptions = {}) {
@@ -114,16 +131,6 @@ export function createServer(options: ServerOptions = {}) {
   const redisClients = getRedisClients();
   if (redisClients) {
     io.adapter(createAdapter(redisClients.pub, redisClients.sub));
-  }
-
-  // Per-(org, match) in-memory state and the active bridge connection for
-  // that room. This is what makes match state genuinely tenant-scoped: one
-  // relay process can serve many orgs (and many matches per org), each
-  // isolated to its own Socket.io room. Omitting matchId addresses the
-  // org's singleton "default" room — unchanged from before multi-match
-  // support existed, so bridges/displays/old links never had to change.
-  function roomFor(orgId: string, matchId?: string): string {
-    return matchId ? `match:${matchId}` : orgId;
   }
 
   const matchStates = new Map<string, { orgId: string; matchId?: string; state: MatchState }>();
@@ -234,8 +241,8 @@ export function createServer(options: ServerOptions = {}) {
       ...(patch.isRunning === true ? { periodBreak: false } : {}),
       sequenceId: current.sequenceId + 1,
       inputSource: patch.inputSource ?? "manual",
-      home:    { ...current.home,    ...(patch.home    ?? {}) },
-      visitor: { ...current.visitor, ...(patch.visitor ?? {}) },
+      home:    { ...current.home,    ...patch.home },
+      visitor: { ...current.visitor, ...patch.visitor },
     };
     setState(orgId, next, matchId);
     return next;
@@ -516,7 +523,9 @@ export function createServer(options: ServerOptions = {}) {
             cb(null, `${id}${ext}`);
           },
         }),
-    limits: { fileSize: 20 * 1024 * 1024 },
+    // Sound effects are short clips, not full tracks — 8MB is comfortably
+    // above anything legitimate while keeping the request-size ceiling sane.
+    limits: { fileSize: 8 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       cb(null, file.mimetype.startsWith("audio/"));
     },
@@ -747,8 +756,8 @@ export function createServer(options: ServerOptions = {}) {
       res.status(400).json({ error: "team must be 'home' or 'visitor'" });
       return;
     }
-    const delta = parseInt(String(req.query.delta ?? req.body?.delta ?? "1"), 10);
-    if (isNaN(delta) || delta < -99 || delta > 99) {
+    const delta = Number.parseInt(String(req.query.delta ?? req.body?.delta ?? "1"), 10);
+    if (Number.isNaN(delta) || delta < -99 || delta > 99) {
       res.status(400).json({ error: "delta must be an integer between -99 and 99" });
       return;
     }
@@ -767,8 +776,8 @@ export function createServer(options: ServerOptions = {}) {
     const matchId = (req as any).matchId as string | undefined;
     try {
       const current = await getState(orgId, matchId);
-      const n = parseInt(current.period, 10);
-      const next = await applyManualUpdate(orgId, { period: String(isNaN(n) ? 2 : n + 1) }, matchId);
+      const n = Number.parseInt(current.period, 10);
+      const next = await applyManualUpdate(orgId, { period: String(Number.isNaN(n) ? 2 : n + 1) }, matchId);
       res.json({ ok: true, period: next.period });
     } catch (err) { respondToStateError(res, err); }
   });
@@ -778,8 +787,8 @@ export function createServer(options: ServerOptions = {}) {
     const matchId = (req as any).matchId as string | undefined;
     try {
       const current = await getState(orgId, matchId);
-      const n = parseInt(current.period, 10);
-      const next = await applyManualUpdate(orgId, { period: String(isNaN(n) || n <= 1 ? 1 : n - 1) }, matchId);
+      const n = Number.parseInt(current.period, 10);
+      const next = await applyManualUpdate(orgId, { period: String(Number.isNaN(n) || n <= 1 ? 1 : n - 1) }, matchId);
       res.json({ ok: true, period: next.period });
     } catch (err) { respondToStateError(res, err); }
   });
@@ -804,13 +813,13 @@ export function createServer(options: ServerOptions = {}) {
     const matchId = (req as any).matchId as string | undefined;
     try {
       const current = await getState(orgId, matchId);
-      const n = parseInt(current.period, 10);
+      const n = Number.parseInt(current.period, 10);
       const defaultClock = SPORT_DEFAULT_CLOCK[current.sport] ?? 0;
       const resetScoreOnPeriod = SPORT_RESET_SCORE_ON_PERIOD.has(current.sport);
       const next = await applyManualUpdate(orgId, {
         isRunning: false,
         clockSeconds: defaultClock,
-        period: String(isNaN(n) ? 2 : n + 1),
+        period: String(Number.isNaN(n) ? 2 : n + 1),
         periodBreak: true,
         ...(resetScoreOnPeriod && {
           home: { ...current.home, score: 0 },
@@ -913,7 +922,16 @@ export function createServer(options: ServerOptions = {}) {
     const isBridge   = (socket as any).isBridge   === true;
     const isControl  = (socket as any).isControl  === true;
     const isGraphics = (socket as any).isGraphics === true;
-    const role = isBridge ? "bridge" : isControl ? "control" : isGraphics ? "graphics" : "viewer";
+    let role: "bridge" | "control" | "graphics" | "viewer";
+    if (isBridge) {
+      role = "bridge";
+    } else if (isControl) {
+      role = "control";
+    } else if (isGraphics) {
+      role = "graphics";
+    } else {
+      role = "viewer";
+    }
 
     const room = roomFor(orgId, matchId);
     socket.join(room);

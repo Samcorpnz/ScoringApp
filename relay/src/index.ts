@@ -18,8 +18,8 @@ process.on("unhandledRejection", (reason) => {
 async function main(): Promise<void> {
   const { createServer } = await import("./server");
 
-  const PORT = parseInt(process.env.PORT ?? "4000", 10);
-  const UPLOAD_DIR = process.env.UPLOAD_DIR ?? require("path").join(process.cwd(), "uploads");
+  const PORT = Number.parseInt(process.env.PORT ?? "4000", 10);
+  const UPLOAD_DIR = process.env.UPLOAD_DIR ?? require("node:path").join(process.cwd(), "uploads");
 
   const { httpServer } = createServer({ uploadDir: UPLOAD_DIR });
 

@@ -3,26 +3,33 @@
 const SQUAD_SIZE = 11;
 
 export function emptySquad(): string[] {
-  return Array(SQUAD_SIZE).fill("");
+  return new Array(SQUAD_SIZE).fill("");
+}
+
+function missingPlayersMessage(filled: number, minPlayers: number): string {
+  if (filled >= minPlayers) return "";
+  const missing = minPlayers - filled;
+  const playerWord = missing === 1 ? "player" : "players";
+  return `Add ${missing} more ${playerWord}`;
 }
 
 export function CricketSquadSetup({
   homeTeamName, visitorTeamName, homeSquad, visitorSquad, onChangeHome, onChangeVisitor, onBack, onSubmit,
 }: {
-  homeTeamName: string;
-  visitorTeamName: string;
-  homeSquad: string[];
-  visitorSquad: string[];
-  onChangeHome: (idx: number, name: string) => void;
-  onChangeVisitor: (idx: number, name: string) => void;
-  onBack: () => void;
-  onSubmit: () => void;
+  readonly homeTeamName: string;
+  readonly visitorTeamName: string;
+  readonly homeSquad: string[];
+  readonly visitorSquad: string[];
+  readonly onChangeHome: (idx: number, name: string) => void;
+  readonly onChangeVisitor: (idx: number, name: string) => void;
+  readonly onBack: () => void;
+  readonly onSubmit: () => void;
 }) {
   const MIN_PLAYERS = 2;
   const homeFilled = homeSquad.filter(n => n.trim()).length;
   const visitorFilled = visitorSquad.filter(n => n.trim()).length;
-  const homeError = homeFilled < MIN_PLAYERS ? `Add ${MIN_PLAYERS - homeFilled} more player${MIN_PLAYERS - homeFilled === 1 ? "" : "s"}` : "";
-  const visitorError = visitorFilled < MIN_PLAYERS ? `Add ${MIN_PLAYERS - visitorFilled} more player${MIN_PLAYERS - visitorFilled === 1 ? "" : "s"}` : "";
+  const homeError = missingPlayersMessage(homeFilled, MIN_PLAYERS);
+  const visitorError = missingPlayersMessage(visitorFilled, MIN_PLAYERS);
   const canSubmit = !homeError && !visitorError;
 
   return (
@@ -64,7 +71,7 @@ export function CricketSquadSetup({
 }
 
 function SquadColumn({ label, squad, onChange, testIdPrefix, error }: {
-  label: string; squad: string[]; onChange: (idx: number, name: string) => void; testIdPrefix: string; error?: string;
+  readonly label: string; readonly squad: string[]; readonly onChange: (idx: number, name: string) => void; readonly testIdPrefix: string; readonly error?: string;
 }) {
   return (
     <div className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
@@ -77,7 +84,7 @@ function SquadColumn({ label, squad, onChange, testIdPrefix, error }: {
       <div className="space-y-2">
         {squad.map((name, idx) => (
           <input
-            key={idx}
+            key={`${testIdPrefix}-${idx}`}
             data-testid={`${testIdPrefix}-player-${idx}`}
             className="w-full rounded-lg px-3 py-1.5 text-sm font-semibold"
             style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}

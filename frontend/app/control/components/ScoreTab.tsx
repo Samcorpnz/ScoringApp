@@ -7,6 +7,31 @@ import { parseClock } from "../lib/parseClock";
 import { getTemplate, ControlPanelProps } from "../../sport-templates";
 import { ClockAdjustButtons, NameField, ScoreButtons, SectionLabel, SmallBtn } from "./primitives";
 
+type Side = "home" | "visitor";
+type AdjustFn = (args: { side: Side; delta: number }) => void;
+
+// Keys 1/2/3 → increment[0/1/2]; Q/W/E → negative; mirror on right side (9/0/8, O/P/I).
+// Returns true if the key matched a score-adjust binding (and applied it).
+function tryScoreAdjustKey(key: string, inc: readonly number[], adjust: AdjustFn): boolean {
+  const bindings: [string, Side, number, boolean][] = [
+    ["1", "home", 0, false], ["2", "home", 1, false], ["3", "home", 2, false],
+    ["q", "home", 0, true], ["Q", "home", 0, true], ["w", "home", 1, true], ["W", "home", 1, true], ["e", "home", 2, true], ["E", "home", 2, true],
+    ["9", "visitor", 0, false], ["0", "visitor", 1, false], ["8", "visitor", 2, false],
+    ["o", "visitor", 0, true], ["O", "visitor", 0, true], ["p", "visitor", 1, true], ["P", "visitor", 1, true], ["i", "visitor", 2, true], ["I", "visitor", 2, true],
+  ];
+  for (const [k, side, idx, negate] of bindings) {
+    if (key !== k || inc[idx] === undefined) continue;
+    adjust({ side, delta: negate ? -inc[idx] : inc[idx] });
+    return true;
+  }
+  return false;
+}
+
+function periodStatusLabel(periodBreak: boolean, periodLabel: string, period: string): string {
+  if (!periodBreak) return `${periodLabel} ${period}`;
+  return periodLabel === "HALF" ? "HALF TIME" : `${periodLabel} BREAK`;
+}
+
 export function ScoreTab({
   state, push, sendReset, sendUndo,
   sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
@@ -56,11 +81,6 @@ export function ScoreTab({
       const s = stateRef.current;
       const p = pushRef.current;
       const inc = getTemplate(s.sport).scoreIncrements;
-      // Keys 1/2/3 → increment[0/1/2]; Q/W/E → negative; mirror on right side (9/0/8, O/P/I)
-      const homeKeys:    [string, number][] = [["1", 0], ["2", 1], ["3", 2]];
-      const homeNegKeys: [string, number][] = [["q", 0], ["Q", 0], ["w", 1], ["W", 1], ["e", 2], ["E", 2]];
-      const visKeys:     [string, number][] = [["9", 0], ["0", 1], ["8", 2]];
-      const visNegKeys:  [string, number][] = [["o", 0], ["O", 0], ["p", 1], ["P", 1], ["i", 2], ["I", 2]];
 
       // Cmd/Ctrl+Z — undo last action
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
@@ -68,39 +88,25 @@ export function ScoreTab({
         undoRef.current();
         return;
       }
-
-      switch (e.key) {
-        case " ":
-          e.preventDefault();
-          p({ isRunning: !s.isRunning });
-          break;
-        case "[":
-          { const n = parseInt(s.period, 10); p({ period: String(isNaN(n) || n <= 1 ? 1 : n - 1) }); break; }
-        case "]":
-          { const n = parseInt(s.period, 10); p({ period: String(isNaN(n) ? 2 : n + 1) }); break; }
-        default: {
-          const adjust = adjustRef.current;
-          for (const [key, idx] of homeKeys) {
-            if (e.key === key && inc[idx] !== undefined)
-              { adjust({ side: "home", delta: inc[idx] }); return; }
-          }
-          for (const [key, idx] of homeNegKeys) {
-            if (e.key === key && inc[idx] !== undefined)
-              { adjust({ side: "home", delta: -inc[idx] }); return; }
-          }
-          for (const [key, idx] of visKeys) {
-            if (e.key === key && inc[idx] !== undefined)
-              { adjust({ side: "visitor", delta: inc[idx] }); return; }
-          }
-          for (const [key, idx] of visNegKeys) {
-            if (e.key === key && inc[idx] !== undefined)
-              { adjust({ side: "visitor", delta: -inc[idx] }); return; }
-          }
-        }
+      if (e.key === " ") {
+        e.preventDefault();
+        p({ isRunning: !s.isRunning });
+        return;
       }
+      if (e.key === "[") {
+        const n = Number.parseInt(s.period, 10);
+        p({ period: String(Number.isNaN(n) || n <= 1 ? 1 : n - 1) });
+        return;
+      }
+      if (e.key === "]") {
+        const n = Number.parseInt(s.period, 10);
+        p({ period: String(Number.isNaN(n) ? 2 : n + 1) });
+        return;
+      }
+      tryScoreAdjustKey(e.key, inc, adjustRef.current);
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    globalThis.addEventListener("keydown", onKey);
+    return () => globalThis.removeEventListener("keydown", onKey);
   }, []);
 
   // Sport-specific control panel override (used by complex sports like Cricket, Softball)
@@ -148,8 +154,8 @@ export function ScoreTab({
           className="flex-1 rounded-xl py-4 text-lg font-black tracking-widest uppercase transition-all"
           style={{ background: "rgba(251,146,60,0.1)", border: "2px solid rgba(251,146,60,0.4)", color: "rgb(251,146,60)" }}
           onClick={() => {
-            const n = parseInt(state.period, 10);
-            const nextPeriod = isNaN(n) ? 2 : n + 1;
+            const n = Number.parseInt(state.period, 10);
+            const nextPeriod = Number.isNaN(n) ? 2 : n + 1;
             // FIBA: overtime periods are 5 minutes (300s), not 10
             const nextClock = isBasketball && nextPeriod > 4 ? 300 : template.clockSeconds;
             push({
@@ -177,11 +183,11 @@ export function ScoreTab({
           className="rounded-xl px-5 py-4 text-sm font-black tracking-widest uppercase transition-all"
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           onClick={() => {
-            const n = parseInt(state.period, 10);
+            const n = Number.parseInt(state.period, 10);
             push({
               isRunning: false,
               clockSeconds: template.clockSeconds,
-              period: String(isNaN(n) || n <= 1 ? 1 : n - 1),
+              period: String(Number.isNaN(n) || n <= 1 ? 1 : n - 1),
               periodBreak: false,
             });
           }}
@@ -206,9 +212,7 @@ export function ScoreTab({
             {formatClockDisplay(displayClock)}
           </p>
           <p className="text-xs mt-1 font-black tracking-widest" style={{ color: state.periodBreak ? "rgb(251,146,60)" : "var(--accent)" }}>
-            {state.periodBreak
-              ? (template.periodLabel === "HALF" ? "HALF TIME" : `${template.periodLabel} BREAK`)
-              : `${template.periodLabel} ${state.period}`}
+            {periodStatusLabel(state.periodBreak, template.periodLabel, state.period)}
           </p>
           <p className="text-xs mt-1 font-semibold" style={{ color: state.isRunning ? "var(--running)" : "var(--stopped)" }}>
             {state.isRunning ? "● RUNNING" : "■ PAUSED"}

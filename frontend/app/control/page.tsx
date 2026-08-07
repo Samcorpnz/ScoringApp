@@ -42,7 +42,7 @@ function ControlPanelInner() {
   const { data: session, status: authStatus } = useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href = "/login?callbackUrl=/control";
+      globalThis.location.href = "/login?callbackUrl=/control";
     },
   });
   const [tab, setTab] = useState<Tab>("score");

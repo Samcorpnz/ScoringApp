@@ -11,8 +11,8 @@ import { startJsonSource } from "./sources/championDataJsonSource";
 import { startScrapeSource } from "./sources/championDataScrapeSource";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { log } from "./logger";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 export type SourceType = "saturn" | "cd-json" | "cd-scrape";
 
@@ -47,13 +47,13 @@ const DEFAULT_CONFIG: BridgeConfig = {
   bridgeSecret: process.env.BRIDGE_SECRET ?? "changeme",
   source: (process.env.CD_SOURCE as SourceType) ?? "saturn",
   serialPort: process.env.SERIAL_PORT ?? "",
-  baudRate: parseInt(process.env.BAUD_RATE ?? "9600", 10),
+  baudRate: Number.parseInt(process.env.BAUD_RATE ?? "9600", 10),
   cdUrl: process.env.CD_URL ?? "",
   cdUsername: process.env.CD_USERNAME ?? "",
   cdPassword: process.env.CD_PASSWORD ?? "",
-  cdPollMs: parseInt(process.env.CD_POLL_MS ?? "2000", 10),
+  cdPollMs: Number.parseInt(process.env.CD_POLL_MS ?? "2000", 10),
   cdScrapeUrl: process.env.CD_SCRAPE_URL ?? "",
-  cdScrapePollMs: parseInt(process.env.CD_POLL_MS ?? "500", 10),
+  cdScrapePollMs: Number.parseInt(process.env.CD_POLL_MS ?? "500", 10),
 };
 
 export class BridgeController {

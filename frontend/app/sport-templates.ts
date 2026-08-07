@@ -8,16 +8,16 @@ import { SoftballDisplayStats } from "./display/components/SoftballDisplayStats"
 import { IndoorCricketDisplayStats } from "./display/components/IndoorCricketDisplayStats";
 
 export interface ControlPanelProps {
-  state: MatchState;
-  push: (p: Partial<MatchState>) => void;
-  sendReset: () => void;
-  sendUndo: () => void;
-  sendCricketBall: (payload: CricketBallEvent) => void;
-  sendCricketOverComplete: (payload: { nextBowlerIndex?: number }) => void;
-  sendCricketInningsChange: (payload: { battingTeam: "home" | "visitor"; target?: number }) => void;
-  sendCricketDeclare: (payload: { battingTeam: "home" | "visitor" }) => void;
-  sendScoreAdjust: (payload: ScoreAdjustEvent) => void;
-  sendIndoorCricketWicket: (payload: IndoorCricketWicketEvent) => void;
+  readonly state: MatchState;
+  readonly push: (p: Partial<MatchState>) => void;
+  readonly sendReset: () => void;
+  readonly sendUndo: () => void;
+  readonly sendCricketBall: (payload: CricketBallEvent) => void;
+  readonly sendCricketOverComplete: (payload: { nextBowlerIndex?: number }) => void;
+  readonly sendCricketInningsChange: (payload: { battingTeam: "home" | "visitor"; target?: number }) => void;
+  readonly sendCricketDeclare: (payload: { battingTeam: "home" | "visitor" }) => void;
+  readonly sendScoreAdjust: (payload: ScoreAdjustEvent) => void;
+  readonly sendIndoorCricketWicket: (payload: IndoorCricketWicketEvent) => void;
 }
 
 export interface DisplayStatsProps {
@@ -388,8 +388,15 @@ export const SPORT_TEMPLATES: SportTemplate[] = [
   },
 ];
 
+function ordinalInningsLabel(n: number): string {
+  if (n === 1) return "1ST";
+  if (n === 2) return "2ND";
+  if (n === 3) return "3RD";
+  return `${n}TH`;
+}
+
 export function getTemplate(sport: SportType): SportTemplate {
-  return SPORT_TEMPLATES.find(t => t.sport === sport) ?? SPORT_TEMPLATES[SPORT_TEMPLATES.length - 1];
+  return SPORT_TEMPLATES.find(t => t.sport === sport) ?? SPORT_TEMPLATES.at(-1)!;
 }
 
 // Softball shows "TOP n" / "BOT n" instead of the static periodLabel (e.g. "INNING")
@@ -402,8 +409,7 @@ export function getPeriodLabel(state: MatchState): string {
   if (state.sport === "cricket") {
     const cricket = state.sportState as CricketState | undefined;
     const n = cricket?.inningsNumber ?? 1;
-    const ordinal = n === 1 ? "1ST" : n === 2 ? "2ND" : n === 3 ? "3RD" : `${n}TH`;
-    return `${ordinal} INNINGS`;
+    return `${ordinalInningsLabel(n)} INNINGS`;
   }
   return getTemplate(state.sport).periodLabel;
 }

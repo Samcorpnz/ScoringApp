@@ -8,7 +8,7 @@ function getIndoorCricketState(state: MatchState): IndoorCricketState | undefine
   return ics?.sport === "indoor_cricket" ? ics : undefined;
 }
 
-export function IndoorCricketDisplayStats({ state, variant = "full" }: DisplayStatsProps) {
+export function IndoorCricketDisplayStats({ state, variant = "full" }: Readonly<DisplayStatsProps>) {
   const indoorCricket = getIndoorCricketState(state);
   if (!indoorCricket) return null;
 

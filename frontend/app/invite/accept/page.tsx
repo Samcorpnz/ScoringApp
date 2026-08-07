@@ -119,6 +119,38 @@ function InviteAcceptInner() {
 
   const loggedInAsInvitee = session?.user?.email === info.email;
 
+  let inviteAction: React.ReactNode;
+  if (loggedInAsInvitee) {
+    inviteAction = (
+      <Button label={busy ? "Joining…" : `Join ${info.orgName}`} onClick={acceptAsLoggedInUser} disabled={busy} />
+    );
+  } else if (info.accountExists) {
+    inviteAction = (
+      <>
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Log in as {info.email} to accept this invitation.
+        </p>
+        <Field type="password" placeholder="Password" value={loginPassword} onChange={setLoginPassword} />
+        <Button label={busy ? "Signing in…" : "Log in and join"} onClick={loginThenAccept} disabled={busy || !loginPassword} />
+      </>
+    );
+  } else {
+    inviteAction = (
+      <>
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Create an account to join {info.orgName}.
+        </p>
+        <Field type="text" placeholder="Your name" value={name} onChange={setName} />
+        <Field type="password" placeholder="Password (min. 8 characters)" value={password} onChange={setPassword} />
+        <Button
+          label={busy ? "Creating account…" : "Create account and join"}
+          onClick={createAccountAndAccept}
+          disabled={busy || !name || password.length < 8}
+        />
+      </>
+    );
+  }
+
   return (
     <Centered>
       <div className="text-center mb-8">
@@ -134,30 +166,7 @@ function InviteAcceptInner() {
         className="w-full max-w-sm rounded-2xl p-8 space-y-4"
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
       >
-        {loggedInAsInvitee ? (
-          <Button label={busy ? "Joining…" : `Join ${info.orgName}`} onClick={acceptAsLoggedInUser} disabled={busy} />
-        ) : info.accountExists ? (
-          <>
-            <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-              Log in as {info.email} to accept this invitation.
-            </p>
-            <Field type="password" placeholder="Password" value={loginPassword} onChange={setLoginPassword} />
-            <Button label={busy ? "Signing in…" : "Log in and join"} onClick={loginThenAccept} disabled={busy || !loginPassword} />
-          </>
-        ) : (
-          <>
-            <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-              Create an account to join {info.orgName}.
-            </p>
-            <Field type="text" placeholder="Your name" value={name} onChange={setName} />
-            <Field type="password" placeholder="Password (min. 8 characters)" value={password} onChange={setPassword} />
-            <Button
-              label={busy ? "Creating account…" : "Create account and join"}
-              onClick={createAccountAndAccept}
-              disabled={busy || !name || password.length < 8}
-            />
-          </>
-        )}
+        {inviteAction}
 
         {actionError && (
           <p
@@ -172,7 +181,7 @@ function InviteAcceptInner() {
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Centered({ children }: { readonly children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ background: "var(--bg-base)" }}>
       {children}
@@ -182,7 +191,7 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 function Field({
   type, placeholder, value, onChange,
-}: { type: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+}: { readonly type: string; readonly placeholder: string; readonly value: string; readonly onChange: (v: string) => void }) {
   return (
     <input
       type={type}
@@ -195,7 +204,7 @@ function Field({
   );
 }
 
-function Button({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+function Button({ label, onClick, disabled }: { readonly label: string; readonly onClick: () => void; readonly disabled?: boolean }) {
   return (
     <button
       onClick={onClick}

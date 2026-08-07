@@ -103,7 +103,7 @@ export function LogoUploadCard({ testId, logoSrc, alt, activeBorderColor, onUplo
   );
 }
 
-export function TemplateRow({ label, value }: { label: string; value: string }) {
+export function TemplateRow({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div className="flex justify-between text-xs">
       <span style={{ color: "var(--text-secondary)" }}>{label}</span>
@@ -112,7 +112,7 @@ export function TemplateRow({ label, value }: { label: string; value: string }) 
   );
 }
 
-export function ColorSwatch({ color }: { color: string }) {
+export function ColorSwatch({ color }: { readonly color: string }) {
   return (
     <div className="flex items-center gap-3">
       <div style={{ width: 32, height: 32, borderRadius: 8, background: color, boxShadow: `0 0 12px ${color}88` }} />
@@ -122,11 +122,11 @@ export function ColorSwatch({ color }: { color: string }) {
 }
 
 export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels, testIdPrefix }: {
-  score: number;
-  onAdjust: (d: number) => void;
-  scoreIncrements: number[];
-  scoreLabels?: string[];
-  testIdPrefix?: string;
+  readonly score: number;
+  readonly onAdjust: (d: number) => void;
+  readonly scoreIncrements: number[];
+  readonly scoreLabels?: string[];
+  readonly testIdPrefix?: string;
 }) {
   const compact = scoreIncrements.length > 2;
   const btnClass = `rounded-xl py-4 font-black flex-1 ${compact ? "text-lg" : "text-xl"}`;
@@ -162,8 +162,8 @@ export function ScoreButtons({ score, onAdjust, scoreIncrements, scoreLabels, te
 }
 
 export function NameField({ label, value, placeholder, onChange, onCommit }: {
-  label: string; value: string; placeholder: string;
-  onChange: (v: string) => void; onCommit: () => void;
+  readonly label: string; readonly value: string; readonly placeholder: string;
+  readonly onChange: (v: string) => void; readonly onCommit: () => void;
 }) {
   return (
     <div className="mb-3">
@@ -182,7 +182,7 @@ export function NameField({ label, value, placeholder, onChange, onCommit }: {
   );
 }
 
-export function ClockAdjustButtons({ clockSeconds, onAdjust }: { clockSeconds: number; onAdjust: (d: number) => void }) {
+export function ClockAdjustButtons({ clockSeconds, onAdjust }: { readonly clockSeconds: number; readonly onAdjust: (d: number) => void }) {
   const adjustments = [-60, -10, -1, 1, 10, 60];
   return (
     <div className="flex items-center gap-1">
