@@ -118,9 +118,17 @@ export function useMatchState(auth?: { secret: string; role: string }) {
         setControllerStatus("connecting");
         clearControlRetries();
         const requestControl = () => {
-          socket.timeout(3000).emit("requestControl", () => {
-            // Ack received — resolveController on the relay has already
-            // emitted controllerGranted/controllerConflict by this point.
+          socket.timeout(3000).emit("requestControl", (err: Error | null, result?: "granted" | "conflict") => {
+            // resolveController on the relay has already emitted
+            // controllerGranted/controllerConflict by this point — those
+            // listeners are the primary path. This ack is a second,
+            // delivery-guaranteed channel for the same outcome (the relay's
+            // response to this specific request, not a broadcast that could
+            // in principle go astray), so act on it directly too rather than
+            // relying solely on the broadcast having arrived.
+            if (err || !result) return; // timed out — the scheduled retry below will try again
+            clearControlRetries();
+            setControllerStatus(result === "granted" ? "granted" : "conflict");
           });
         };
         requestControl();

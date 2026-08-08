@@ -151,4 +151,29 @@ describe("controller mutex handoff across a page navigation (SA-102)", () => {
     first.disconnect();
     second.disconnect();
   });
+
+  it("requestControl's ack payload carries the outcome directly, not just the broadcast event", async () => {
+    // Regression coverage for the ack-correlation fix: the relay's response
+    // to a specific requestControl is now delivery-guaranteed via the ack
+    // itself (socket.io's ack/timeout mechanism), not solely a separate
+    // controllerGranted/controllerConflict broadcast the client has no way
+    // to confirm it received.
+    const org = "org-handoff-ack-payload";
+
+    const first = connectControlSocket(await controlToken(org, "user-ack-1"));
+    await waitForEvent(first, "controllerGranted");
+
+    const second = connectControlSocket(await controlToken(org, "user-ack-2"));
+    await waitForEvent(second, "controllerConflict"); // connect-time auto-resolution settles first
+
+    const ackResult = await new Promise<string>((resolve, reject) => {
+      second.timeout(3000).emit("requestControl", (err: Error | null, result?: string) => {
+        if (err) reject(err); else resolve(result ?? "");
+      });
+    });
+    expect(ackResult).toBe("conflict");
+
+    first.disconnect();
+    second.disconnect();
+  });
 });

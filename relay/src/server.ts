@@ -981,7 +981,15 @@ export function createServer(options: ServerOptions = {}) {
       const controlUserId = (socket as any).controlUserId as string | undefined;
 
       // Controller mutex: check if another controller already holds the token for this room.
-      function resolveController(): void {
+      // Returns the outcome so callers with an ack (requestControl) can hand
+      // it straight back to the client in the ack payload itself — a
+      // delivery guaranteed by socket.io's ack/timeout mechanism, unlike the
+      // separate controllerGranted/controllerConflict broadcasts below,
+      // which the client also listens for but has no way to confirm it
+      // received. Emitting both keeps existing callers (implicit
+      // connect-time resolution, tests that don't use requestControl) working
+      // unchanged.
+      function resolveController(): "granted" | "conflict" {
         const now = Date.now();
         const existing = controllerTokens.get(room);
         const existingIsActive = existing && existing.socketId !== socket.id && existing.expiresAt > now;
@@ -1007,12 +1015,13 @@ export function createServer(options: ServerOptions = {}) {
           // Another controller is active — notify this socket so the UI can show a "take control?" prompt
           socket.emit("controllerConflict", { activeControllerId: existing.socketId });
           // Don't grant control yet; the client can send "takeControl" to revoke the existing token
-        } else {
-          // Grant control (no existing token, expired token, same operator's
-          // new socket, or same socket reconnecting)
-          controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity, userId: controlUserId });
-          socket.emit("controllerGranted");
+          return "conflict";
         }
+        // Grant control (no existing token, expired token, same operator's
+        // new socket, or same socket reconnecting)
+        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity, userId: controlUserId });
+        socket.emit("controllerGranted");
+        return "granted";
       }
 
       resolveController();
@@ -1020,10 +1029,13 @@ export function createServer(options: ServerOptions = {}) {
       // Explicit, retryable version of the connect-time resolution above —
       // the client uses this (with an ack) when the initial emit is lost or
       // races another socket's disconnect cleanup on the same room, leaving
-      // it stuck with neither controllerGranted nor controllerConflict.
-      socket.on("requestControl", (ack?: () => void) => {
-        resolveController();
-        ack?.();
+      // it stuck with neither controllerGranted nor controllerConflict. The
+      // ack payload carries the outcome directly, so the client can act on
+      // it even in the (still theoretical) case where the broadcast event
+      // above doesn't arrive but the ack does.
+      socket.on("requestControl", (ack?: (result: "granted" | "conflict") => void) => {
+        const result = resolveController();
+        ack?.(result);
       });
 
       // Client requests to take control from an existing controller
