@@ -1,0 +1,72 @@
+import { describe, it, expect } from "vitest";
+import { renderHook } from "@testing-library/react";
+import { useDisplayTheme } from "../useDisplayTheme";
+import { DEFAULT_DISPLAY_THEME } from "../../types";
+
+describe("useDisplayTheme", () => {
+  it("falls back to DEFAULT_DISPLAY_THEME when no theme is supplied", () => {
+    const { result } = renderHook(() => useDisplayTheme(undefined));
+    expect(result.current.backgroundColor).toBe(DEFAULT_DISPLAY_THEME.backgroundColor);
+    expect(result.current["--accent"]).toBe(DEFAULT_DISPLAY_THEME.primaryColor);
+  });
+
+  it("uses the supplied theme's colors and derives CSS variables", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, primaryColor: "#ff0000", backgroundColor: "#000000" }),
+    );
+    expect(result.current.backgroundColor).toBe("#000000");
+    expect(result.current["--accent"]).toBe("#ff0000");
+    expect(result.current["--accent-dim"]).toBe("#ff000022");
+    expect(result.current["--border-accent"]).toBe("#ff000044");
+  });
+
+  it("falls back to default colors when primaryColor/backgroundColor are empty strings", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, primaryColor: "", backgroundColor: "" }),
+    );
+    expect(result.current.backgroundColor).toBe(DEFAULT_DISPLAY_THEME.backgroundColor);
+    expect(result.current["--accent"]).toBe(DEFAULT_DISPLAY_THEME.primaryColor);
+  });
+
+  it("passes through an explicit textScale", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, textScale: 1.5 }),
+    );
+    expect(result.current.textScale).toBe(1.5);
+    expect(result.current["--text-scale"]).toBe("1.5");
+  });
+
+  it("leaves fontFamily undefined when no font is set", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, font: "" }),
+    );
+    expect(result.current.fontFamily).toBeUndefined();
+  });
+
+  it("sets fontFamily and injects a Google Fonts stylesheet link when a font is set", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, font: "Oswald" }),
+    );
+    expect(result.current.fontFamily).toBe('"Oswald", sans-serif');
+    const link = document.head.querySelector('link[href*="Oswald"]');
+    expect(link).not.toBeNull();
+  });
+
+  it("does not inject a duplicate stylesheet link when the font is unchanged across rerenders", () => {
+    const before = document.head.querySelectorAll('link[href*="Montserrat"]').length;
+    const { rerender } = renderHook(
+      ({ font }) => useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, font }),
+      { initialProps: { font: "Montserrat" } },
+    );
+    rerender({ font: "Montserrat" });
+    const after = document.head.querySelectorAll('link[href*="Montserrat"]').length;
+    expect(after).toBe(before + 1);
+  });
+
+  it("defaults competitionLogoUrl to an empty string when unset", () => {
+    const { result } = renderHook(() =>
+      useDisplayTheme({ ...DEFAULT_DISPLAY_THEME, competitionLogoUrl: "" }),
+    );
+    expect(result.current.competitionLogoUrl).toBe("");
+  });
+});

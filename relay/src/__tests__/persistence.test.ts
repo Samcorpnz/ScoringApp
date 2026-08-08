@@ -1,0 +1,299 @@
+const matchFindUniqueMock = jest.fn();
+const matchFindFirstMock = jest.fn();
+const matchCreateMock = jest.fn();
+const matchUpdateMock = jest.fn();
+const matchCountMock = jest.fn();
+
+jest.mock("@scorehub/db", () => ({
+  prisma: {
+    match: {
+      findUnique: (...a: unknown[]) => matchFindUniqueMock(...a),
+      findFirst: (...a: unknown[]) => matchFindFirstMock(...a),
+      create: (...a: unknown[]) => matchCreateMock(...a),
+      update: (...a: unknown[]) => matchUpdateMock(...a),
+      count: (...a: unknown[]) => matchCountMock(...a),
+    },
+  },
+}));
+
+const getOrgAccountMock = jest.fn();
+class FakeConcurrentMatchLimitError extends Error {}
+jest.mock("../entitlements", () => ({
+  getOrgAccount: (...a: unknown[]) => getOrgAccountMock(...a),
+  ConcurrentMatchLimitError: FakeConcurrentMatchLimitError,
+}));
+
+import { DEFAULT_MATCH_STATE, MatchState } from "../types";
+
+describe("persistence", () => {
+  const originalDbUrl = process.env.DATABASE_URL;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.useFakeTimers();
+    matchFindUniqueMock.mockReset();
+    matchFindFirstMock.mockReset();
+    matchCreateMock.mockReset();
+    matchUpdateMock.mockReset();
+    matchCountMock.mockReset();
+    getOrgAccountMock.mockReset();
+    process.env.DATABASE_URL = "postgres://test";
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    if (originalDbUrl) process.env.DATABASE_URL = originalDbUrl;
+    else delete process.env.DATABASE_URL;
+  });
+
+  it("getMatchStore returns null when DATABASE_URL is unset (legacy mode)", async () => {
+    delete process.env.DATABASE_URL;
+    const { getMatchStore } = await import("../persistence");
+    expect(getMatchStore("org-1")).toBeNull();
+  });
+
+  it("caches the same store instance per (org, matchId) pair", async () => {
+    const { getMatchStore } = await import("../persistence");
+    const a = getMatchStore("org-1", "m1");
+    const b = getMatchStore("org-1", "m1");
+    expect(a).toBe(b);
+  });
+
+  it("returns distinct stores for different matchIds under the same org", async () => {
+    const { getMatchStore } = await import("../persistence");
+    const a = getMatchStore("org-1", "m1");
+    const b = getMatchStore("org-1", "m2");
+    expect(a).not.toBe(b);
+  });
+
+  describe("createLiveMatch (also exercised via the org-singleton path)", () => {
+    it("creates a match directly when the account isn't on the free plan", async () => {
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "pro" });
+      matchCreateMock.mockResolvedValue({ id: "new-match" });
+      const { createLiveMatch } = await import("../persistence");
+
+      await expect(createLiveMatch("org-1")).resolves.toBe("new-match");
+      expect(matchCountMock).not.toHaveBeenCalled();
+    });
+
+    it("creates a match when free-plan but no other match is live", async () => {
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "free" });
+      matchCountMock.mockResolvedValue(0);
+      matchCreateMock.mockResolvedValue({ id: "new-match" });
+      const { createLiveMatch } = await import("../persistence");
+
+      await expect(createLiveMatch("org-1")).resolves.toBe("new-match");
+    });
+
+    it("throws ConcurrentMatchLimitError on a free plan with a live match elsewhere", async () => {
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "free" });
+      matchCountMock.mockResolvedValue(1);
+      const { createLiveMatch } = await import("../persistence");
+
+      await expect(createLiveMatch("org-1")).rejects.toBeInstanceOf(FakeConcurrentMatchLimitError);
+      expect(matchCreateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("MatchStore.load / resolveMatch", () => {
+    it("resolves an explicit matchId belonging to the org and loads its state", async () => {
+      const state: MatchState = { ...DEFAULT_MATCH_STATE, matchName: "Finals" };
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await expect(store.load()).resolves.toEqual(state);
+    });
+
+    it("throws MatchNotFoundError when the match belongs to a different org", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-2", status: "LIVE" });
+      const { getMatchStore, MatchNotFoundError } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await expect(store.load()).rejects.toBeInstanceOf(MatchNotFoundError);
+    });
+
+    it("throws MatchNotFoundError when the match doesn't exist", async () => {
+      matchFindUniqueMock.mockResolvedValue(null);
+      const { getMatchStore, MatchNotFoundError } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "missing")!;
+      await expect(store.load()).rejects.toBeInstanceOf(MatchNotFoundError);
+    });
+
+    it("transitions a SCHEDULED match to LIVE on first access", async () => {
+      matchFindUniqueMock
+        .mockResolvedValueOnce({ id: "m1", orgId: "org-1", status: "SCHEDULED" })
+        .mockResolvedValueOnce({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "pro" });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await store.load();
+      expect(matchUpdateMock).toHaveBeenCalledWith({ where: { id: "m1" }, data: { status: "LIVE" } });
+    });
+
+    it("blocks a SCHEDULED->LIVE transition on the free plan when another match is already live", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "SCHEDULED" });
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "free" });
+      matchCountMock.mockResolvedValue(1);
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await expect(store.load()).rejects.toBeInstanceOf(FakeConcurrentMatchLimitError);
+      expect(matchUpdateMock).not.toHaveBeenCalled();
+    });
+
+    it("caches the resolved matchId so a second load() doesn't re-resolve", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await store.load();
+      await store.load();
+      // One findUnique per load() call (state fetch) but resolveMatch's own
+      // findUnique (status/org check) should only run once, on the first call.
+      expect(matchFindUniqueMock).toHaveBeenCalledTimes(3);
+    });
+
+    it("falls back to the org's existing LIVE match when no matchId is given", async () => {
+      matchFindFirstMock.mockResolvedValue({ id: "live-match" });
+      matchFindUniqueMock.mockResolvedValue({ id: "live-match", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1")!;
+      await expect(store.load()).resolves.toEqual(DEFAULT_MATCH_STATE);
+      expect(matchCreateMock).not.toHaveBeenCalled();
+    });
+
+    it("creates a new LIVE match when no matchId is given and none is live", async () => {
+      matchFindFirstMock.mockResolvedValue(null);
+      getOrgAccountMock.mockResolvedValue({ accountId: "acc-1", plan: "pro" });
+      matchCreateMock.mockResolvedValue({ id: "brand-new" });
+      matchFindUniqueMock.mockResolvedValue({ id: "brand-new", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1")!;
+      await store.load();
+      expect(matchCreateMock).toHaveBeenCalled();
+    });
+
+    it("defaults to DEFAULT_MATCH_STATE when the row has no state", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: null });
+      const { getMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      await expect(store.load()).resolves.toEqual(DEFAULT_MATCH_STATE);
+    });
+  });
+
+  describe("MatchStore.save / flush (debounced write-through)", () => {
+    it("debounces rapid save() calls into a single write", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+      const store = getMatchStore("org-1", "m1")!;
+
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "First" });
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "Second" });
+
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(matchUpdateMock).toHaveBeenCalledTimes(1);
+      expect(matchUpdateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ homeName: "Home" }) }),
+      );
+      // Only the last of the two rapid save() calls should have been written.
+      const [[{ data }]] = matchUpdateMock.mock.calls;
+      expect((data.state as { matchName: string }).matchName).toBe("Second");
+    });
+
+    it("flush() writes immediately and cancels the pending timer", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+      const store = getMatchStore("org-1", "m1")!;
+
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "Flushed" });
+      await store.flush();
+
+      expect(matchUpdateMock).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+      expect(matchUpdateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("flush() is a no-op when there's nothing pending", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore } = await import("../persistence");
+      const store = getMatchStore("org-1", "m1")!;
+
+      await store.flush();
+      expect(matchUpdateMock).not.toHaveBeenCalled();
+    });
+
+    it("logs but does not throw when the debounced write fails", async () => {
+      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      matchUpdateMock.mockRejectedValue(new Error("db down"));
+      const { getMatchStore } = await import("../persistence");
+      const store = getMatchStore("org-1", "m1")!;
+
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "X" });
+      jest.advanceTimersByTime(2000);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[relay] failed to persist match state for org:",
+        "org-1",
+        expect.any(Error),
+      );
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe("evictMatchStore / allActiveStores", () => {
+    it("flushes and removes the store from the cache", async () => {
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      const { getMatchStore, evictMatchStore, allActiveStores } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "Evicting" });
+      expect(allActiveStores()).toContain(store);
+
+      await evictMatchStore("org-1", "m1");
+
+      expect(matchUpdateMock).toHaveBeenCalledTimes(1);
+      expect(allActiveStores()).not.toContain(store);
+      expect(getMatchStore("org-1", "m1")).not.toBe(store);
+    });
+
+    it("is a no-op for a matchId that was never stored", async () => {
+      const { evictMatchStore } = await import("../persistence");
+      await expect(evictMatchStore("org-1", "never-existed")).resolves.toBeUndefined();
+    });
+
+    it("logs but does not throw when the flush-on-evict write fails", async () => {
+      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      matchFindUniqueMock.mockResolvedValue({ id: "m1", orgId: "org-1", status: "LIVE", state: DEFAULT_MATCH_STATE });
+      matchUpdateMock.mockRejectedValue(new Error("db down"));
+      const { getMatchStore, evictMatchStore } = await import("../persistence");
+
+      const store = getMatchStore("org-1", "m1")!;
+      store.save({ ...DEFAULT_MATCH_STATE, matchName: "X" });
+
+      await evictMatchStore("org-1", "m1");
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[relay] failed to flush match state on evict:",
+        "org-1",
+        "m1",
+        expect.any(Error),
+      );
+      errorSpy.mockRestore();
+    });
+  });
+});
