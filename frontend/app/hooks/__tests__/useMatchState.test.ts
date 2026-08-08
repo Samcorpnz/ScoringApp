@@ -108,4 +108,25 @@ describe("useMatchState", () => {
     unmount();
     expect(fakeSocket.disconnect).toHaveBeenCalled();
   });
+
+  it("does not open a socket while the control token hasn't been fetched yet (secret === \"\")", () => {
+    // useControlToken() returns "" until its fetch resolves (or while a
+    // failed fetch is retrying) — connecting with that would just get
+    // silently rejected at the relay's handshake and retried forever by
+    // socket.io's own reconnection logic, showing "OFFLINE" instead of the
+    // real "waiting for a token" state (SA-102 follow-up).
+    const { result } = renderHook(() => useMatchState({ secret: "", role: "control" }));
+    expect(ioMock).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("connecting");
+  });
+
+  it("opens a socket once a real token replaces the empty placeholder", () => {
+    const { rerender } = renderHook(
+      ({ secret }) => useMatchState({ secret, role: "control" }),
+      { initialProps: { secret: "" } }
+    );
+    expect(ioMock).not.toHaveBeenCalled();
+    rerender({ secret: "real-token" });
+    expect(ioMock).toHaveBeenCalledTimes(1);
+  });
 });

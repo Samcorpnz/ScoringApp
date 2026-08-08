@@ -58,6 +58,19 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const role = auth?.role;
 
   useEffect(() => {
+    // The control panel passes useControlToken()'s return value directly as
+    // `secret` — it starts as "" until the token fetch resolves (and stays
+    // "" while a failed fetch retries with backoff, see useControlToken.ts).
+    // An empty-but-defined secret is a real "not ready yet" state, distinct
+    // from a viewer's `undefined` secret — connecting with it would just get
+    // silently rejected at the relay's handshake (no orgId resolves from an
+    // empty secret) and retried forever by socket.io's own reconnection
+    // logic, masking the real "waiting for a token" state as "OFFLINE".
+    if (secret === "") {
+      setStatus("connecting");
+      return;
+    }
+
     // Viewers/displays have no secret — scope them to an org via the page's
     // ?org= query param so multiple tenants on one relay stay isolated.
     // An optional &matchId= further scopes them to one specific match
