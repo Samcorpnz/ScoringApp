@@ -58,6 +58,19 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   const role = auth?.role;
 
   useEffect(() => {
+    // The control panel passes useControlToken()'s return value directly as
+    // `secret` — it starts as "" until the token fetch resolves (and stays
+    // "" while a failed fetch retries with backoff, see useControlToken.ts).
+    // An empty-but-defined secret is a real "not ready yet" state, distinct
+    // from a viewer's `undefined` secret — connecting with it would just get
+    // silently rejected at the relay's handshake (no orgId resolves from an
+    // empty secret) and retried forever by socket.io's own reconnection
+    // logic, masking the real "waiting for a token" state as "OFFLINE".
+    if (secret === "") {
+      setStatus("connecting");
+      return;
+    }
+
     // Viewers/displays have no secret — scope them to an org via the page's
     // ?org= query param so multiple tenants on one relay stay isolated.
     // An optional &matchId= further scopes them to one specific match
@@ -118,9 +131,17 @@ export function useMatchState(auth?: { secret: string; role: string }) {
         setControllerStatus("connecting");
         clearControlRetries();
         const requestControl = () => {
-          socket.timeout(3000).emit("requestControl", () => {
-            // Ack received — resolveController on the relay has already
-            // emitted controllerGranted/controllerConflict by this point.
+          socket.timeout(3000).emit("requestControl", (err: Error | null, result?: "granted" | "conflict") => {
+            // resolveController on the relay has already emitted
+            // controllerGranted/controllerConflict by this point — those
+            // listeners are the primary path. This ack is a second,
+            // delivery-guaranteed channel for the same outcome (the relay's
+            // response to this specific request, not a broadcast that could
+            // in principle go astray), so act on it directly too rather than
+            // relying solely on the broadcast having arrived.
+            if (err || !result) return; // timed out — the scheduled retry below will try again
+            clearControlRetries();
+            setControllerStatus(result === "granted" ? "granted" : "conflict");
           });
         };
         requestControl();

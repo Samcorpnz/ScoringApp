@@ -9,6 +9,12 @@ export const LEGACY_ROOM_ID = "legacy-single-tenant";
 export interface AuthResult {
   orgId: string;
   matchId?: string;
+  // Set only for JWT-authenticated control connections (the JWT's `sub`
+  // claim, i.e. the logged-in user's id) — used by the relay's controller
+  // mutex to recognize a page-navigation handoff (same operator, new socket)
+  // vs. a genuinely different controller. Absent for legacy shared-secret
+  // auth and ScopedToken callers, where there's no reliable per-user identity.
+  userId?: string;
 }
 
 function hashToken(token: string): string {
@@ -88,7 +94,7 @@ export async function verifyControlSecret(
     const role = payload.role as string | undefined;
     const matchId = payload.matchId as string | undefined;
     if (!orgId || !["ADMIN", "MANAGER", "OPERATOR"].includes(role ?? "")) return null;
-    return { orgId, matchId };
+    return { orgId, matchId, userId: payload.sub };
   } catch {
     return null;
   }

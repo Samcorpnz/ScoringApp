@@ -1,7 +1,17 @@
 import { useEffect, useRef } from "react";
 import { DisplayTheme, DEFAULT_DISPLAY_THEME } from "../types";
 
-export function useDisplayTheme(theme: DisplayTheme | undefined) {
+export type DisplayThemeStyle = React.CSSProperties & {
+  "--accent": string;
+  "--accent-dim": string;
+  "--border-accent": string;
+  "--bg-base": string;
+  "--text-scale": string;
+  textScale: number;
+  competitionLogoUrl: string;
+};
+
+export function useDisplayTheme(theme: DisplayTheme | undefined): DisplayThemeStyle {
   const t = theme ?? DEFAULT_DISPLAY_THEME;
   const loadedFonts = useRef(new Set<string>());
 
@@ -32,5 +42,5 @@ export function useDisplayTheme(theme: DisplayTheme | undefined) {
     "--text-scale":     String(textScale),
     textScale,
     competitionLogoUrl: t.competitionLogoUrl || "",
-  } as React.CSSProperties & { textScale: number; competitionLogoUrl: string };
+  } as DisplayThemeStyle;
 }

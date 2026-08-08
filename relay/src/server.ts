@@ -141,9 +141,9 @@ export function createServer(options: ServerOptions = {}) {
   const undoStacks = new Map<string, MatchState[]>();
   const UNDO_STACK_SIZE = 50;
   // Controller mutex: only one control panel may send scoring events per match.
-  // key = room, value = socket.id of the active controller.
+  // key = room, value = socket.id (+ owning user, when known) of the active controller.
   // Token expires after TTL on ungraceful disconnect to allow page refresh.
-  const controllerTokens = new Map<string, { socketId: string; expiresAt: number }>();
+  const controllerTokens = new Map<string, { socketId: string; expiresAt: number; userId?: string }>();
   const CONTROLLER_TOKEN_TTL_MS = options.controllerTokenTtlMs ?? 30_000;
   // Graphics Operator add-on: which scene is currently live per room.
   // In-memory only for Phase A (like controllerTokens/undoStacks above) — a
@@ -878,6 +878,7 @@ export function createServer(options: ServerOptions = {}) {
         orgId = result.orgId;
         matchId = result.matchId;
         (socket as any).isControl = true;
+        (socket as any).controlUserId = result.userId;
       }
     } else if (role === "graphics") {
       const result = await verifyGraphicsSecret(secret, GRAPHICS_SECRET);
@@ -977,21 +978,50 @@ export function createServer(options: ServerOptions = {}) {
     }
 
     if (isControl) {
+      const controlUserId = (socket as any).controlUserId as string | undefined;
+
       // Controller mutex: check if another controller already holds the token for this room.
-      function resolveController(): void {
+      // Returns the outcome so callers with an ack (requestControl) can hand
+      // it straight back to the client in the ack payload itself — a
+      // delivery guaranteed by socket.io's ack/timeout mechanism, unlike the
+      // separate controllerGranted/controllerConflict broadcasts below,
+      // which the client also listens for but has no way to confirm it
+      // received. Emitting both keeps existing callers (implicit
+      // connect-time resolution, tests that don't use requestControl) working
+      // unchanged.
+      function resolveController(): "granted" | "conflict" {
         const now = Date.now();
         const existing = controllerTokens.get(room);
         const existingIsActive = existing && existing.socketId !== socket.id && existing.expiresAt > now;
+        // The /setup page's socket disconnecting into /control's new socket
+        // (or any refresh/reconnect) looks identical to a second controller
+        // unless we can tell them apart. Two signals, both required:
+        //   1. The held token is in its post-disconnect grace period
+        //      (finite expiresAt — see the disconnect handler below), not a
+        //      still-live socket (expiresAt: Infinity) — two tabs open at
+        //      once under the same login must still conflict (see
+        //      adversarial.spec.ts's "two tabs on the same match" test).
+        //   2. The owning user matches this socket's — same operator, not a
+        //      rival. Only trusted for JWT-authenticated sessions (userId
+        //      set); ScopedToken and legacy shared-secret callers have no
+        //      reliable per-user identity, so they keep the strict
+        //      socketId-only check.
+        const existingOwnerDisconnected = existing !== undefined && existing.expiresAt !== Infinity;
+        const isSameOperatorHandoff =
+          existingIsActive && existingOwnerDisconnected &&
+          controlUserId !== undefined && existing.userId === controlUserId;
 
-        if (existingIsActive) {
+        if (existingIsActive && !isSameOperatorHandoff) {
           // Another controller is active — notify this socket so the UI can show a "take control?" prompt
           socket.emit("controllerConflict", { activeControllerId: existing.socketId });
           // Don't grant control yet; the client can send "takeControl" to revoke the existing token
-        } else {
-          // Grant control (either no existing token, expired token, or same socket reconnecting)
-          controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
-          socket.emit("controllerGranted");
+          return "conflict";
         }
+        // Grant control (no existing token, expired token, same operator's
+        // new socket, or same socket reconnecting)
+        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity, userId: controlUserId });
+        socket.emit("controllerGranted");
+        return "granted";
       }
 
       resolveController();
@@ -999,10 +1029,13 @@ export function createServer(options: ServerOptions = {}) {
       // Explicit, retryable version of the connect-time resolution above —
       // the client uses this (with an ack) when the initial emit is lost or
       // races another socket's disconnect cleanup on the same room, leaving
-      // it stuck with neither controllerGranted nor controllerConflict.
-      socket.on("requestControl", (ack?: () => void) => {
-        resolveController();
-        ack?.();
+      // it stuck with neither controllerGranted nor controllerConflict. The
+      // ack payload carries the outcome directly, so the client can act on
+      // it even in the (still theoretical) case where the broadcast event
+      // above doesn't arrive but the ack does.
+      socket.on("requestControl", (ack?: (result: "granted" | "conflict") => void) => {
+        const result = resolveController();
+        ack?.(result);
       });
 
       // Client requests to take control from an existing controller
@@ -1012,7 +1045,7 @@ export function createServer(options: ServerOptions = {}) {
           // Notify the displaced controller that they've lost control
           io.to(prior.socketId).emit("controllerRevoked");
         }
-        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity });
+        controllerTokens.set(room, { socketId: socket.id, expiresAt: Infinity, userId: controlUserId });
         socket.emit("controllerGranted");
       });
 
@@ -1247,7 +1280,7 @@ export function createServer(options: ServerOptions = {}) {
       if (isControl) {
         const token = controllerTokens.get(room);
         if (token?.socketId === socket.id) {
-          controllerTokens.set(room, { socketId: socket.id, expiresAt: Date.now() + CONTROLLER_TOKEN_TTL_MS });
+          controllerTokens.set(room, { socketId: socket.id, expiresAt: Date.now() + CONTROLLER_TOKEN_TTL_MS, userId: token.userId });
         }
       }
       const remaining = (roomCounts.get(room) ?? 1) - 1;
