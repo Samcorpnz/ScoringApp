@@ -1,21 +1,24 @@
-import { Resend } from "resend";
+import Mailgun from "mailgun.js";
+import FormData from "form-data";
 
 // Lazily constructed, mirroring lib/stripe.ts's getStripe() — importing this
 // module during Next.js's build-time page-data collection shouldn't throw
-// in environments where Resend isn't configured yet. The error only
+// in environments where Mailgun isn't configured yet. The error only
 // surfaces when a route that actually sends mail runs.
-const globalForResend = globalThis as unknown as { resend?: Resend };
+const globalForMailgun = globalThis as unknown as {
+  mailgun?: ReturnType<InstanceType<typeof Mailgun>["client"]>;
+};
 
-function getResend(): Resend {
-  if (globalForResend.resend) return globalForResend.resend;
+function getMailgun() {
+  if (globalForMailgun.mailgun) return globalForMailgun.mailgun;
 
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.MAILGUN_API_KEY;
   if (!apiKey) {
-    throw new Error("RESEND_API_KEY is not configured");
+    throw new Error("MAILGUN_API_KEY is not configured");
   }
-  const client = new Resend(apiKey);
+  const client = new Mailgun(FormData).client({ username: "api", key: apiKey });
   if (process.env.NODE_ENV !== "production") {
-    globalForResend.resend = client;
+    globalForMailgun.mailgun = client;
   }
   return client;
 }
@@ -25,10 +28,14 @@ export async function sendEmailChangeVerification({ to, token }: { to: string; t
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const link = `${baseUrl}/verify-email?token=${token}`;
 
-  await getResend().emails.send({
+  await getMailgun().messages.create(domain, {
     from,
     to,
     subject: "Confirm your new ScoreHub email address",
@@ -52,10 +59,14 @@ export async function sendInvitationEmail({
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const link = `${baseUrl}/invite/accept?token=${token}`;
 
-  await getResend().emails.send({
+  await getMailgun().messages.create(domain, {
     from,
     to,
     subject: `You've been invited to join ${orgName} on ScoreHub`,
@@ -70,10 +81,14 @@ export async function sendPaymentFailedEmail({ to }: { to: string[] }): Promise<
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const link = `${baseUrl}/account`;
 
-  await getResend().emails.send({
+  await getMailgun().messages.create(domain, {
     from,
     to,
     subject: "Your ScoreHub payment failed",
