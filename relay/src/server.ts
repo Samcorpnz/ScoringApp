@@ -525,7 +525,7 @@ export function createServer(options: ServerOptions = {}) {
         }),
     // Sound effects are short clips, not full tracks — 8MB is comfortably
     // above anything legitimate while keeping the request-size ceiling sane.
-    limits: { fileSize: 8 * 1024 * 1024 },
+    limits: { fileSize: 8_000_000 },
     fileFilter: (_req, file, cb) => {
       cb(null, file.mimetype.startsWith("audio/"));
     },

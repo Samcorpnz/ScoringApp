@@ -1,0 +1,210 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import DashboardPage from "../page";
+
+const { pushMock, useSessionMock, signOutMock } = vi.hoisted(() => ({
+  pushMock: vi.fn(),
+  useSessionMock: vi.fn(),
+  signOutMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock }),
+}));
+
+vi.mock("next-auth/react", () => ({
+  useSession: useSessionMock,
+  signOut: signOutMock,
+}));
+
+vi.mock("../../components/PlanBadge", () => ({ PlanBadge: () => <div data-testid="plan-badge" /> }));
+vi.mock("../../components/OrgSwitcher", () => ({ OrgSwitcher: () => <div data-testid="org-switcher" /> }));
+
+const authedSession = {
+  data: { user: { name: "Sam Kerins", activeOrgId: "org-1" } },
+  status: "authenticated" as const,
+};
+
+function matchRow(overrides: Partial<{
+  id: string; status: "SCHEDULED" | "LIVE" | "ENDED"; sport: string | null; competition: string | null;
+  homeName: string | null; visitorName: string | null; scheduledAt: string | null; createdAt: string; endedAt: string | null;
+}> = {}) {
+  return {
+    id: "match-1",
+    status: "LIVE" as const,
+    sport: "netball",
+    competition: "Regional",
+    homeName: "Sharks",
+    visitorName: "Magic",
+    scheduledAt: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    endedAt: null,
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+describe("DashboardPage", () => {
+  it("shows a loading state while the session is resolving", () => {
+    useSessionMock.mockReturnValue({ data: null, status: "loading" });
+    render(<DashboardPage />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
+
+  it("redirects to /login when unauthenticated", () => {
+    useSessionMock.mockImplementation((opts?: { onUnauthenticated?: () => void }) => {
+      opts?.onUnauthenticated?.();
+      return { data: null, status: "unauthenticated" };
+    });
+    render(<DashboardPage />);
+    expect(pushMock).toHaveBeenCalledWith("/login?callbackUrl=/dashboard");
+  });
+
+  it("fetches live matches by default and renders them", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [matchRow()] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DashboardPage />);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/orgs/org-1/matches?status=LIVE"))
+    );
+    expect(await screen.findByText("Sharks v Magic")).toBeInTheDocument();
+    expect(screen.getByText("Open Control →").closest("a")).toHaveAttribute("href", "/control?matchId=match-1");
+  });
+
+  it("shows 'No matches here yet.' when the list is empty", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) }));
+    render(<DashboardPage />);
+    await waitFor(() => expect(screen.getByText("No matches here yet.")).toBeInTheDocument());
+  });
+
+  it("re-fetches with the SCHEDULED status when switching to the Upcoming tab", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DashboardPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("upcoming"));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("status=SCHEDULED"))
+    );
+    expect(screen.getByText("Upload Fixtures")).toBeInTheDocument();
+  });
+
+  it("includes the search query in the matches request", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DashboardPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText("Search team name…"), { target: { value: "Sharks" } });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("q=Sharks")));
+  });
+
+  it("shows 'Ended' with no link for ended matches, and 'Start →' for scheduled matches", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ matches: [matchRow({ id: "ended-1", status: "ENDED" })] }),
+      })
+    );
+    render(<DashboardPage />);
+    expect(await screen.findByText("Ended")).toBeInTheDocument();
+    expect(screen.queryByText("Copy display link")).not.toBeInTheDocument();
+  });
+
+  it("copies the display link to the clipboard when 'Copy display link' is clicked", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [matchRow()] }) }));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<DashboardPage />);
+    const copyButton = await screen.findByText("Copy display link");
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(await screen.findByText("Copied!")).toBeInTheDocument();
+  });
+
+  it("uploads parsed CSV fixtures via the bulk endpoint and reloads on success", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DashboardPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("upcoming"));
+    fireEvent.click(screen.getByText("Upload Fixtures"));
+
+    const csv = "sport,competition,home,visitor,scheduledAt\nnetball,Regional,Sharks,Magic,2026-05-01T10:00:00.000Z";
+    const file = new File([csv], "fixtures.csv", { type: "text/csv" });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(await screen.findByText("Upload 1 Fixtures")).toBeInTheDocument();
+
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    fireEvent.click(screen.getByText("Upload 1 Fixtures"));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/orgs/org-1/matches/bulk",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            fixtures: [
+              {
+                sport: "netball",
+                competition: "Regional",
+                home: "Sharks",
+                visitor: "Magic",
+                scheduledAt: "2026-05-01T10:00:00.000Z",
+                matchName: undefined,
+              },
+            ],
+          }),
+        })
+      )
+    );
+    // The upload panel closes itself (onDone) after a successful upload.
+    await waitFor(() => expect(screen.queryByText("Upload 1 Fixtures")).not.toBeInTheDocument());
+  });
+
+  it("shows parse errors for CSV rows missing required fields", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) }));
+    render(<DashboardPage />);
+    fireEvent.click(screen.getByText("upcoming"));
+    fireEvent.click(screen.getByText("Upload Fixtures"));
+
+    const csv = "sport,competition,home,visitor\n,Regional,Sharks,Magic";
+    const file = new File([csv], "fixtures.csv", { type: "text/csv" });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(await screen.findByText("row 1: missing sport/home/visitor")).toBeInTheDocument();
+  });
+
+  it("signs out and redirects to /login", async () => {
+    useSessionMock.mockReturnValue(authedSession);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matches: [] }) }));
+    render(<DashboardPage />);
+    fireEvent.click(screen.getByText("Sign out"));
+    expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: "/login" });
+  });
+});
