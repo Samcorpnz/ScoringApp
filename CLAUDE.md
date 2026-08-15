@@ -151,9 +151,12 @@ disabled in their dashboards — otherwise every push deploys immediately, bypas
 signing key for control tokens). Required-reviewer environment protection is free on GitHub for
 public repos (like this one) regardless of plan — only private repos need Team/Enterprise for it.
 
-No hosted staging environment exists — one Fly app (`scorehub-relay`) and one Vercel project
-(`scoring-app`), both wired to `main`/production only. Vercel auto-generates preview deploys for
-branches/PRs (frontend only, would still hit prod relay/DB unless given separate env vars), but
-there's no second relay instance or DB branch to pair with it. Pre-prod testing today means
-`docker compose up --build` locally (see above) — verify there, then push to `main` and approve
-the deploy gate when it pauses.
+A hosted UAT environment exists alongside prod: Fly app `scorehub-relay-uat` (config
+`fly.uat.toml`, deploys via `.github/workflows/deploy-uat.yml` on push to the `uat` branch), a
+Neon `UAT` branch (copy-on-write off `production`), a separate Upstash Redis DB, and a Vercel
+`uat` branch with its own branch-scoped env vars (auto-deployed by Vercel's GitHub integration —
+no Actions job needed for the frontend side). See `docs/uat-environment.md` for URLs, resource
+IDs, and known gaps (Stripe webhook, Mailgun isolation, R2 not yet provisioned there). UAT has no
+required-reviewer gate — it's not customer-facing, so pushes to `uat` deploy immediately, unlike
+`main`. Pre-prod testing can use either UAT or local `docker compose up --build` — then push to
+`main` and approve the deploy gate when it pauses.
