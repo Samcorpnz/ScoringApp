@@ -20,6 +20,15 @@ Saturn/Vega Console (RS422/serial)
 workspaces consumed by both `frontend` and `relay`. This is an npm workspaces monorepo — always
 run installs from the repo root (`npm install`), not inside a sub-package.
 
+Two more standalone sites live alongside the app, each its own Cloudflare Worker (not part of the
+npm workspace, not on Vercel): `marketing/` (public marketing site, linked from `app.scorehub.co.nz`)
+and `help/` (help centre, linked from the marketing footer and app nav — see commit
+`d74e766`). Both deploy manually (`cd marketing && npm run build && npx wrangler deploy`, same for
+`help/`) — no CI job wires them up yet. **When a change touches user-facing naming, pricing,
+plans/add-ons, feature descriptions, URLs/routes, or anything else these sites reference, check
+`marketing/` and `help/` for content that now needs updating too** — they're easy to forget since
+they build and deploy independently of `frontend/`.
+
 ## Commands
 
 Run from repo root unless noted. Each sub-package (`frontend`, `relay`, `bridge`, `packages/db`)
@@ -151,9 +160,10 @@ disabled in their dashboards — otherwise every push deploys immediately, bypas
 signing key for control tokens). Required-reviewer environment protection is free on GitHub for
 public repos (like this one) regardless of plan — only private repos need Team/Enterprise for it.
 
-No hosted staging environment exists — one Fly app (`scorehub-relay`) and one Vercel project
-(`scoring-app`), both wired to `main`/production only. Vercel auto-generates preview deploys for
-branches/PRs (frontend only, would still hit prod relay/DB unless given separate env vars), but
-there's no second relay instance or DB branch to pair with it. Pre-prod testing today means
-`docker compose up --build` locally (see above) — verify there, then push to `main` and approve
-the deploy gate when it pauses.
+A hosted UAT environment exists as of 2026-08-14/15 — see `docs/uat-environment.md` for the full
+stack (dedicated Fly relay, Neon DB branch, Upstash, R2 bucket, and `uat`-branch-scoped Vercel
+Preview env vars) and its known gaps. It's built on branch-scoped Preview env vars rather than a
+true Vercel Custom Environment or Rolling Release, because the `sam-kerins-projects` Vercel team
+is on the Hobby plan and both those features are Pro/Enterprise-only (confirmed 2026-08-15).
+`docker compose up --build` locally is still the fastest inner-loop check before pushing to `uat`
+or `main`.
