@@ -24,6 +24,7 @@ function InviteAcceptInner() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loginPassword, setLoginPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -86,7 +87,7 @@ function InviteAcceptInner() {
       const res = await fetch("/api/invitations/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, name, password }),
+        body: JSON.stringify({ token, name, password, acceptedTerms }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "couldn't create your account");
@@ -142,10 +143,21 @@ function InviteAcceptInner() {
         </p>
         <Field type="text" placeholder="Your name" value={name} onChange={setName} />
         <Field type="password" placeholder="Password (min. 8 characters)" value={password} onChange={setPassword} />
+        <label className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <input
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            I agree to the <a href="/terms" target="_blank" style={{ color: "var(--accent)" }}>Terms &amp; Conditions</a>
+          </span>
+        </label>
         <Button
           label={busy ? "Creating account…" : "Create account and join"}
           onClick={createAccountAndAccept}
-          disabled={busy || !name || password.length < 8}
+          disabled={busy || !name || password.length < 8 || !acceptedTerms}
         />
       </>
     );

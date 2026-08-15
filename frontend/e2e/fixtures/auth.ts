@@ -4,8 +4,13 @@ import path from "path";
 // Signup is rate-limited to 5/60s per IP (frontend/app/api/signup/route.ts),
 // so we sign up once per worker and reuse the session via storageState rather
 // than signing up fresh per test — otherwise parallel tests would trip the
-// limiter. Signup grants ADMIN with no email-verification step, so this is a
-// direct path to a usable /control session.
+// limiter. Signup is now request-then-confirm (email verification + password
+// as a second step, mirroring the invite-accept flow): we call /api/signup
+// directly to create the SignupRequest, then drive the real /signup/confirm
+// UI to set the password and land on /setup. docker-compose.yml sets
+// E2E_EXPOSE_AUTH_TOKENS=true so that API call returns the raw token
+// directly (no Mailgun/inbox in the e2e environment) — see
+// frontend/lib/e2eTestMode.ts.
 export const test = base.extend<{}, { workerStorageState: string }>({
   storageState: async ({ workerStorageState }, use) => { await use(workerStorageState); },
 
@@ -19,12 +24,20 @@ export const test = base.extend<{}, { workerStorageState: string }>({
     const email = `e2e-w${workerInfo.workerIndex}-${Date.now()}@example.test`;
     const password = "TestPass1234!";
 
-    await page.goto("/signup");
-    await page.getByRole("textbox").nth(0).fill(`E2E Worker ${workerInfo.workerIndex}`);
-    await page.getByRole("textbox").nth(1).fill(`E2E Test Org ${workerInfo.workerIndex}`);
-    await page.locator('input[type="email"]').fill(email);
+    const signupRes = await page.request.post("/api/signup", {
+      data: {
+        name: `E2E Worker ${workerInfo.workerIndex}`,
+        orgName: `E2E Test Org ${workerInfo.workerIndex}`,
+        email,
+        acceptedTerms: true,
+        turnstileToken: "",
+      },
+    });
+    const { token } = await signupRes.json();
+
+    await page.goto(`/signup/confirm?token=${token}`);
     await page.locator('input[type="password"]').fill(password);
-    await page.getByRole("button", { name: "Create Account" }).click();
+    await page.getByRole("button", { name: "Create account" }).click();
     await page.waitForURL("**/setup");
 
     await page.context().storageState({ path: fileName });

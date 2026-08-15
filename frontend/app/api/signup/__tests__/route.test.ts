@@ -8,22 +8,30 @@ vi.mock("@/lib/rateLimit", () => ({
   clientIp: () => "127.0.0.1",
 }));
 
-const bcryptHashMock = vi.fn();
-vi.mock("bcryptjs", () => ({ default: { hash: (...a: unknown[]) => bcryptHashMock(...a) } }));
+const verifyTurnstileTokenMock = vi.fn(async (..._a: unknown[]) => true);
+vi.mock("@/lib/turnstile", () => ({
+  verifyTurnstileToken: (...a: unknown[]) => verifyTurnstileTokenMock(...a),
+}));
+
+const sendSignupVerificationEmailMock = vi.fn(async (..._a: unknown[]) => {});
+vi.mock("@/lib/email", () => ({
+  sendSignupVerificationEmail: (...a: unknown[]) => sendSignupVerificationEmailMock(...a),
+}));
 
 const userFindUniqueMock = vi.fn();
+const signupRequestDeleteManyMock = vi.fn();
+const signupRequestCreateMock = vi.fn();
 const transactionMock = vi.fn();
-const accountCreateMock = vi.fn();
-const orgCreateMock = vi.fn();
-const userCreateMock = vi.fn();
-const membershipCreateMock = vi.fn();
 
 vi.mock("@scorehub/db", () => ({
   prisma: {
     user: { findUnique: (...a: unknown[]) => userFindUniqueMock(...a) },
+    signupRequest: {
+      deleteMany: (...a: unknown[]) => signupRequestDeleteManyMock(...a),
+      create: (...a: unknown[]) => signupRequestCreateMock(...a),
+    },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
-  Prisma: {},
 }));
 
 function makeRequest(body: unknown) {
@@ -35,9 +43,10 @@ function makeRequest(body: unknown) {
 
 const validBody = {
   email: "New@Example.com",
-  password: "longenough1",
   name: "Ann Lee",
   orgName: "Wellington Netball",
+  acceptedTerms: true,
+  turnstileToken: "tok",
 };
 
 describe("POST /api/signup", () => {
@@ -45,30 +54,18 @@ describe("POST /api/signup", () => {
     vi.resetModules();
     isRateLimitedMock.mockReset();
     isRateLimitedMock.mockReturnValue(false);
-    bcryptHashMock.mockReset();
-    bcryptHashMock.mockResolvedValue("hashed-password");
+    verifyTurnstileTokenMock.mockReset();
+    verifyTurnstileTokenMock.mockResolvedValue(true);
+    sendSignupVerificationEmailMock.mockReset();
+    sendSignupVerificationEmailMock.mockResolvedValue(undefined);
     userFindUniqueMock.mockReset();
+    userFindUniqueMock.mockResolvedValue(null);
+    signupRequestDeleteManyMock.mockReset();
+    signupRequestCreateMock.mockReset();
     transactionMock.mockReset();
-    accountCreateMock.mockReset();
-    orgCreateMock.mockReset();
-    userCreateMock.mockReset();
-    membershipCreateMock.mockReset();
-
-    accountCreateMock.mockResolvedValue({ id: "acc_1" });
-    orgCreateMock.mockResolvedValue({ id: "org_1" });
-    userCreateMock.mockResolvedValue({ id: "user_1" });
-    membershipCreateMock.mockResolvedValue({});
-
     transactionMock.mockImplementation(async (arg: unknown) => {
-      if (typeof arg === "function") {
-        return arg({
-          account: { create: (...a: unknown[]) => accountCreateMock(...a) },
-          org: { create: (...a: unknown[]) => orgCreateMock(...a) },
-          user: { create: (...a: unknown[]) => userCreateMock(...a) },
-          membership: { create: (...a: unknown[]) => membershipCreateMock(...a) },
-        });
-      }
-      return Promise.all(arg as Promise<unknown>[]);
+      if (Array.isArray(arg)) return Promise.all(arg as Promise<unknown>[]);
+      return arg;
     });
   });
 
@@ -85,12 +82,6 @@ describe("POST /api/signup", () => {
     expect(res.status).toBe(400);
   });
 
-  it("400s when password is missing", async () => {
-    const { POST } = await import("../route");
-    const res = await POST(makeRequest({ ...validBody, password: "" }));
-    expect(res.status).toBe(400);
-  });
-
   it("400s when name is missing", async () => {
     const { POST } = await import("../route");
     const res = await POST(makeRequest({ ...validBody, name: "" }));
@@ -103,9 +94,9 @@ describe("POST /api/signup", () => {
     expect(res.status).toBe(400);
   });
 
-  it("400s when password is shorter than 8 characters", async () => {
+  it("400s when terms are not accepted", async () => {
     const { POST } = await import("../route");
-    const res = await POST(makeRequest({ ...validBody, password: "short" }));
+    const res = await POST(makeRequest({ ...validBody, acceptedTerms: false }));
     expect(res.status).toBe(400);
   });
 
@@ -116,6 +107,13 @@ describe("POST /api/signup", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400s when turnstile verification fails", async () => {
+    verifyTurnstileTokenMock.mockResolvedValue(false);
+    const { POST } = await import("../route");
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(400);
+  });
+
   it("409s when an account with that email already exists", async () => {
     userFindUniqueMock.mockResolvedValue({ id: "existing" });
     const { POST } = await import("../route");
@@ -123,22 +121,44 @@ describe("POST /api/signup", () => {
     expect(res.status).toBe(409);
   });
 
-  it("creates account/org/user/membership in a transaction and returns 201", async () => {
-    userFindUniqueMock.mockResolvedValue(null);
+  it("creates a signup request, sends the verification email, and returns 201", async () => {
     const { POST } = await import("../route");
     const res = await POST(makeRequest(validBody));
 
     expect(userFindUniqueMock).toHaveBeenCalledWith({ where: { email: "new@example.com" } });
-    expect(bcryptHashMock).toHaveBeenCalledWith("longenough1", 12);
-    expect(accountCreateMock).toHaveBeenCalledWith({ data: { name: "Wellington Netball" } });
-    expect(orgCreateMock).toHaveBeenCalledWith({ data: { accountId: "acc_1", name: "Wellington Netball" } });
-    expect(userCreateMock).toHaveBeenCalledWith({
-      data: { email: "new@example.com", passwordHash: "hashed-password", name: "Ann Lee" },
+    expect(signupRequestDeleteManyMock).toHaveBeenCalledWith({
+      where: { email: "new@example.com", consumedAt: null },
     });
-    expect(membershipCreateMock).toHaveBeenCalledWith({
-      data: { userId: "user_1", orgId: "org_1", role: "ADMIN" },
+    expect(signupRequestCreateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        email: "new@example.com",
+        name: "Ann Lee",
+        orgName: "Wellington Netball",
+        tokenHash: expect.any(String),
+        termsAcceptedAt: expect.any(Date),
+        termsVersion: expect.any(String),
+        expiresAt: expect.any(Date),
+      }),
+    });
+    expect(sendSignupVerificationEmailMock).toHaveBeenCalledWith({
+      to: "new@example.com",
+      name: "Ann Lee",
+      token: expect.any(String),
     });
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ status: "ok" });
+    expect(await res.json()).toEqual({ status: "check your email" });
+  });
+
+  it("returns the raw token instead of emailing it when E2E_EXPOSE_AUTH_TOKENS=true", async () => {
+    process.env.E2E_EXPOSE_AUTH_TOKENS = "true";
+    try {
+      const { POST } = await import("../route");
+      const res = await POST(makeRequest(validBody));
+      const json = await res.json();
+      expect(json).toEqual({ status: "check your email", token: expect.any(String) });
+      expect(sendSignupVerificationEmailMock).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.E2E_EXPOSE_AUTH_TOKENS;
+    }
   });
 });

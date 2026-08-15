@@ -102,6 +102,11 @@ services:
       # verify as trusted; Vercel sets its own trust signal automatically,
       # but this container needs it explicit or every /api/auth/* call 500s.
       AUTH_TRUST_HOST: "true"
+      # No Mailgun configured below (and no inbox for the e2e suite to read),
+      # so /api/signup and /api/auth/forgot-password return the raw token
+      # directly instead of emailing it — see frontend/lib/e2eTestMode.ts.
+      # Local-only: never set this in .env.vercel.production/.env.vercel.preview.
+      E2E_EXPOSE_AUTH_TOKENS: "true"
       # Test-mode Stripe account only (acct_1Tl1sw...) — required for the e2e
       # billing spec (frontend/e2e/specs/billing.spec.ts) and for the
       # Logos/Sounds/Graphics specs' plan-gated routes to be purchasable at

@@ -113,6 +113,100 @@ describe("lib/email", () => {
         sendInvitationEmail({ to: "a@b.com", orgName: "Org", role: "ADMIN", token: "t" }),
       ).rejects.toThrow("MAILGUN_DOMAIN is not configured");
     });
+
+    it("HTML-escapes the org name in the html body", async () => {
+      const { sendInvitationEmail } = await import("../email");
+      await sendInvitationEmail({
+        to: "a@b.com",
+        orgName: "<script>alert(1)</script>",
+        role: "ADMIN",
+        token: "t",
+      });
+      const [, sentBody] = sendMock.mock.calls[0];
+      expect((sentBody as { html: string }).html).not.toContain("<script>alert(1)</script>");
+      expect((sentBody as { html: string }).html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    });
+  });
+
+  describe("sendSignupVerificationEmail", () => {
+    it("sends with a signup/confirm link and the recipient's name in the copy", async () => {
+      const { sendSignupVerificationEmail } = await import("../email");
+      await sendSignupVerificationEmail({ to: "new@example.com", name: "Ann Lee", token: "su-tok" });
+      expect(sendMock).toHaveBeenCalledWith(
+        "sandboxtest.mailgun.org",
+        expect.objectContaining({
+          to: "new@example.com",
+          subject: expect.stringContaining("Confirm"),
+          text: expect.stringContaining("https://app.scorehub.test/signup/confirm?token=su-tok"),
+          html: expect.stringContaining("Ann Lee"),
+        }),
+      );
+    });
+
+    it("throws when EMAIL_FROM is not configured", async () => {
+      delete process.env.EMAIL_FROM;
+      const { sendSignupVerificationEmail } = await import("../email");
+      await expect(
+        sendSignupVerificationEmail({ to: "a@b.com", name: "Ann", token: "t" }),
+      ).rejects.toThrow("EMAIL_FROM is not configured");
+    });
+
+    it("throws when MAILGUN_DOMAIN is not configured", async () => {
+      delete process.env.MAILGUN_DOMAIN;
+      const { sendSignupVerificationEmail } = await import("../email");
+      await expect(
+        sendSignupVerificationEmail({ to: "a@b.com", name: "Ann", token: "t" }),
+      ).rejects.toThrow("MAILGUN_DOMAIN is not configured");
+    });
+
+    it("HTML-escapes the name in the html body but not the text body", async () => {
+      const { sendSignupVerificationEmail } = await import("../email");
+      await sendSignupVerificationEmail({
+        to: "a@b.com",
+        name: "<img src=x onerror=alert(1)>",
+        token: "t",
+      });
+      expect(sendMock).toHaveBeenCalledWith(
+        "sandboxtest.mailgun.org",
+        expect.objectContaining({
+          html: expect.stringContaining("&lt;img src=x onerror=alert(1)&gt;"),
+          text: expect.stringContaining("<img src=x onerror=alert(1)>"),
+        }),
+      );
+      const [, sentBody] = sendMock.mock.calls[0];
+      expect((sentBody as { html: string }).html).not.toContain("<img src=x onerror=alert(1)>");
+    });
+  });
+
+  describe("sendPasswordResetEmail", () => {
+    it("sends with a reset-password link", async () => {
+      const { sendPasswordResetEmail } = await import("../email");
+      await sendPasswordResetEmail({ to: "a@example.com", token: "reset-tok" });
+      expect(sendMock).toHaveBeenCalledWith(
+        "sandboxtest.mailgun.org",
+        expect.objectContaining({
+          to: "a@example.com",
+          subject: expect.stringContaining("Reset"),
+          text: expect.stringContaining("https://app.scorehub.test/reset-password?token=reset-tok"),
+        }),
+      );
+    });
+
+    it("throws when EMAIL_FROM is not configured", async () => {
+      delete process.env.EMAIL_FROM;
+      const { sendPasswordResetEmail } = await import("../email");
+      await expect(sendPasswordResetEmail({ to: "a@b.com", token: "t" })).rejects.toThrow(
+        "EMAIL_FROM is not configured",
+      );
+    });
+
+    it("throws when MAILGUN_DOMAIN is not configured", async () => {
+      delete process.env.MAILGUN_DOMAIN;
+      const { sendPasswordResetEmail } = await import("../email");
+      await expect(sendPasswordResetEmail({ to: "a@b.com", token: "t" })).rejects.toThrow(
+        "MAILGUN_DOMAIN is not configured",
+      );
+    });
   });
 
   describe("sendPaymentFailedEmail", () => {

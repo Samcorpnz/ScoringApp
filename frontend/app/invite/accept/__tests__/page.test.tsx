@@ -169,6 +169,8 @@ describe("InviteAcceptPage", () => {
     const inputs = container.querySelectorAll("input");
     fireEvent.change(inputs[0], { target: { value: "New Person" } });
     fireEvent.change(inputs[1], { target: { value: "longenough" } });
+    expect(screen.getByText("Create account and join")).toBeDisabled();
+    fireEvent.click(inputs[2]);
     fireEvent.click(screen.getByText("Create account and join"));
 
     await waitFor(() =>
@@ -176,7 +178,7 @@ describe("InviteAcceptPage", () => {
         "/api/invitations/accept",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ token: "good-token", name: "New Person", password: "longenough" }),
+          body: JSON.stringify({ token: "good-token", name: "New Person", password: "longenough", acceptedTerms: true }),
         })
       )
     );
@@ -197,6 +199,7 @@ describe("InviteAcceptPage", () => {
     const inputs = container.querySelectorAll("input");
     fireEvent.change(inputs[0], { target: { value: "New Person" } });
     fireEvent.change(inputs[1], { target: { value: "longenough" } });
+    fireEvent.click(inputs[2]);
     fireEvent.click(screen.getByText("Create account and join"));
 
     await waitFor(() => expect(screen.getByText("email already registered")).toBeInTheDocument());

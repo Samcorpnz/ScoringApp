@@ -251,18 +251,34 @@ describe("/api/invitations/accept", () => {
 
       it("400s when password is shorter than 8 characters", async () => {
         const { POST } = await import("../route");
-        const res = await POST(makePostRequest({ token: "tok", name: "Ann", password: "short" }));
+        const res = await POST(
+          makePostRequest({ token: "tok", name: "Ann", password: "short", acceptedTerms: true })
+        );
+        expect(res.status).toBe(400);
+      });
+
+      it("400s when terms are not accepted", async () => {
+        const { POST } = await import("../route");
+        const res = await POST(makePostRequest({ token: "tok", name: "Ann", password: "longenough123" }));
         expect(res.status).toBe(400);
       });
 
       it("creates a user + membership and marks the invitation consumed, returning 201", async () => {
         userCreateMock.mockResolvedValue({ id: "new-user" });
         const { POST } = await import("../route");
-        const res = await POST(makePostRequest({ token: "tok", name: "  Ann Lee  ", password: "longenough123" }));
+        const res = await POST(
+          makePostRequest({ token: "tok", name: "  Ann Lee  ", password: "longenough123", acceptedTerms: true })
+        );
 
         expect(bcryptHashMock).toHaveBeenCalledWith("longenough123", 12);
         expect(userCreateMock).toHaveBeenCalledWith({
-          data: { email: "invitee@example.com", passwordHash: "hashed-password", name: "Ann Lee" },
+          data: {
+            email: "invitee@example.com",
+            passwordHash: "hashed-password",
+            name: "Ann Lee",
+            termsAcceptedAt: expect.any(Date),
+            termsVersion: expect.any(String),
+          },
         });
         expect(membershipCreateMock).toHaveBeenCalledWith({
           data: { userId: "new-user", orgId: "org-1", role: "OPERATOR" },
