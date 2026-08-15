@@ -23,7 +23,9 @@
     "uat": {
       "name": "scorehub-marketing-uat",
       "workers_dev": true,
-      "routes": [],
+      "routes": [
+        { "pattern": "marketing-uat.scorehub.co.nz", "custom_domain": true }
+      ],
       "vars": {
         "MAILGUN_DOMAIN": "sandboxb942a665e95b4eefaa84301b0cd15dce.mailgun.org",
         "CONTACT_TO_EMAIL": "sam@samcorp.co.nz"
