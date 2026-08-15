@@ -116,12 +116,14 @@ export default function Home() {
           <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "var(--accent)" }}>
             SAMCORP
           </p>
-          <h1
-            className="text-4xl font-black tracking-tight"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Score<span style={{ color: "var(--accent)" }}>Hub</span>
-          </h1>
+          <a href="https://scorehub.co.nz" style={{ textDecoration: "none" }}>
+            <h1
+              className="text-4xl font-black tracking-tight"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Score<span style={{ color: "var(--accent)" }}>Hub</span>
+            </h1>
+          </a>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             Live sport display system
           </p>
@@ -169,6 +171,12 @@ export default function Home() {
               {preview.render()}
             </div>
           ))}
+        </div>
+
+        <div className="mt-12 text-center text-xs" style={{ color: "var(--text-dim)" }}>
+          <a href="/terms" style={{ color: "inherit" }}>Terms of Use</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/privacy" style={{ color: "inherit" }}>Privacy Policy</a>
         </div>
       </div>
     </main>

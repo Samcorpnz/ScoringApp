@@ -54,9 +54,14 @@ export default function RootLayout({ children }: { readonly children: React.Reac
             <a href="/" className="wordmark">
               Score<span style={{ color: "var(--accent)" }}>Hub</span>
             </a>
-            <a href={`${APP_URL}/signup`} className="nav-cta">
-              Get Started
-            </a>
+            <div className="nav-group">
+              <a href={`${APP_URL}/login`} className="nav-login">
+                Log in
+              </a>
+              <a href={`${APP_URL}/signup`} className="nav-cta">
+                Get Started
+              </a>
+            </div>
           </nav>
         </header>
         {children}

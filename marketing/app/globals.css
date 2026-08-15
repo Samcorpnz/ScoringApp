@@ -158,6 +158,24 @@ button:focus-visible {
   color: var(--text-secondary);
 }
 
+.nav-group {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.nav-login {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-login:hover {
+  color: var(--text-primary);
+}
+
 .nav-cta {
   border-radius: 10px;
   padding: 0.5rem 1.1rem;
