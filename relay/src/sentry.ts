@@ -7,7 +7,7 @@ export function initSentry(): void {
   if (!dsn) return;
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV ?? "development",
+    environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? "development",
     tracesSampleRate: 0.1,
   });
   initialized = true;
