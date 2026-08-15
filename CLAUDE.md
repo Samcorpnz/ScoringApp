@@ -164,6 +164,7 @@ A hosted UAT environment exists as of 2026-08-14/15 — see `docs/uat-environmen
 stack (dedicated Fly relay, Neon DB branch, Upstash, R2 bucket, and `uat`-branch-scoped Vercel
 Preview env vars) and its known gaps. It's built on branch-scoped Preview env vars rather than a
 true Vercel Custom Environment or Rolling Release, because the `sam-kerins-projects` Vercel team
-is on the Hobby plan and both those features are Pro/Enterprise-only (confirmed 2026-08-15).
-`docker compose up --build` locally is still the fastest inner-loop check before pushing to `uat`
-or `main`.
+is on the Hobby plan and both those features are Pro/Enterprise-only (confirmed 2026-08-15). UAT
+has no required-reviewer gate — it's not customer-facing, so pushes to `uat` deploy immediately,
+unlike `main`. `docker compose up --build` locally is still the fastest inner-loop check before
+pushing to `uat` or `main`.

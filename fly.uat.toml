@@ -1,0 +1,25 @@
+app = "scorehub-relay-uat"
+primary_region = "syd"
+
+[build]
+  dockerfile = "relay/Dockerfile"
+
+[deploy]
+  release_command = "sh -c 'cd /app/packages/db && npx prisma migrate deploy'"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "2s"
+  method = "GET"
+  path = "/health"
+  timeout = "2s"
+
+[env]
+  NODE_ENV = "production"
