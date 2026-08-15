@@ -18,15 +18,33 @@ team upgrades to Pro.
 
 | Layer | Resource | Notes |
 | --- | --- | --- |
-| Frontend | Vercel `uat` git branch (Preview environment, branch-scoped env vars) | Auto-deploys on every push to `uat` via Vercel's GitHub integration — no Actions job needed. Stable branch-alias URL: `https://scoring-app-git-uat-sam-kerins-projects.vercel.app`. `app.uat.scorehub.co.nz` is registered on the `scoring-app` Vercel project as of 2026-08-15 but **not yet live** — see "Known gaps" below. |
+| Frontend | Vercel `uat` git branch (Preview environment, branch-scoped env vars) | Auto-deploys on every push to `uat` via Vercel's GitHub integration — no Actions job needed. Stable branch-alias URL: `https://scoring-app-git-uat-sam-kerins-projects.vercel.app`. Also live at `app.uat.scorehub.co.nz`, gated by Cloudflare Zero Trust Access (see below) rather than open to the internet. |
 | Relay | Fly.io app `scorehub-relay-uat` | Config: `fly.uat.toml` (repo root). Single region (`syd`), `min_machines_running = 0` / `auto_stop_machines = true` so it idles to zero cost between test sessions. Deploys via `.github/workflows/deploy-uat.yml` on push to `uat`, or manually: `flyctl deploy -c fly.uat.toml -a scorehub-relay-uat --remote-only` |
 | Database | Neon branch `UAT` (project `ScoringApp`, id `patient-morning-97818497`) | Copy-on-write off `production`. No auto-refresh policy yet — reset with `neonctl branches reset UAT --parent` when data drifts too far from useful. |
 | Redis | Upstash `ScoreHub-UAT` (pay-as-you-go, `ap-southeast-2`) | Deliberately a separate database from prod's `ScoreHub` — isolates the Socket.io cross-instance adapter and clock tick-lock so UAT traffic can't touch prod's Redis keyspace. |
 | Object storage | R2 bucket `scorehub-uat`, custom domain `cdn-uat.scorehub.co.nz` | Access key scoped to this bucket only (Object Read & Write), created via the Cloudflare dashboard (not available through `wrangler`/the account API token used for other Cloudflare ops). Account ID `c0c396b5f4c3cf71c2ecb3821febaf92`. |
-| Marketing site | Cloudflare Worker `scorehub-marketing-uat`, custom domain `uat.scorehub.co.nz` | Deploy: `cd marketing && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. Uses a Mailgun sandbox domain and routes contact-form submissions to `sam@samcorp.co.nz` instead of `hello@scorehub.co.nz` — see the `uat` env block in `marketing/wrangler.jsonc`. **Custom domain not yet live** — see "Known gaps". |
+| Marketing site | Cloudflare Worker `scorehub-marketing-uat`, custom domain `uat.scorehub.co.nz` | Deploy: `cd marketing && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. Uses a Mailgun sandbox domain and routes contact-form submissions to `sam@samcorp.co.nz` instead of `hello@scorehub.co.nz` — see the `uat` env block in `marketing/wrangler.jsonc`. |
 | Help centre | Cloudflare Worker `scorehub-help-uat`, custom domain `help.uat.scorehub.co.nz` | Deploy: `cd help && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. |
 
 UAT hostnames mirror production's structure — bare domain is marketing, `app.` is the frontend, `help.` is the help centre — just with everything nested a level under `uat.`: `uat.scorehub.co.nz` (marketing), `app.uat.scorehub.co.nz` (frontend), `help.uat.scorehub.co.nz` (help centre).
+
+## Access control on `app.uat.scorehub.co.nz`
+
+Unlike marketing and help (public), the frontend on UAT sits behind a **Cloudflare Zero Trust
+Access** application (`samcorpltd.cloudflareaccess.com`) scoped to that hostname — visitors hit a
+Cloudflare login page before ever reaching Vercel. This is why its DNS record is **Proxied**
+(orange cloud) in Cloudflare, unlike every other `*.scorehub.co.nz` record (all DNS-only, grey
+cloud) — Access only intercepts traffic that's proxied through Cloudflare's edge.
+
+**Do not switch that record to DNS-only** to "fix" the domain-misconfigured warning in
+`vercel domains inspect app.uat.scorehub.co.nz` — that warning is cosmetic in this setup (Vercel
+can't complete its own DNS-based verification while Cloudflare proxies the record) and the site
+works fine regardless; unproxying it would remove the Access gate instead. Vercel's own
+project-level deployment protection (Vercel Authentication / SSO) is left enabled as normal —
+Cloudflare Access already gates this hostname before requests reach Vercel, so it doesn't add a
+second login for testers, and turning it off project-wide would also strip protection from every
+ad-hoc PR preview deployment (Vercel's Hobby plan has no per-branch protection setting — see the
+Custom Environments note above).
 
 ## Secrets
 
@@ -43,33 +61,14 @@ prod, or vice versa).
 
 ## Known gaps / not yet done
 
-- **UAT subdomain scheme changed on 2026-08-15** — from `marketing-uat`/`help-uat`/bare-`uat`
-  (app) to the current `uat.` (marketing) / `app.uat.` / `help.uat.` scheme, to mirror prod's
-  bare-domain/`app.`/`help.` structure. This left two loose ends:
-  - **Stale `uat.scorehub.co.nz` DNS record**: `uat.scorehub.co.nz` was originally registered for
-    the *frontend* (a Vercel CNAME to `561d756e4f5b917f.vercel-dns-016.com`, added by hand
-    following the old scheme's instructions). Now that `uat.scorehub.co.nz` is meant for
-    *marketing* instead, that CNAME needs to be **deleted** from the Cloudflare dashboard for the
-    `scorehub.co.nz` zone before the marketing Worker's custom domain can attach —
-    `wrangler deploy --env uat` for `marketing/` will fail with `Hostname 'uat.scorehub.co.nz'
-    already has externally managed DNS records` until it's gone. Once deleted, re-run
-    `cd marketing && npx wrangler deploy --env uat` to provision the correct record automatically
-    (same mechanism that already worked for `help.uat.scorehub.co.nz`).
-  - **`app.uat.scorehub.co.nz` DNS record**: `vercel domains add app.uat.scorehub.co.nz
-    scoring-app` has registered the new hostname on the project, but as with the old one, the
-    Cloudflare API token used for `wrangler` only has `zone:read`, not DNS-record write — add by
-    hand: `A app.uat.scorehub.co.nz 76.76.21.21` (**DNS only**, not proxied through Cloudflare's
-    orange cloud, so Vercel can issue its own TLS cert). Then run
-    `vercel domains verify app.uat.scorehub.co.nz`.
-  - **`app.uat.scorehub.co.nz` branch targeting**: once DNS resolves, the domain still defaults to
-    serving the project's **Production** deployment, not the `uat` branch. In the Vercel
-    dashboard, go to `scoring-app` → Settings → Domains → `app.uat.scorehub.co.nz` and assign it
-    to Git Branch `uat` (no CLI/API path for this was found — it's dashboard-only). Until that's
-    done, use the branch-alias URL above for testing instead.
-  - **Cleanup**: the old `uat.scorehub.co.nz` domain attachment on the `scoring-app` Vercel
-    project is now unused (its DNS was repointed to marketing above) and can be removed via the
-    dashboard — `vercel domains rm` only operates on top-level domains and can't touch a
-    project-attached subdomain, so this is dashboard-only too.
+- **`app.uat.scorehub.co.nz` branch targeting — worth double-checking**: `app.uat.scorehub.co.nz`
+  was registered on the `scoring-app` Vercel project and confirmed loading past the Cloudflare
+  Access gate on 2026-08-15, but whether it was explicitly assigned to Git Branch `uat` in the
+  Vercel dashboard (Settings → Domains) — as opposed to falling back to serving **Production** —
+  was never independently confirmed. Verify by checking it's talking to the UAT relay/DB (e.g. a
+  match created there shouldn't appear in production) before relying on it for real UAT testing;
+  if it turns out to be serving Production, do the branch assignment in the dashboard (no CLI/API
+  path exists for this).
 - **CORS**: confirmed — `ALLOWED_ORIGINS` on the relay matches the actual
   Vercel branch-alias URL (`https://scoring-app-git-uat-sam-kerins-projects.vercel.app`),
   verified against a live deployment after the first `uat` push.
