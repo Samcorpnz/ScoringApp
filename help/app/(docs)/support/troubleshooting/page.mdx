@@ -1,0 +1,45 @@
+export const metadata = { title: "Troubleshooting" };
+
+# Troubleshooting
+
+## The display badge says OFFLINE or CONNECTING
+
+Every `/display` and `/control` page shows a small status badge (top right): **LIVE**,
+**CONNECTING**, or **OFFLINE**.
+
+- **CONNECTING** that doesn't resolve within a few seconds usually means the browser can't reach
+  ScoreHub's relay — check the venue's internet connection.
+- **OFFLINE** means the connection dropped. Reloading the page reconnects it; match state itself
+  isn't lost, since it's held on the server, not in the browser tab.
+- A **FEED STALE** badge next to the connection status means the connection to ScoreHub is fine,
+  but the source feeding the score (Bridge, or the console behind it) has stopped sending updates
+  — check Bridge's admin UI at `http://localhost:4002` on the venue laptop, not your internet
+  connection.
+
+## The score isn't updating from the console
+
+1. Confirm Bridge is running and its admin UI (`http://localhost:4002`) shows the source as
+   connected.
+2. Check the serial cable and adapter — for Saturn/Vega, loose or cheap USB-to-serial adapters are
+   the most common cause of dropped data. See [Connecting a console](/connecting-the-bridge).
+3. Confirm the bridge token entered in Bridge's admin UI is still valid — tokens are long-lived
+   but can be revoked/rotated from the control panel's Settings tab.
+4. As a fallback while you debug the console connection, you can always score the match by hand
+   from `/control` — Bridge and manual scoring aren't mutually exclusive, either can drive the
+   same match.
+
+## A display link isn't showing the right match
+
+Display and control links are match-specific (`?match=<id>` in the URL). Double check the link
+was copied for the current match — a link from a previous match will keep showing that match's
+final state, not an error.
+
+## An invite link says it's invalid or expired
+
+Invitations expire 7 days after being sent. Ask an Admin or Manager to send a new one from
+**Account → Team** — see [Inviting your team](/account/inviting-your-team).
+
+## Still stuck
+
+Email [hello@scorehub.co.nz](mailto:hello@scorehub.co.nz) — see [Contact support](/support) for
+what to include so we can help faster.

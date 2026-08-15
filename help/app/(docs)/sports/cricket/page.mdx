@@ -1,0 +1,38 @@
+export const metadata = { title: "Cricket" };
+
+# Cricket
+
+Cricket matches run as T20, ODI, or Test on ScoreHub's cricket template.
+
+## Match structure
+
+- Periods: 1 × INNINGS (the display label advances through 1st/2nd/3rd/4th innings as the match
+  progresses)
+- Clock: counts up from 0:00, no fixed length
+
+## Scoring buttons
+
+- **1, 2, 3, 4, 6** — runs scored off a delivery
+
+## Match setup options
+
+When creating the match ([Getting started](/getting-started)), choose the **Format**:
+
+- **T20** — 20 overs per side
+- **ODI** — 50 overs per side
+- **Test** — up to 2 innings per side, multi-day
+
+<Callout>
+  For cricket you also enter starting batting/bowling squads in the match wizard — see
+  [Getting started](/getting-started).
+</Callout>
+
+## Running the match
+
+Cricket gets a bespoke control panel on `/control` instead of plain score buttons, tracking
+overs, wickets, and innings ball by ball.
+
+## On the display
+
+Viewers on `/display/advanced` see an extra cricket stats panel alongside the base scoreboard —
+see [Displaying your score](/displaying-your-score) for the full list of display routes.

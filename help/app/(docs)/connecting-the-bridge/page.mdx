@@ -1,0 +1,47 @@
+export const metadata = { title: "Connecting a console (Bridge)" };
+
+# Connecting a console (Bridge)
+
+Most matches are scored by hand on the [control panel](/getting-started). If your venue has a
+physical scoring console, the **ScoreHub Bridge** app reads it and pushes the score to ScoreHub
+automatically instead.
+
+## What Bridge is
+
+Bridge is a small app that runs on a laptop at the venue — the one physically connected to the
+console — and forwards match state to ScoreHub over the internet. It supports two input sources:
+
+- **Swiss Timing Saturn/Vega consoles** over a serial (RS422) connection.
+- **ChampionData**, for sports where scoring comes from a data feed rather than a physical
+  console.
+
+Bridge has its own admin UI, served locally at `http://localhost:4002` once it's running, where
+you pick the source and configure it.
+
+## Setting it up
+
+1. **Generate a bridge token.** In the control panel, open **Settings** and generate a BRIDGE
+   token for your organisation. This is a long-lived credential — treat it like a password and
+   don't share it outside your venue team.
+2. **Install and start Bridge** on the laptop connected to the console (or running the ChampionData
+   feed). Open `http://localhost:4002` in a browser on that same machine.
+3. **Enter the bridge token** and the ScoreHub relay URL in the admin UI, and choose your source
+   (Saturn/Vega serial port, or ChampionData).
+4. **Start the source.** Bridge will begin forwarding match state as soon as the console sends
+   data. Set `CD_AUTOSTART=true` in its configuration if you want it to start automatically on
+   launch rather than being started from the UI each time.
+
+## Serial console wiring
+
+Saturn/Vega consoles connect over RS422 at 9600 baud, 8 data bits, no parity, 1 stop bit (8N1).
+Use a laptop with a genuine RS422/RS232 serial port or a known-good USB-to-serial adapter — cheap
+adapters are the most common cause of dropped or garbled data.
+
+<Callout>
+  A physical console is optional. Everything Bridge can do can also be done by hand from the
+  [control panel](/getting-started) — Bridge just saves an operator from tapping the score in
+  manually when a console is already running the scoreboard.
+</Callout>
+
+Bridge only sends data one way, into ScoreHub — it doesn't read anything back from the app, so
+there's nothing to keep in sync manually once it's running.
