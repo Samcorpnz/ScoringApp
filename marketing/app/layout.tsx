@@ -4,6 +4,7 @@ import "./globals.css";
 
 const APP_URL = "https://app.scorehub.co.nz";
 const SITE_URL = "https://scorehub.co.nz";
+const HELP_URL = "https://help.scorehub.co.nz";
 const TITLE = "ScoreHub — Live sport scoring from any browser";
 const DESCRIPTION =
   "ScoreHub is a browser-based live scoring app — score any match from a laptop, tablet, or phone and push one live match state to venue screens, broadcast overlays, and the crowd's phones. No hardware required.";
@@ -61,6 +62,8 @@ export default function RootLayout({ children }: { readonly children: React.Reac
         {children}
         <footer className="site-footer">
           <a href={`${APP_URL}/login`}>Log in</a>
+          <span aria-hidden="true"> · </span>
+          <a href={HELP_URL}>Help Centre</a>
           <span aria-hidden="true"> · </span>
           <a href="/terms">Terms of Use</a>
           <span aria-hidden="true"> · </span>
