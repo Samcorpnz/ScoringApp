@@ -1,8 +1,14 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import {
+  verifyAuthenticationResponse,
+  type AuthenticationResponseJSON,
+  type AuthenticatorTransportFuture,
+} from "@simplewebauthn/server";
 import { prisma, Role } from "@scorehub/db";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
+import { consumeChallenge, expectedOrigin, rpID } from "@/lib/webauthn";
 
 export type SessionMembership = {
   orgId: string;
@@ -72,6 +78,89 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
+        const memberships: SessionMembership[] = user.memberships.map((m) => ({
+          orgId: m.orgId,
+          orgName: m.org.name,
+          role: m.role,
+        }));
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          memberships,
+          activeOrgId: memberships[0]?.orgId ?? null,
+        };
+      },
+    }),
+    // SA-108: passkey sign-in. Verification happens here (in-process, same as
+    // the credentials provider above calling bcrypt.compare directly) rather
+    // than via a separate "verify" API route, so it returns the same user
+    // shape the credentials provider does and rides the same jwt/session
+    // callbacks below unchanged. The frontend calls
+    // signIn("passkey", { credential: JSON.stringify(assertionResponse) })
+    // after /api/webauthn/authenticate/options + @simplewebauthn/browser's
+    // startAuthentication() produce that assertion.
+    Credentials({
+      id: "passkey",
+      name: "Passkey",
+      credentials: { credential: { label: "Credential", type: "text" } },
+      async authorize(credentials, request) {
+        const raw = typeof credentials?.credential === "string" ? credentials.credential : undefined;
+        if (!raw) return null;
+
+        const key = `login-passkey:${clientIp(request)}`;
+        if (isRateLimited(key, 10, 60_000)) return null;
+
+        let response: AuthenticationResponseJSON;
+        try {
+          response = JSON.parse(raw);
+        } catch {
+          return null;
+        }
+
+        const authenticator = await prisma.authenticator.findUnique({
+          where: { credentialId: response.id },
+          include: { user: { include: { memberships: { include: { org: true } } } } },
+        });
+        if (!authenticator) return null;
+
+        let clientData: { challenge?: string };
+        try {
+          clientData = JSON.parse(Buffer.from(response.response.clientDataJSON, "base64url").toString("utf8"));
+        } catch {
+          return null;
+        }
+        if (!clientData.challenge) return null;
+
+        const challengeRow = await consumeChallenge(clientData.challenge, "authentication");
+        if (!challengeRow) return null; // expired, replayed, or unknown challenge
+
+        let verification;
+        try {
+          verification = await verifyAuthenticationResponse({
+            response,
+            expectedChallenge: clientData.challenge,
+            expectedOrigin: expectedOrigin(),
+            expectedRPID: rpID(),
+            credential: {
+              id: authenticator.credentialId,
+              publicKey: Buffer.from(authenticator.publicKey, "base64url"),
+              counter: Number(authenticator.counter),
+              transports: authenticator.transports as AuthenticatorTransportFuture[],
+            },
+          });
+        } catch {
+          return null;
+        }
+        if (!verification.verified) return null;
+
+        await prisma.authenticator.update({
+          where: { id: authenticator.id },
+          data: { counter: BigInt(verification.authenticationInfo.newCounter), lastUsedAt: new Date() },
+        });
+
+        const user = authenticator.user;
         const memberships: SessionMembership[] = user.memberships.map((m) => ({
           orgId: m.orgId,
           orgName: m.org.name,

@@ -1,11 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Capture the config object passed to NextAuth() and the credentials
-// provider config, so we can exercise the authorize/jwt/session callbacks
-// directly without going through NextAuth's own request/response machinery.
+// Capture the config object passed to NextAuth() and each Credentials()
+// provider config (there are two: the password provider and, since SA-108,
+// the passkey provider), so we can exercise the authorize/jwt/session
+// callbacks directly without going through NextAuth's own request/response
+// machinery. Providers are distinguished by `id` — only the passkey
+// provider sets one explicitly.
 let capturedConfig: any;
-let capturedCredentialsConfig: any;
+let capturedCredentialsConfigs: any[];
 
 vi.mock("next-auth", () => ({
   default: (config: unknown) => {
@@ -16,7 +19,7 @@ vi.mock("next-auth", () => ({
 
 vi.mock("next-auth/providers/credentials", () => ({
   default: (config: unknown) => {
-    capturedCredentialsConfig = config;
+    capturedCredentialsConfigs.push(config);
     return { id: "credentials", type: "credentials", ...(config as object) };
   },
 }));
@@ -28,10 +31,16 @@ vi.mock("bcryptjs", () => ({
 
 const findUniqueMock = vi.fn();
 const findManyMock = vi.fn();
+const authenticatorFindUniqueMock = vi.fn();
+const authenticatorUpdateMock = vi.fn();
 vi.mock("@scorehub/db", () => ({
   prisma: {
     user: { findUnique: (...a: unknown[]) => findUniqueMock(...a) },
     membership: { findMany: (...a: unknown[]) => findManyMock(...a) },
+    authenticator: {
+      findUnique: (...a: unknown[]) => authenticatorFindUniqueMock(...a),
+      update: (...a: unknown[]) => authenticatorUpdateMock(...a),
+    },
   },
   Role: {},
 }));
@@ -43,20 +52,44 @@ vi.mock("@/lib/rateLimit", () => ({
   clientIp: (...a: unknown[]) => clientIpMock(...a),
 }));
 
+const verifyAuthenticationResponseMock = vi.fn();
+vi.mock("@simplewebauthn/server", () => ({
+  verifyAuthenticationResponse: (...a: unknown[]) => verifyAuthenticationResponseMock(...a),
+}));
+
+const consumeChallengeMock = vi.fn();
+vi.mock("@/lib/webauthn", () => ({
+  consumeChallenge: (...a: unknown[]) => consumeChallengeMock(...a),
+  rpID: () => "localhost",
+  expectedOrigin: () => "http://localhost:3000",
+}));
+
 describe("auth.ts", () => {
   beforeEach(async () => {
     vi.resetModules();
+    capturedCredentialsConfigs = [];
     findUniqueMock.mockReset();
     findManyMock.mockReset();
+    authenticatorFindUniqueMock.mockReset();
+    authenticatorUpdateMock.mockReset();
     bcryptCompareMock.mockReset();
     isRateLimitedMock.mockReset().mockReturnValue(false);
     clientIpMock.mockReset().mockReturnValue("127.0.0.1");
+    verifyAuthenticationResponseMock.mockReset();
+    consumeChallengeMock.mockReset();
     await import("../auth");
   });
 
+  function passwordProviderConfig() {
+    return capturedCredentialsConfigs.find((c) => c.id === undefined);
+  }
+  function passkeyProviderConfig() {
+    return capturedCredentialsConfigs.find((c) => c.id === "passkey");
+  }
+
   describe("authorize", () => {
     function authorize(credentials: unknown) {
-      return capturedCredentialsConfig.authorize(credentials, new Request("http://localhost"));
+      return passwordProviderConfig().authorize(credentials, new Request("http://localhost"));
     }
 
     it("returns null when email is missing", async () => {
@@ -134,6 +167,137 @@ describe("auth.ts", () => {
       bcryptCompareMock.mockResolvedValue(true);
       const result = await authorize({ email: "a@b.com", password: "correct" });
       expect(result).toMatchObject({ activeOrgId: null, memberships: [] });
+    });
+  });
+
+  describe("passkey provider authorize", () => {
+    function authorizePasskey(credentials: unknown) {
+      return passkeyProviderConfig().authorize(credentials, new Request("http://localhost"));
+    }
+
+    function validClientDataJSON(challenge: string) {
+      return Buffer.from(JSON.stringify({ type: "webauthn.get", challenge, origin: "http://localhost:3000" })).toString(
+        "base64url",
+      );
+    }
+
+    function assertionCredential(overrides: { id?: string; clientDataJSON?: string } = {}) {
+      return {
+        id: overrides.id ?? "cred-1",
+        response: { clientDataJSON: overrides.clientDataJSON ?? validClientDataJSON("chal-1") },
+      };
+    }
+
+    it("returns null when credential is missing", async () => {
+      await expect(authorizePasskey({})).resolves.toBeNull();
+    });
+
+    it("returns null when credential isn't valid JSON", async () => {
+      await expect(authorizePasskey({ credential: "not-json" })).resolves.toBeNull();
+    });
+
+    it("rate-limits repeated attempts by IP", async () => {
+      isRateLimitedMock.mockReturnValue(true);
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential()) });
+      expect(result).toBeNull();
+      expect(isRateLimitedMock).toHaveBeenCalledWith("login-passkey:127.0.0.1", 10, 60_000);
+      expect(authenticatorFindUniqueMock).not.toHaveBeenCalled();
+    });
+
+    it("returns null when no authenticator matches the credential id", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue(null);
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential({ id: "unknown" })) });
+      expect(result).toBeNull();
+    });
+
+    it("returns null when clientDataJSON has no challenge", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue({ id: "auth-1", credentialId: "cred-1" });
+      const badClientData = Buffer.from(JSON.stringify({ type: "webauthn.get" })).toString("base64url");
+      const result = await authorizePasskey({
+        credential: JSON.stringify(assertionCredential({ clientDataJSON: badClientData })),
+      });
+      expect(result).toBeNull();
+      expect(consumeChallengeMock).not.toHaveBeenCalled();
+    });
+
+    it("returns null when the challenge is expired/unknown", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue({ id: "auth-1", credentialId: "cred-1" });
+      consumeChallengeMock.mockResolvedValue(null);
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential()) });
+      expect(result).toBeNull();
+      expect(verifyAuthenticationResponseMock).not.toHaveBeenCalled();
+    });
+
+    it("returns null when verification fails", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue({
+        id: "auth-1",
+        credentialId: "cred-1",
+        publicKey: Buffer.from("pubkey").toString("base64url"),
+        counter: BigInt(5),
+        transports: ["internal"],
+        user: { id: "u1", email: "a@b.com", name: "A", memberships: [] },
+      });
+      consumeChallengeMock.mockResolvedValue({ userId: null });
+      verifyAuthenticationResponseMock.mockResolvedValue({ verified: false });
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential()) });
+      expect(result).toBeNull();
+      expect(authenticatorUpdateMock).not.toHaveBeenCalled();
+    });
+
+    it("returns null when verifyAuthenticationResponse throws", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue({
+        id: "auth-1",
+        credentialId: "cred-1",
+        publicKey: Buffer.from("pubkey").toString("base64url"),
+        counter: BigInt(5),
+        transports: ["internal"],
+        user: { id: "u1", email: "a@b.com", name: "A", memberships: [] },
+      });
+      consumeChallengeMock.mockResolvedValue({ userId: null });
+      verifyAuthenticationResponseMock.mockRejectedValue(new Error("bad signature"));
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential()) });
+      expect(result).toBeNull();
+    });
+
+    it("updates the counter/lastUsedAt and returns the same user shape as the password provider on success", async () => {
+      authenticatorFindUniqueMock.mockResolvedValue({
+        id: "auth-1",
+        credentialId: "cred-1",
+        publicKey: Buffer.from("pubkey").toString("base64url"),
+        counter: BigInt(5),
+        transports: ["internal"],
+        user: {
+          id: "u1",
+          email: "a@b.com",
+          name: "A",
+          memberships: [
+            { orgId: "org-1", role: "ADMIN", org: { name: "Org One" } },
+            { orgId: "org-2", role: "OPERATOR", org: { name: "Org Two" } },
+          ],
+        },
+      });
+      consumeChallengeMock.mockResolvedValue({ userId: null });
+      verifyAuthenticationResponseMock.mockResolvedValue({
+        verified: true,
+        authenticationInfo: { newCounter: 6 },
+      });
+
+      const result = await authorizePasskey({ credential: JSON.stringify(assertionCredential()) });
+
+      expect(authenticatorUpdateMock).toHaveBeenCalledWith({
+        where: { id: "auth-1" },
+        data: { counter: BigInt(6), lastUsedAt: expect.any(Date) },
+      });
+      expect(result).toEqual({
+        id: "u1",
+        name: "A",
+        email: "a@b.com",
+        memberships: [
+          { orgId: "org-1", orgName: "Org One", role: "ADMIN" },
+          { orgId: "org-2", orgName: "Org Two", role: "OPERATOR" },
+        ],
+        activeOrgId: "org-1",
+      });
     });
   });
 

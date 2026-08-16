@@ -48,7 +48,7 @@ test.describe("signup and login", () => {
     await page.goto("/login");
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10_000 });
   });
 
@@ -75,7 +75,7 @@ test.describe("signup and login", () => {
     await page.goto("/login");
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill("WrongPassword999!");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -122,7 +122,7 @@ test.describe("forgot / reset password", () => {
     await page.goto("/login");
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(newPassword);
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10_000 });
   });
 });

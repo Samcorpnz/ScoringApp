@@ -226,6 +226,7 @@ export default function AccountPage() {
       <DisplayNameCard initialName={session?.user?.name ?? ""} />
       <PasswordCard />
       <EmailCard currentEmail={session?.user?.email ?? ""} />
+      <PasskeysCard />
 
       {session?.user?.activeOrgId &&
         (session.user.activeRole === "ADMIN" || session.user.activeRole === "MANAGER") && (
@@ -968,6 +969,105 @@ function EmailCard({ currentEmail }: { readonly currentEmail: string }) {
         </div>
       )}
 
+      {status && <StatusText message={status.message} isError={status.isError} />}
+    </Card>
+  );
+}
+
+type Passkey = {
+  id: string;
+  name: string | null;
+  deviceType: string;
+  backedUp: boolean;
+  transports: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+function PasskeysCard() {
+  const [passkeys, setPasskeys] = useState<Passkey[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
+
+  async function refresh() {
+    try {
+      const res = await fetch("/api/webauthn/passkeys");
+      const data = await res.json().catch(() => ({}));
+      setPasskeys(Array.isArray(data?.passkeys) ? data.passkeys : []);
+    } catch {
+      // leave the existing list as-is on a transient fetch failure
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function handleAdd() {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { startRegistration } = await import("@simplewebauthn/browser");
+
+      const optionsRes = await fetch("/api/webauthn/register/options", { method: "POST" });
+      const options = await optionsRes.json().catch(() => ({}));
+      if (!optionsRes.ok) throw new Error(options?.error ?? "couldn't start passkey registration");
+
+      const attestation = await startRegistration({ optionsJSON: options });
+
+      const verifyRes = await fetch("/api/webauthn/register/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response: attestation }),
+      });
+      const data = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok) throw new Error(data?.error ?? "couldn't save passkey");
+
+      await refresh();
+      setStatus({ message: "Passkey added.", isError: false });
+    } catch (e) {
+      setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(id: string) {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/webauthn/passkeys/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "couldn't remove passkey");
+      await refresh();
+      setStatus({ message: "Passkey removed.", isError: false });
+    } catch (e) {
+      setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Passkeys">
+      {passkeys.length === 0 && (
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No passkeys yet.</p>
+      )}
+      {passkeys.length > 0 && (
+        <div className="space-y-2">
+          {passkeys.map(pk => (
+            <div key={pk.id} className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                {pk.name ?? "Unnamed passkey"} · added {new Date(pk.createdAt).toLocaleDateString()}
+              </span>
+              <SmallBtn label="Remove" onClick={() => handleRemove(pk.id)} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3">
+        <SmallBtn label={busy ? "Working…" : "Add a passkey"} onClick={handleAdd} primary />
+      </div>
       {status && <StatusText message={status.message} isError={status.isError} />}
     </Card>
   );

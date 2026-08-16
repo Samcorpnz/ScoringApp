@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense, SubmitEvent } from "react";
+import { useState, useEffect, Suspense, SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -40,6 +40,16 @@ function LoginForm() {
   const [loading,  setLoading]  = useState(false);
   const [touched,  setTouched]  = useState<Record<string, boolean>>({});
 
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyBusy,      setPasskeyBusy]      = useState(false);
+  const [passkeyError,     setPasskeyError]     = useState("");
+
+  // Feature-detect client-side only, after mount, to avoid an SSR/hydration
+  // mismatch (window.PublicKeyCredential doesn't exist on the server).
+  useEffect(() => {
+    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window);
+  }, []);
+
   const errors = fieldErrors(email, password);
   const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
@@ -63,6 +73,37 @@ function LoginForm() {
       setError("Invalid email or password.");
     } else {
       router.push(callbackUrl);
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    setPasskeyError("");
+    setPasskeyBusy(true);
+    try {
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+
+      const optionsRes = await fetch("/api/webauthn/authenticate/options", { method: "POST" });
+      if (!optionsRes.ok) throw new Error("couldn't start passkey sign-in");
+      const options = await optionsRes.json();
+
+      const assertion = await startAuthentication({ optionsJSON: options });
+
+      const result = await signIn("passkey", {
+        credential: JSON.stringify(assertion),
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setPasskeyError("Passkey sign-in failed.");
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch {
+      // startAuthentication throws (e.g. NotAllowedError) if the user
+      // cancels the browser's passkey prompt or it times out.
+      setPasskeyError("Passkey sign-in was cancelled or failed.");
+    } finally {
+      setPasskeyBusy(false);
     }
   }
 
@@ -155,6 +196,38 @@ function LoginForm() {
           >
             {loading ? "Signing in…" : "Sign In"}
           </button>
+
+          {passkeySupported && (
+            <>
+              <button
+                type="button"
+                onClick={handlePasskeyLogin}
+                disabled={passkeyBusy}
+                className="w-full rounded-xl py-3 text-sm font-black tracking-widest uppercase transition-opacity"
+                style={{
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-secondary)",
+                  opacity: passkeyBusy ? 0.5 : 1,
+                  cursor: passkeyBusy ? "not-allowed" : "pointer",
+                }}
+              >
+                {passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}
+              </button>
+              {passkeyError && (
+                <p
+                  className="text-sm rounded-lg px-3 py-2 font-semibold"
+                  style={{
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "var(--danger)",
+                  }}
+                >
+                  {passkeyError}
+                </p>
+              )}
+            </>
+          )}
         </form>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--text-dim)" }}>

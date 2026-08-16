@@ -117,6 +117,8 @@ model User {
   emailChangeRequests   EmailChangeRequest[]
   invitationsSent       Invitation[]
   passwordResetRequests PasswordResetRequest[]
+  authenticators        Authenticator[]
+  webauthnChallenges    WebAuthnChallenge[]
 }
 
 // Single-use pending request to create a brand-new account (self-serve
@@ -170,6 +172,52 @@ model EmailChangeRequest {
   expiresAt  DateTime
   consumedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// A registered WebAuthn credential ("passkey"), SA-108. Additive to
+// passwordHash — most users have both a password and 1+ passkeys, so this
+// is never the account's sole auth factor and passwordHash on User stays
+// required. credentialId/publicKey/transports are stored base64url-encoded
+// (the shape @simplewebauthn/server hands back) rather than raw bytes, to
+// avoid Bytes-vs-Buffer friction with the "prisma-client" (not
+// prisma-client-js) generator in use here.
+model Authenticator {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  credentialId String    @unique
+  publicKey    String
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  deviceType   String
+  backedUp     Boolean   @default(false)
+  name         String?
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Single-use WebAuthn challenge, mirroring PasswordResetRequest/
+// EmailChangeRequest's tokenHash+expiresAt shape but keyed on the raw
+// challenge (base64url) itself rather than a hash, since the challenge is
+// not a secret credential — it's sent to the browser/authenticator by
+// design and its only job is anti-replay. userId is null for the
+// usernameless login flow (we don't know who's authenticating until after
+// the credential is looked up); it's set for registration since that
+// endpoint is auth-gated. Short TTL (~5 min) since it's a synchronous
+// in-flight ceremony, not an email link — deleted (not just marked
+// consumed) on successful verify.
+model WebAuthnChallenge {
+  id        String   @id @default(uuid())
+  challenge String   @unique
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  purpose   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
