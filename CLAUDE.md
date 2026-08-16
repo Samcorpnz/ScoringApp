@@ -20,6 +20,20 @@ Saturn/Vega Console (RS422/serial)
 workspaces consumed by both `frontend` and `relay`. This is an npm workspaces monorepo — always
 run installs from the repo root (`npm install`), not inside a sub-package.
 
+Two more standalone sites live alongside the app, each its own Cloudflare Worker (not part of the
+npm workspace, not on Vercel): `marketing/` (public marketing site, linked from `app.scorehub.co.nz`)
+and `help/` (help centre, linked from the marketing footer and app nav — see commit
+`d74e766`). Both build/deploy independently of `frontend/`'s Vercel pipeline, but share its gating:
+`deploy.yml`'s `deploy-marketing`/`deploy-help` jobs push to Cloudflare Workers on every push to
+`main`, behind the same `production` GitHub Environment required-reviewer gate as relay/frontend
+(needs a `CLOUDFLARE_API_TOKEN` repo secret, scoped to account `c0c396b5f4c3cf71c2ecb3821febaf92`).
+UAT (`uat` branch) is still manual and ungated — `cd marketing && npm run build && npx wrangler
+deploy --env uat` (same for `help/`), see `docs/uat-environment.md`. **When a change touches
+user-facing naming, pricing,
+plans/add-ons, feature descriptions, URLs/routes, or anything else these sites reference, check
+`marketing/` and `help/` for content that now needs updating too** — they're easy to forget since
+they build and deploy independently of `frontend/`.
+
 ## Commands
 
 Run from repo root unless noted. Each sub-package (`frontend`, `relay`, `bridge`, `packages/db`)
@@ -151,12 +165,11 @@ disabled in their dashboards — otherwise every push deploys immediately, bypas
 signing key for control tokens). Required-reviewer environment protection is free on GitHub for
 public repos (like this one) regardless of plan — only private repos need Team/Enterprise for it.
 
-A hosted UAT environment exists alongside prod: Fly app `scorehub-relay-uat` (config
-`fly.uat.toml`, deploys via `.github/workflows/deploy-uat.yml` on push to the `uat` branch), a
-Neon `UAT` branch (copy-on-write off `production`), a separate Upstash Redis DB, and a Vercel
-`uat` branch with its own branch-scoped env vars (auto-deployed by Vercel's GitHub integration —
-no Actions job needed for the frontend side). See `docs/uat-environment.md` for URLs, resource
-IDs, and known gaps (Stripe webhook, Mailgun isolation, R2 not yet provisioned there). UAT has no
-required-reviewer gate — it's not customer-facing, so pushes to `uat` deploy immediately, unlike
-`main`. Pre-prod testing can use either UAT or local `docker compose up --build` — then push to
-`main` and approve the deploy gate when it pauses.
+A hosted UAT environment exists as of 2026-08-14/15 — see `docs/uat-environment.md` for the full
+stack (dedicated Fly relay, Neon DB branch, Upstash, R2 bucket, and `uat`-branch-scoped Vercel
+Preview env vars) and its known gaps. It's built on branch-scoped Preview env vars rather than a
+true Vercel Custom Environment or Rolling Release, because the `sam-kerins-projects` Vercel team
+is on the Hobby plan and both those features are Pro/Enterprise-only (confirmed 2026-08-15). UAT
+has no required-reviewer gate — it's not customer-facing, so pushes to `uat` deploy immediately,
+unlike `main`. `docker compose up --build` locally is still the fastest inner-loop check before
+pushing to `uat` or `main`.

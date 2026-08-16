@@ -1,0 +1,26 @@
+export const metadata = { title: "Rugby Union" };
+
+# Rugby Union
+
+Rugby Union matches run as 2 halves of 40:00 each on ScoreHub's rugby union template.
+
+## Match structure
+
+- Periods: 2 × HALF
+- Clock: counts up from 0:00, no fixed length
+
+<Callout>
+  The clock counts up rather than down, since rugby union halves commonly run past 40:00 for
+  stoppages — you control when a half ends from the period control on `/control`.
+</Callout>
+
+## Scoring buttons
+
+- **PEN/DG (3)** — a penalty goal or drop goal
+- **TRY (5)** — an unconverted try
+- **CONV TRY (7)** — a try plus successful conversion
+
+## Running the match
+
+Score the match from the buttons above on `/control`. See [Getting started](/getting-started) for
+creating the match and finding the control panel link.

@@ -1,0 +1,27 @@
+export const metadata = { title: "Roles & permissions" };
+
+# Roles & permissions
+
+Every member of an organisation holds one role, from most to least privileged:
+
+| Role | Can do |
+| --- | --- |
+| **Admin** | Everything — run matches, manage billing, invite/remove members, and change any member's role, including other Admins and Managers. |
+| **Manager** | Run matches and invite/manage members, but limited to Operator and Viewer roles — a Manager can't touch another Admin's or Manager's membership, and doesn't get billing access. |
+| **Operator** | Run matches from the control panel. Can't manage members or billing. |
+| **Viewer** | Read-only — see match state and dashboards, no control panel access. |
+
+## Who can invite and manage members
+
+Only **Admin** and **Manager** roles see the Team panel on the Account page. A Manager can invite,
+promote, demote, or remove Operators and Viewers, but can't act on another Admin or Manager — that
+prevents a Manager from escalating their own or someone else's privilege. Only an Admin can manage
+other Admins or Managers.
+
+## Control tokens vs. roles
+
+The role above governs the ScoreHub web app. The control panel and any Stream Deck/webhook
+integrations authenticate separately using short-lived control tokens or long-lived scoped
+tokens issued to your organisation — those aren't tied to an individual member's role, so removing
+someone's membership doesn't automatically revoke a token they generated. Regenerate any shared
+tokens after removing an operator if you're rotating access.

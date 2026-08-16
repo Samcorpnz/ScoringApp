@@ -69,6 +69,40 @@ jobs:
           AUTH_SECRET: ci-placeholder-secret
           NEXT_PUBLIC_RELAY_URL: https://scorehub-relay.fly.dev
 
+  test-marketing:
+    name: Marketing site build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: marketing/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+
+  test-help:
+    name: Help centre build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: help
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: help/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+
   # Playwright suite against a full docker-compose stack (postgres/redis/
   # relay/frontend) — see frontend/e2e/playwright.config.ts and CLAUDE.md's
   # "no hosted staging" note. New and untested as a CI job (previously only

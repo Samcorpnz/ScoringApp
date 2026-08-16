@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "scorehub-help",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-14",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "help.scorehub.co.nz", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "uat": {
+      "name": "scorehub-help-uat",
+      "workers_dev": true,
+      "routes": [
+        { "pattern": "help.uat.scorehub.co.nz", "custom_domain": true }
+      ]
+    }
+  }
+}

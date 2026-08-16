@@ -103,15 +103,57 @@ model Match {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  // Null for users created before terms-of-service tracking was added.
+  // New users (self-serve signup or invite-accept) always set both.
+  termsAcceptedAt DateTime?
+  termsVersion    String?
+  createdAt       DateTime  @default(now())
 
-  memberships         Membership[]
-  emailChangeRequests EmailChangeRequest[]
-  invitationsSent     Invitation[]
+  memberships           Membership[]
+  emailChangeRequests   EmailChangeRequest[]
+  invitationsSent       Invitation[]
+  passwordResetRequests PasswordResetRequest[]
+}
+
+// Single-use pending request to create a brand-new account (self-serve
+// sign-up), same tokenHash+expiresAt+consumedAt shape as
+// Invitation/EmailChangeRequest. termsAcceptedAt/termsVersion are captured
+// here (when the checkbox was actually checked) and copied onto the
+// resulting User once the request is consumed, rather than recording
+// consent at confirm-time. Expiry is 24h — shorter than Invitation's 7 days
+// since this is the requester's own inbox, not a third party's.
+model SignupRequest {
+  id              String    @id @default(uuid())
+  email           String
+  name            String
+  orgName         String
+  tokenHash       String    @unique
+  termsAcceptedAt DateTime
+  termsVersion    String
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([email])
+}
+
+// Single-use pending password reset, mirroring EmailChangeRequest's shape
+// and 1h expiry (same "must still have access to the inbox right now"
+// reasoning).
+model PasswordResetRequest {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // Single-use pending request for changing a User's email. Only the hashed

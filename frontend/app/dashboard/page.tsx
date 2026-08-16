@@ -148,6 +148,15 @@ export default function DashboardPage() {
           >
             Account
           </a>
+          <a
+            href="https://help.scorehub.co.nz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none" }}
+          >
+            Help
+          </a>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="rounded-lg px-3 py-1.5 text-xs font-bold"

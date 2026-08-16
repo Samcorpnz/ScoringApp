@@ -1,0 +1,38 @@
+export const metadata = { title: "Displaying your score" };
+
+# Displaying your score
+
+Once a match is live, ScoreHub pushes its state to every open display link in real time — nothing
+needs refreshing, and you can have several open at once (a venue screen, an overlay in your
+stream, and a scorebug, all driven from the same match). Every display route lives under
+`/display/*` and needs no login — anyone with the link can view it.
+
+| Route | Best for |
+| --- | --- |
+| `/display/basic` | A simple, centred scoreboard — good default for a phone, tablet, or small screen. |
+| `/display/advanced` | A wider scoreboard card with a header bar and, for sports with one, a sport-specific stats panel — suited to a large venue screen or scoreboard TV. |
+| `/display/fullscreen` | Fills a second monitor edge-to-edge, or a hardware capture card (Elgato, AVerMedia, Magewell, etc.). |
+| `/display/overlay` | Transparent background streaming overlay for OBS/vMix/Wirecast — add as a Browser Source at roughly 1920×120. |
+| `/display/scorebug` | A compact corner widget, transparent background, roughly 480×100 — for a corner scorebug that doesn't need chroma key. |
+| `/display/graphics` | The stable Browser Source URL for the [Graphics Operator add-on](/billing/graphics-addon) — drop it into your streaming software once, and switch what it shows from `/control/graphics` without ever changing the source URL again. |
+
+## Choosing one
+
+- **Venue screen or scoreboard TV:** `/display/basic` or `/display/advanced`.
+- **Second monitor or capture card feed:** `/display/fullscreen`.
+- **Streaming a match with OBS/vMix/Wirecast:** `/display/overlay` for a full-width bar, or
+  `/display/scorebug` for a small corner widget. Both have transparent backgrounds, so no chroma
+  key is needed.
+- **Running broadcast-style scene graphics** (lower thirds, sponsor bugs, replay slates) alongside
+  your stream: `/display/graphics`, paired with the Graphics Operator add-on.
+
+## Getting the link
+
+The match URL (with its ID) is shown on the control panel and the dashboard once a match is
+created — append the display route you want, e.g. `.../display/scorebug?match=<id>`. Anyone with
+the link can view it without an account; treat the link itself as the access control.
+
+<Callout>
+  All display routes are read-only. Scoring only happens from `/control` — see
+  [Getting started](/getting-started).
+</Callout>

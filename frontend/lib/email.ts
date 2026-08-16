@@ -9,6 +9,18 @@ const globalForMailgun = globalThis as unknown as {
   mailgun?: ReturnType<InstanceType<typeof Mailgun>["client"]>;
 };
 
+// User-controlled strings (org names, display names) get interpolated into
+// html: bodies below — escape them so a name like `<img src=x onerror=...>`
+// can't inject markup into an email rendered in the recipient's client.
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function getMailgun() {
   if (globalForMailgun.mailgun) return globalForMailgun.mailgun;
 
@@ -71,7 +83,63 @@ export async function sendInvitationEmail({
     to,
     subject: `You've been invited to join ${orgName} on ScoreHub`,
     text: `You've been invited to join ${orgName} on ScoreHub as ${role}.\n\n${link}\n\nThis link expires in 7 days. If you weren't expecting this, you can ignore this email.`,
-    html: `<p>You've been invited to join <strong>${orgName}</strong> on ScoreHub as <strong>${role}</strong>.</p><p><a href="${link}">${link}</a></p><p>This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`,
+    html: `<p>You've been invited to join <strong>${escapeHtml(orgName)}</strong> on ScoreHub as <strong>${escapeHtml(role)}</strong>.</p><p><a href="${link}">${link}</a></p><p>This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`,
+  });
+}
+
+export async function sendSignupVerificationEmail({
+  to,
+  name,
+  token,
+}: {
+  to: string;
+  name: string;
+  token: string;
+}): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = `${baseUrl}/signup/confirm?token=${token}`;
+
+  await getMailgun().messages.create(domain, {
+    from,
+    to,
+    subject: "Confirm your ScoreHub account",
+    text: `Hi ${name},\n\nClick the link below to confirm your email address and finish setting up your ScoreHub account.\n\n${link}\n\nThis link expires in 24 hours. If you didn't request this, you can ignore this email.`,
+    html: `<p>Hi ${escapeHtml(name)},</p><p>Click the link below to confirm your email address and finish setting up your ScoreHub account.</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours. If you didn't request this, you can ignore this email.</p>`,
+  });
+}
+
+export async function sendPasswordResetEmail({
+  to,
+  token,
+}: {
+  to: string;
+  token: string;
+}): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = `${baseUrl}/reset-password?token=${token}`;
+
+  await getMailgun().messages.create(domain, {
+    from,
+    to,
+    subject: "Reset your ScoreHub password",
+    text: `Click the link below to choose a new password for your ScoreHub account.\n\n${link}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't change.`,
+    html: `<p>Click the link below to choose a new password for your ScoreHub account.</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't change.</p>`,
   });
 }
 

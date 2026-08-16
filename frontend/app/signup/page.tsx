@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, SubmitEvent } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useCallback, useState, SubmitEvent } from "react";
+import { TurnstileWidget } from "@/app/components/TurnstileWidget";
 
 // Bounded quantifiers (rather than unbounded `+`) cap backtracking cost even
 // though the three `[^\s@]` classes overlap — see typescript:S8786.
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}$/;
 
-function fieldErrors(name: string, orgName: string, email: string, password: string) {
+const TURNSTILE_REQUIRED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+
+function fieldErrors(name: string, orgName: string, email: string, acceptedTerms: boolean) {
   let emailError = "";
   if (!email) {
     emailError = "Email is required";
@@ -16,38 +17,32 @@ function fieldErrors(name: string, orgName: string, email: string, password: str
     emailError = "Enter a valid email address";
   }
 
-  let passwordError = "";
-  if (!password) {
-    passwordError = "Password is required";
-  } else if (password.length < 8) {
-    passwordError = "Must be at least 8 characters";
-  }
-
   return {
     name: name.trim() ? "" : "Name is required",
     orgName: orgName.trim() ? "" : "Organization name is required",
     email: emailError,
-    password: passwordError,
+    acceptedTerms: acceptedTerms ? "" : "You must agree to the terms and conditions",
   };
 }
 
 export default function SignupPage() {
-  const router = useRouter();
+  const [name,          setName]          = useState("");
+  const [orgName,       setOrgName]       = useState("");
+  const [email,         setEmail]         = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [error,         setError]         = useState("");
+  const [loading,       setLoading]       = useState(false);
+  const [touched,       setTouched]       = useState<Record<string, boolean>>({});
+  const [submitted,     setSubmitted]     = useState(false);
 
-  const [name,     setName]     = useState("");
-  const [orgName,  setOrgName]  = useState("");
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [touched,  setTouched]  = useState<Record<string, boolean>>({});
-
-  const errors = fieldErrors(name, orgName, email, password);
+  const errors = fieldErrors(name, orgName, email, acceptedTerms);
   const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
+  const onTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
-    setTouched({ name: true, orgName: true, email: true, password: true });
+    setTouched({ name: true, orgName: true, email: true, acceptedTerms: true });
     if (Object.values(errors).some(Boolean)) return;
 
     setError("");
@@ -57,16 +52,13 @@ export default function SignupPage() {
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, orgName, email, password }),
+        body: JSON.stringify({ name, orgName, email, acceptedTerms, turnstileToken }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Signup failed");
       }
-
-      const result = await signIn("credentials", { email, password, redirect: false });
-      if (result?.error) throw new Error("Account created — please sign in.");
-      router.push("/setup");
+      setSubmitted(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -74,7 +66,22 @@ export default function SignupPage() {
     }
   }
 
-  const canSubmit = !Object.values(errors).some(Boolean) && !loading;
+  const canSubmit =
+    !Object.values(errors).some(Boolean) && !loading && (!TURNSTILE_REQUIRED || Boolean(turnstileToken));
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ background: "var(--bg-base)" }}>
+        <div className="w-full max-w-sm text-center">
+          <h1 className="text-2xl font-black tracking-tight mb-3">Check your email</h1>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to set your password and
+            finish creating your account. The link expires in 24 hours.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -118,12 +125,29 @@ export default function SignupPage() {
             autoComplete="email"
             error={touched.email ? errors.email : ""} onBlur={() => touch("email")}
           />
-          <Field
-            label="Password" type="password" value={password} onChange={setPassword}
-            autoComplete="new-password"
-            error={touched.password ? errors.password : ""} onBlur={() => touch("password")}
-            hint="At least 8 characters"
-          />
+
+          <div>
+            <label className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                onBlur={() => touch("acceptedTerms")}
+                className="mt-0.5"
+              />
+              <span>
+                I agree to the <a href="/terms" target="_blank" style={{ color: "var(--accent)" }}>Terms of Use</a> and{" "}
+                <a href="/privacy" target="_blank" style={{ color: "var(--accent)" }}>Privacy Policy</a>
+              </span>
+            </label>
+            {touched.acceptedTerms && errors.acceptedTerms && (
+              <p className="mt-1.5 text-xs font-semibold" style={{ color: "var(--danger)" }}>
+                {errors.acceptedTerms}
+              </p>
+            )}
+          </div>
+
+          <TurnstileWidget onToken={onTurnstileToken} />
 
           {error && (
             <p
@@ -146,7 +170,7 @@ export default function SignupPage() {
               cursor: canSubmit ? "pointer" : "not-allowed",
             }}
           >
-            {loading ? "Creating account…" : "Create Account"}
+            {loading ? "Sending confirmation…" : "Create Account"}
           </button>
         </form>
 

@@ -1,0 +1,29 @@
+export const metadata = { title: "Inviting your team" };
+
+# Inviting your team
+
+Admins and Managers can invite new members to their organisation from the **Team** panel on the
+Account page.
+
+## Sending an invite
+
+1. Go to **Account → Team**.
+2. Enter the person's email address and pick a role (Manager and Admin are only offered to Admins
+   inviting — see [Roles & permissions](/account/roles-and-permissions)).
+3. Send the invite. It appears in the **Pending invitations** list until it's accepted or expires.
+
+The invited person receives an email with a link to `/invite/accept?token=...`. Following it:
+
+- **If they already have a ScoreHub account**, they log in and the organisation is added to their
+  memberships — the org switcher then lets them move between organisations.
+- **If they're new**, they set a name and password on the same page to create their account and
+  join the organisation in one step.
+
+Invitations expire **7 days** after being sent. An expired or already-used invite link shows an
+error; send a new one from the Team panel.
+
+## Changing or removing a member
+
+From the same Team panel, Admins and Managers can change a member's role or remove them, subject
+to the same role limits described in [Roles & permissions](/account/roles-and-permissions) — you
+can't act on someone at or above your own rank.

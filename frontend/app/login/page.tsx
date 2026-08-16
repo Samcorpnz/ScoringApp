@@ -124,6 +124,10 @@ function LoginForm() {
             onBlur={() => touch("password")}
           />
 
+          <p className="text-right text-xs -mt-2">
+            <a href="/forgot-password" style={{ color: "var(--text-dim)" }}>Forgot password?</a>
+          </p>
+
           {error && (
             <p
               className="text-sm rounded-lg px-3 py-2 font-semibold"

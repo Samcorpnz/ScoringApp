@@ -1,0 +1,59 @@
+export const metadata = { title: "Getting started" };
+
+# Getting started
+
+ScoreHub scores a live match from any browser and pushes one live match state out to venue
+screens, streaming overlays, and viewers' phones. This page walks through creating your account
+and running your first match.
+
+## 1. Create your account
+
+Go to [app.scorehub.co.nz/signup](https://app.scorehub.co.nz/signup) and fill in your name, your
+organisation's name, email, and a password (8 characters minimum). Signing up creates both your
+user account and your organisation in one step — there's no separate "create an organisation"
+screen. Check your inbox for a verification email before logging in.
+
+You start on the **Free** plan automatically — one live match at a time, no credit card required.
+See [Plans & pricing](/billing) if you need more than one concurrent match or custom branding.
+
+## 2. Create a match
+
+From the [dashboard](https://app.scorehub.co.nz/dashboard), select **New Match**. This opens the
+setup wizard where you:
+
+1. Choose the sport — see [Sports](/sports) for a guide to each one.
+2. Enter a match name and the home/visitor team names.
+3. Set any sport-specific match options (for example, cricket's T20/ODI/Test format, or squash's
+   best-of-3/best-of-5 format) — these only appear for sports that have them.
+4. For cricket, enter starting batting/bowling squads.
+
+Submitting the wizard provisions the match and takes you straight to the control panel.
+
+You can also schedule multiple fixtures at once from the dashboard's **Upload fixtures** panel, by
+pasting or uploading a CSV with `sport,competition,home,visitor,scheduledAt` columns.
+
+## 3. Score the match
+
+The control panel at `/control` is where you run the match — score buttons, clock, period
+control, and (for cricket, softball, and indoor cricket) a bespoke ball-by-ball or innings panel.
+It works from a laptop, tablet, or phone; nothing needs to be installed.
+
+If you're feeding scores from a physical scoring console instead of tapping buttons by hand, see
+[Connecting a console (Bridge)](/connecting-the-bridge).
+
+## 4. Put the score on screen
+
+Once a match is live, share a `/display` link with venue screens, or drop a `/display/overlay` or
+`/display/scorebug` URL into your streaming software as a Browser Source. See
+[Displaying your score](/displaying-your-score) for the full list of display variants and when to
+use each one.
+
+## 5. Bring in your team
+
+Invite other operators from **Account → Team** so more than one person can run the control panel.
+See [Inviting your team](/account/inviting-your-team) and [Roles & permissions](/account/roles-and-permissions).
+
+<Callout>
+  **Stuck?** Email [hello@scorehub.co.nz](mailto:hello@scorehub.co.nz) or see
+  [Support](/support).
+</Callout>

@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "scorehub-marketing",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-14",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "MAILGUN_DOMAIN": "mail.scorehub.co.nz",
+    "CONTACT_TO_EMAIL": "hello@scorehub.co.nz"
+  },
+  "routes": [
+    { "pattern": "scorehub.co.nz", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "uat": {
+      "name": "scorehub-marketing-uat",
+      "workers_dev": true,
+      "routes": [
+        { "pattern": "uat.scorehub.co.nz", "custom_domain": true }
+      ],
+      "vars": {
+        "MAILGUN_DOMAIN": "sandboxb942a665e95b4eefaa84301b0cd15dce.mailgun.org",
+        "CONTACT_TO_EMAIL": "sam@samcorp.co.nz"
+      }
+    }
+  }
+}

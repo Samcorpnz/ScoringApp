@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 
 // Looks up a pending invitation by token (without consuming it) so the
 // accept page can show the org name/role before asking for any input.
@@ -83,17 +84,24 @@ export async function POST(req: NextRequest) {
 
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
+  const acceptedTerms = body?.acceptedTerms === true;
   if (!name || !password) {
     return NextResponse.json({ error: "name and password are required" }, { status: 400 });
   }
   if (password.length < 8) {
     return NextResponse.json({ error: "password must be at least 8 characters" }, { status: 400 });
   }
+  if (!acceptedTerms) {
+    return NextResponse.json({ error: "you must agree to the terms and conditions" }, { status: 400 });
+  }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const now = new Date();
 
   await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({ data: { email: invitation.email, passwordHash, name } });
+    const user = await tx.user.create({
+      data: { email: invitation.email, passwordHash, name, termsAcceptedAt: now, termsVersion: CURRENT_TERMS_VERSION },
+    });
     await tx.membership.create({ data: { userId: user.id, orgId: invitation.orgId, role: invitation.role } });
     await tx.invitation.update({ where: { id: invitation.id }, data: { consumedAt: new Date() } });
   });

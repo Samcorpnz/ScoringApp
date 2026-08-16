@@ -1,0 +1,31 @@
+{
+  "name": "scorehub-marketing",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "generate:og": "node scripts/generate-og-image.mjs",
+    "build": "npm run generate:og && next build",
+    "deploy": "npm run build && wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5",
+    "wrangler": "^4"
+  },
+  "overrides": {
+    "sharp": "^0.35.0",
+    "postcss": "^8.5.23",
+    "next": {
+      "postcss": "^8.5.23"
+    }
+  }
+}
