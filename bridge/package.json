@@ -28,7 +28,7 @@
     "@types/node": "^26.1.1",
     "@types/node-fetch": "^2.6.13",
     "@types/supertest": "^7.2.1",
-    "electron": "^43.4.0",
+    "electron": "43.4.0",
     "electron-builder": "^26.15.3",
     "jest": "^30.4.2",
     "supertest": "^7.2.2",
@@ -36,6 +36,7 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3"
   },
+  "author": "ScoreHub",
   "build": {
     "appId": "co.nz.scorehub.bridge",
     "productName": "ScoreHub Bridge",
@@ -62,7 +63,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallDirectory": true,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
     }
   }
