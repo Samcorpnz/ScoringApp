@@ -2,7 +2,7 @@ const CATEGORIES = [
   {
     href: "/getting-started",
     title: "Getting started",
-    description: "Create your first match, connect a console, and get your score on screen.",
+    description: "Create your first match, score it from the control panel, and get your score on screen.",
   },
   {
     href: "/sports",
