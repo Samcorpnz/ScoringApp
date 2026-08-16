@@ -301,6 +301,33 @@ function BridgeTokensCard({ orgId }: { readonly orgId: string }) {
         connection setup along with the relay URL above.
       </p>
 
+      <div className="flex items-center gap-3 mb-4 p-3 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+        <div className="flex-1">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>ScoreHub Bridge app</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>
+            Install on the venue laptop, then paste a token below into its setup screen.
+          </p>
+        </div>
+        <a
+          href="https://downloads.scorehub.co.nz/mac"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg px-3 py-2 text-xs font-bold shrink-0"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
+        >
+          Mac
+        </a>
+        <a
+          href="https://downloads.scorehub.co.nz/windows"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg px-3 py-2 text-xs font-bold shrink-0"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--border-accent)", color: "var(--accent)", textDecoration: "none" }}
+        >
+          Windows
+        </a>
+      </div>
+
       {justCreated && (
         <div className="mb-3 p-3 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-accent)" }}>
           <p className="text-xs font-semibold mb-2" style={{ color: "var(--accent)" }}>

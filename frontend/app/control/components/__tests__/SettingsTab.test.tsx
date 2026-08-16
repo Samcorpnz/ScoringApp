@@ -104,4 +104,13 @@ describe("SettingsTab", () => {
     expect(screen.getByText("Bridge Devices")).toBeInTheDocument();
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
   });
+
+  it("links the Bridge Devices card's download buttons to downloads.scorehub.co.nz", async () => {
+    useSessionMock.mockReturnValue({ data: { user: { activeRole: "MANAGER", activeOrgId: "org1" } } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ tokens: [] }) }));
+    render(<SettingsTab state={makeState()} push={vi.fn()} />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(screen.getByRole("link", { name: "Mac" })).toHaveAttribute("href", "https://downloads.scorehub.co.nz/mac");
+    expect(screen.getByRole("link", { name: "Windows" })).toHaveAttribute("href", "https://downloads.scorehub.co.nz/windows");
+  });
 });
