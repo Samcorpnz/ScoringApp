@@ -50,6 +50,23 @@ function connect(auth?: Record<string, unknown>): Socket {
   return ioClient(serverUrl, { auth, reconnection: false });
 }
 
+// socket.disconnect() doesn't wait for the underlying transport to actually
+// close — over polling that's a pending XHR, which can otherwise fire after
+// Jest has torn down the module registry once afterAll closes the server.
+// A socket that never connected (e.g. rejected with connect_error) has no
+// live transport to tear down and never emits "disconnect", so only wait
+// for it when there's actually a connection to close.
+function disconnectAndWait(socket: Socket): Promise<void> {
+  if (!socket.connected) {
+    socket.disconnect();
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    socket.on("disconnect", () => resolve());
+    socket.disconnect();
+  });
+}
+
 describe("unscoped viewer connections once DATABASE_URL is set", () => {
   it("rejects a viewer socket with no org and no matchId", async () => {
     const socket = connect();
@@ -58,7 +75,7 @@ describe("unscoped viewer connections once DATABASE_URL is set", () => {
       socket.on("connect", () => reject(new Error("expected connect_error, got connect")));
     });
     expect(err.message).toMatch(/org.*required/i);
-    socket.disconnect();
+    await disconnectAndWait(socket);
   });
 
   it("still connects a viewer socket that supplies an org", async () => {
@@ -68,6 +85,6 @@ describe("unscoped viewer connections once DATABASE_URL is set", () => {
       socket.on("connect_error", reject);
     });
     expect(socket.connected).toBe(true);
-    socket.disconnect();
+    await disconnectAndWait(socket);
   });
 });
