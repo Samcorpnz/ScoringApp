@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import * as Sentry from "@sentry/nextjs";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/stripe-client";
 import { Card, SmallBtn } from "../components/primitives";
@@ -1026,6 +1027,7 @@ function PasskeysCard() {
       await refresh();
       setStatus({ message: "Passkey added.", isError: false });
     } catch (e) {
+      Sentry.captureException(e);
       setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
     } finally {
       setBusy(false);

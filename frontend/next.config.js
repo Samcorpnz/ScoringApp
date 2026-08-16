@@ -20,4 +20,19 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+const { withSentryConfig } = require("@sentry/nextjs");
+
+// Wraps the build to upload source maps to Sentry so production/UAT stack
+// traces are readable instead of minified. No-op without SENTRY_AUTH_TOKEN
+// (e.g. local dev) — silentlySkip avoids failing the build when it's unset.
+module.exports = withSentryConfig(nextConfig, {
+  org: "samcorp-limited",
+  project: "scorehub-frontend",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  disableLogger: true,
+  widenClientFileUpload: true,
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
+});
