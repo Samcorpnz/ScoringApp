@@ -25,7 +25,7 @@ jobs:
       - name: Deploy relay to Fly.io (UAT)
         run: $HOME/.fly/bin/flyctl deploy -c fly.uat.toml -a scorehub-relay-uat --remote-only
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_UAT }}
 
   # Frontend needs no job here: Vercel's GitHub integration auto-deploys a
   # preview on every push to any branch, including `uat`, using the
