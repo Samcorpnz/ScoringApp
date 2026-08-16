@@ -30,7 +30,8 @@ module.exports = withSentryConfig(nextConfig, {
   project: "scorehub-frontend",
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: true,
-  disableLogger: true,
+  // No replacement while building with Turbopack (`next build` here) — the
+  // suggested webpack.treeshake.removeDebugLogging option is webpack-only.
   widenClientFileUpload: true,
   sourcemaps: {
     disable: !process.env.SENTRY_AUTH_TOKEN,
