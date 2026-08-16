@@ -35,7 +35,10 @@ export interface BridgeConfig {
 
 export type BridgeStatus = "stopped" | "connecting" | "running" | "error";
 
-const CONFIG_PATH = path.join(process.cwd(), "bridge-config.json");
+// BRIDGE_CONFIG_DIR is set by the Electron main process (electron/main.ts) to
+// app.getPath("userData") before this module loads, since a packaged app has
+// no predictable cwd. Falls back to cwd for the plain `npm start` / Docker path.
+const CONFIG_PATH = path.join(process.env.BRIDGE_CONFIG_DIR ?? process.cwd(), "bridge-config.json");
 
 // How long the relay socket can stay disconnected before we treat it as an
 // outage worth alerting on, rather than a normal brief reconnect blip (SA-29).

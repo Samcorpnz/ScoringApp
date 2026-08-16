@@ -2,11 +2,14 @@
   "name": "scorehub-bridge",
   "version": "1.0.0",
   "description": "Venue-side serial bridge — reads Saturn console, pushes to cloud relay",
-  "main": "dist/index.js",
+  "main": "dist/electron/main.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc && cp -r src/ui/public dist/ui/public",
     "start": "node dist/index.js",
+    "electron:dev": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
     "test": "jest",
     "test:coverage": "jest --coverage --coverageReporters=lcov --coverageReporters=text-summary"
   },
@@ -25,10 +28,42 @@
     "@types/node": "^26.1.1",
     "@types/node-fetch": "^2.6.13",
     "@types/supertest": "^7.2.1",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
     "jest": "^30.4.2",
     "supertest": "^7.2.2",
     "ts-jest": "^29.1.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3"
+  },
+  "build": {
+    "appId": "co.nz.scorehub.bridge",
+    "productName": "ScoreHub Bridge",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*"
+    ],
+    "extraResources": [],
+    "mac": {
+      "category": "public.app-category.sports",
+      "icon": "resources/icon.png",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallDirectory": true,
+      "createDesktopShortcut": true
+    }
   }
 }

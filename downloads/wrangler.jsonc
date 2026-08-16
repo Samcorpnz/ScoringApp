@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "scorehub-downloads",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-14",
+  "vars": {
+    "GITHUB_REPO": "Samcorpnz/ScoringApp",
+    "RELEASE_TAG_PREFIX": "bridge-v"
+  },
+  "routes": [
+    { "pattern": "downloads.scorehub.co.nz", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "uat": {
+      "name": "scorehub-downloads-uat",
+      "workers_dev": true,
+      "routes": [
+        { "pattern": "downloads.uat.scorehub.co.nz", "custom_domain": true }
+      ],
+      "vars": {
+        "GITHUB_REPO": "Samcorpnz/ScoringApp",
+        "RELEASE_TAG_PREFIX": "bridge-v"
+      }
+    }
+  }
+}
