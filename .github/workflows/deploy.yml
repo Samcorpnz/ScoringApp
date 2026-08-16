@@ -48,3 +48,46 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-marketing:
+    name: Deploy marketing site (Cloudflare Worker)
+    needs: test
+    runs-on: ubuntu-latest
+    # Same production-environment gate as relay/frontend above — previously
+    # this site deployed manually (`cd marketing && npm run build && npx
+    # wrangler deploy`) with no CI and no review step at all.
+    environment: production
+    defaults:
+      run:
+        working-directory: marketing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: marketing/package-lock.json
+      - run: npm ci
+      - run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-help:
+    name: Deploy help centre (Cloudflare Worker)
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: help
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: help/package-lock.json
+      - run: npm ci
+      - run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
