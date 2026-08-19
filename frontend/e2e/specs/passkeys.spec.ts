@@ -62,6 +62,7 @@ test.describe("passkeys", () => {
 
     await page.goto("/account");
     await page.getByRole("button", { name: "Add a passkey" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByText("Passkey added.")).toBeVisible({ timeout: 10_000 });
 
     await page.context().clearCookies();
@@ -79,6 +80,7 @@ test.describe("passkeys", () => {
 
     await page.goto("/account");
     await page.getByRole("button", { name: "Add a passkey" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByText("Passkey added.")).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Remove" }).click();
