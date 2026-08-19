@@ -180,6 +180,15 @@ describe("/api/orgs/[orgId]/matches", () => {
       );
     });
 
+    it("filters by a specific match id (used to fetch one match's displayToken)", async () => {
+      matchFindManyMock.mockResolvedValue([]);
+      const { GET } = await import("../route");
+      await GET(makeGetRequest("?id=m1"), { params });
+      expect(matchFindManyMock).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: "m1" }) }),
+      );
+    });
+
     it("adds a case-insensitive OR search on home/visitor names for q", async () => {
       matchFindManyMock.mockResolvedValue([]);
       const { GET } = await import("../route");

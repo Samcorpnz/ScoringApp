@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { OutputsTab } from "../OutputsTab";
 
@@ -7,6 +7,14 @@ const { useSessionMock } = vi.hoisted(() => ({ useSessionMock: vi.fn() }));
 vi.mock("next-auth/react", () => ({
   useSession: useSessionMock,
 }));
+
+// OutputsTab fetches the match's displayToken to append to display URLs —
+// stub it to "no token yet" by default so existing assertions (which predate
+// the token param) keep matching; a couple of tests below override this to
+// assert the token actually gets appended once known.
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ matches: [] }) })));
+});
 
 afterEach(() => {
   cleanup();
@@ -69,6 +77,19 @@ describe("OutputsTab", () => {
     useSessionMock.mockReturnValue({ data: null });
     render(<OutputsTab />);
     expect(screen.getByText("Graphics Control").closest("a")).toHaveAttribute("href", "/control/graphics");
+  });
+
+  it("appends the fetched displayToken to display URLs once known", async () => {
+    useSessionMock.mockReturnValue({ data: { user: { activeOrgId: "org1" } } });
+    vi.stubGlobal("fetch", vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve({ matches: [{ id: "match1", displayToken: "the-token" }] }) })
+    ));
+    render(<OutputsTab matchId="match1" />);
+    expect(
+      await screen.findByText(
+        (_content, el) => el?.textContent === "http://localhost:3000/display/fullscreen?org=org1&matchId=match1&token=the-token"
+      )
+    ).toBeInTheDocument();
   });
 
   it("renders the data feed rows with copy buttons", () => {

@@ -1,6 +1,13 @@
+import crypto from "node:crypto";
 import { prisma } from "@scorehub/db";
 import { MatchState, DEFAULT_MATCH_STATE } from "./types";
 import { getOrgAccount, ConcurrentMatchLimitError } from "./entitlements";
+
+// See the Match.displayToken schema comment — every match gets one at
+// creation so opening a display link stays a zero-config action.
+function newDisplayToken(): string {
+  return crypto.randomBytes(24).toString("hex");
+}
 
 const SAVE_DEBOUNCE_MS = 2000;
 
@@ -31,7 +38,7 @@ async function createLiveMatch(orgId: string): Promise<string> {
     });
     if (liveElsewhere > 0) throw new ConcurrentMatchLimitError();
   }
-  const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object } });
+  const created = await prisma.match.create({ data: { orgId, state: DEFAULT_MATCH_STATE as object, displayToken: newDisplayToken() } });
   return created.id;
 }
 

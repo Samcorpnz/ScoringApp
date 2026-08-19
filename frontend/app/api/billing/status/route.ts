@@ -36,9 +36,28 @@ export async function GET() {
     };
   }
 
-  const [subscription, graphicsSubscription] = await Promise.all([
+  type PaymentMethodSummary = { brand: string; last4: string } | null;
+
+  async function summarizeCustomer(customerId: string): Promise<{ invoiceEmail: string | null; paymentMethod: PaymentMethodSummary }> {
+    const customer = await getStripe().customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if (customer.deleted) return { invoiceEmail: null, paymentMethod: null };
+    const pm = customer.invoice_settings.default_payment_method;
+    const paymentMethod =
+      pm && typeof pm !== "string" && pm.type === "card" && pm.card
+        ? { brand: pm.card.brand, last4: pm.card.last4 }
+        : null;
+    return { invoiceEmail: customer.email, paymentMethod };
+  }
+
+  const [subscription, graphicsSubscription, dataFeedSubscription, customerInfo] = await Promise.all([
     account.stripeSubscriptionId ? summarize(account.stripeSubscriptionId) : Promise.resolve(null),
     account.graphicsSubscriptionId ? summarize(account.graphicsSubscriptionId) : Promise.resolve(null),
+    account.dataFeedSubscriptionId ? summarize(account.dataFeedSubscriptionId) : Promise.resolve(null),
+    account.stripeCustomerId
+      ? summarizeCustomer(account.stripeCustomerId)
+      : Promise.resolve({ invoiceEmail: null, paymentMethod: null }),
   ]);
 
   return NextResponse.json({
@@ -48,5 +67,9 @@ export async function GET() {
     subscription,
     addOns: account.addOns,
     graphicsSubscription,
+    dataFeedSubscription,
+    invoiceEmail: customerInfo.invoiceEmail,
+    paymentMethod: customerInfo.paymentMethod,
+    upgradeDiscountAvailable: account.upgradeDiscountUsedAt === null,
   });
 }

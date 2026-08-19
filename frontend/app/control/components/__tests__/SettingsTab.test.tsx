@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, within, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { SettingsTab } from "../SettingsTab";
 import { DEFAULT_MATCH_STATE } from "../../../types";
 import type { MatchState } from "@scorehub/types";
@@ -103,6 +103,45 @@ describe("SettingsTab", () => {
     expect(screen.getByText("Stream Deck / Webhooks")).toBeInTheDocument();
     expect(screen.getByText("Bridge Devices")).toBeInTheDocument();
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+  });
+
+  it("shows an upgrade prompt for the Data Feed card when the org lacks the add-on", async () => {
+    useSessionMock.mockReturnValue({ data: { user: { activeRole: "MANAGER", activeOrgId: "org1" } } });
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.includes("/api/billing/status")) return Promise.resolve({ ok: true, json: async () => ({ addOns: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ tokens: [] }) });
+    }));
+    render(<SettingsTab state={makeState()} push={vi.fn()} />);
+    expect(await screen.findByText("Data Feed")).toBeInTheDocument();
+    expect(await screen.findByText(/requires the Data Feed add-on/)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Label (e.g. Singular.live)")).not.toBeInTheDocument();
+  });
+
+  it("renders the Data Feed token form and generates a token when the org has the add-on", async () => {
+    useSessionMock.mockReturnValue({ data: { user: { activeRole: "MANAGER", activeOrgId: "org1" } } });
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes("/api/billing/status")) return Promise.resolve({ ok: true, json: async () => ({ addOns: ["data-feed"] }) });
+      if (url === "/api/orgs/org1/tokens" && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({ token: "the-plaintext-token" }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ tokens: [] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsTab state={makeState()} push={vi.fn()} />);
+
+    expect(await screen.findByText("No data feed tokens yet.")).toBeInTheDocument();
+    const card = within(screen.getByText("Data Feed").closest("div")!);
+    fireEvent.change(card.getByPlaceholderText("Label (e.g. Singular.live)"), { target: { value: "Singular.live" } });
+    fireEvent.click(card.getByText("Generate Token"));
+
+    expect(await screen.findByText("the-plaintext-token")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/orgs/org1/tokens",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ label: "Singular.live", type: "DATA_FEED" }),
+      })
+    );
   });
 
   it("links the Bridge Devices card's download buttons to downloads.scorehub.co.nz", async () => {

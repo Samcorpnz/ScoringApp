@@ -11,6 +11,7 @@ import {
   verifyActionSecret,
   verifyControlSecret,
   verifyGraphicsSecret,
+  verifyDataFeedSecret,
 } from "../auth";
 
 const LEGACY_SECRET = "legacy-shared-secret";
@@ -42,6 +43,7 @@ describe("relay auth (legacy mode, no DATABASE_URL)", () => {
     ["verifyActionSecret", verifyActionSecret],
     ["verifyControlSecret", verifyControlSecret],
     ["verifyGraphicsSecret", verifyGraphicsSecret],
+    ["verifyDataFeedSecret", verifyDataFeedSecret],
   ])("%s returns the legacy room for a matching secret", async (_name, fn) => {
     await expect(fn(LEGACY_SECRET, LEGACY_SECRET)).resolves.toEqual({ orgId: LEGACY_ROOM_ID });
   });
@@ -51,6 +53,7 @@ describe("relay auth (legacy mode, no DATABASE_URL)", () => {
     ["verifyActionSecret", verifyActionSecret],
     ["verifyControlSecret", verifyControlSecret],
     ["verifyGraphicsSecret", verifyGraphicsSecret],
+    ["verifyDataFeedSecret", verifyDataFeedSecret],
   ])("%s returns null for a non-matching secret", async (_name, fn) => {
     await expect(fn("wrong-secret", LEGACY_SECRET)).resolves.toBeNull();
   });
@@ -60,6 +63,7 @@ describe("relay auth (legacy mode, no DATABASE_URL)", () => {
     ["verifyActionSecret", verifyActionSecret],
     ["verifyControlSecret", verifyControlSecret],
     ["verifyGraphicsSecret", verifyGraphicsSecret],
+    ["verifyDataFeedSecret", verifyDataFeedSecret],
   ])("%s returns null when no secret is supplied", async (_name, fn) => {
     await expect(fn(undefined, LEGACY_SECRET)).resolves.toBeNull();
   });
@@ -69,6 +73,7 @@ describe("relay auth (legacy mode, no DATABASE_URL)", () => {
     await verifyActionSecret(LEGACY_SECRET, LEGACY_SECRET);
     await verifyControlSecret(LEGACY_SECRET, LEGACY_SECRET);
     await verifyGraphicsSecret(LEGACY_SECRET, LEGACY_SECRET);
+    await verifyDataFeedSecret(LEGACY_SECRET, LEGACY_SECRET);
     expect(findUniqueMock).not.toHaveBeenCalled();
   });
 });
@@ -210,6 +215,28 @@ describe("relay auth (multi-tenant mode, DATABASE_URL set)", () => {
     it("returns null for a revoked GRAPHICS token that also fails JWT verification", async () => {
       findUniqueMock.mockResolvedValue({ type: "GRAPHICS", orgId: "org-1", revokedAt: new Date() });
       await expect(verifyGraphicsSecret("not-a-jwt", "legacy")).resolves.toBeNull();
+    });
+  });
+
+  describe("verifyDataFeedSecret", () => {
+    it("resolves for a valid, unrevoked DATA_FEED token", async () => {
+      findUniqueMock.mockResolvedValue({ type: "DATA_FEED", orgId: "org-1", matchId: "m1", revokedAt: null });
+      await expect(verifyDataFeedSecret("tok", "legacy")).resolves.toEqual({ orgId: "org-1", matchId: "m1" });
+    });
+
+    it("returns null for a revoked DATA_FEED token", async () => {
+      findUniqueMock.mockResolvedValue({ type: "DATA_FEED", orgId: "org-1", revokedAt: new Date() });
+      await expect(verifyDataFeedSecret("tok", "legacy")).resolves.toBeNull();
+    });
+
+    it("returns null for a token of the wrong type", async () => {
+      findUniqueMock.mockResolvedValue({ type: "BRIDGE", orgId: "org-1", revokedAt: null });
+      await expect(verifyDataFeedSecret("tok", "legacy")).resolves.toBeNull();
+    });
+
+    it("returns null when the token doesn't exist", async () => {
+      findUniqueMock.mockResolvedValue(null);
+      await expect(verifyDataFeedSecret("tok", "legacy")).resolves.toBeNull();
     });
   });
 });

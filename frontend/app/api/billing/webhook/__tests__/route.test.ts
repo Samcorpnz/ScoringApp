@@ -45,6 +45,10 @@ const addOnForPriceIdMock = vi.fn();
 vi.mock("@/lib/plans", () => ({
   planForPriceId: (...a: unknown[]) => planForPriceIdMock(...a),
   addOnForPriceId: (...a: unknown[]) => addOnForPriceIdMock(...a),
+  ADDON_SUBSCRIPTION_FIELD: {
+    "graphics-operator": "graphicsSubscriptionId",
+    "data-feed": "dataFeedSubscriptionId",
+  },
 }));
 
 const sendPaymentFailedEmailMock = vi.fn();
@@ -187,6 +191,30 @@ describe("POST /api/billing/webhook", () => {
       });
     });
 
+    it("adds a data-feed add-on subscription onto its own dedicated field", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("checkout.session.completed", {
+          client_reference_id: "acc_1",
+          customer: "cus_1",
+          subscription: "sub_1",
+          metadata: { addOn: "data-feed" },
+        }),
+      );
+      subscriptionsRetrieveMock.mockResolvedValue({
+        id: "sub_1",
+        items: { data: [{ price: { id: "price_data_feed" } }] },
+      });
+      accountFindUniqueMock.mockResolvedValue({ id: "acc_1", addOns: [] });
+
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+
+      expect(accountUpdateMock).toHaveBeenCalledWith({
+        where: { id: "acc_1" },
+        data: { dataFeedSubscriptionId: "sub_1", addOns: ["data-feed"] },
+      });
+    });
+
     it("maps the price id to a plan and records it on the account", async () => {
       constructEventMock.mockReturnValue(
         stripeEvent("checkout.session.completed", {
@@ -316,7 +344,7 @@ describe("POST /api/billing/webhook", () => {
       await POST(makeRequest());
 
       expect(accountFindFirstMock).toHaveBeenCalledWith({
-        where: { graphicsSubscriptionId: "sub_1" },
+        where: { OR: [{ graphicsSubscriptionId: "sub_1" }, { dataFeedSubscriptionId: "sub_1" }] },
       });
       expect(accountUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "acc_1" } }),

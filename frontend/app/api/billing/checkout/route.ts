@@ -4,7 +4,18 @@ import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { getAccountForOrg } from "@/lib/account";
 import { getStripe } from "@/lib/stripe";
-import { priceIdForPlan, priceIdForAddOn, PaidPlan, AddOn, BillingInterval } from "@/lib/plans";
+import {
+  priceIdForPlan,
+  priceIdForAddOn,
+  isPlanUpgrade,
+  UPGRADE_DISCOUNT_COUPON_ID,
+  ADDON_SUBSCRIPTION_FIELD,
+  PaidPlan,
+  AddOn,
+  BillingInterval,
+} from "@/lib/plans";
+
+const KNOWN_ADDONS: AddOn[] = ["graphics-operator", "data-feed"];
 
 type Account = NonNullable<Awaited<ReturnType<typeof getAccountForOrg>>>;
 
@@ -23,7 +34,7 @@ function parseCheckoutRequest(body: unknown): CheckoutRequest | NextResponse {
   if (plan && plan !== "pro" && plan !== "venue") {
     return NextResponse.json({ error: "plan must be 'pro' or 'venue'" }, { status: 400 });
   }
-  if (addOn && addOn !== "graphics-operator") {
+  if (addOn && !KNOWN_ADDONS.includes(addOn)) {
     return NextResponse.json({ error: "unknown add-on" }, { status: 400 });
   }
   if (!plan && !addOn) {
@@ -44,10 +55,10 @@ async function switchExistingSubscription(
   account: Account,
   existingSubscriptionId: string,
   priceId: string,
-  plan: PaidPlan | undefined,
-  addOn: AddOn | undefined,
-  interval: BillingInterval,
+  request: CheckoutRequest,
+  discountEligible: boolean,
 ): Promise<NextResponse> {
+  const { plan, addOn, interval } = request;
   const subscription = await stripe.subscriptions.retrieve(existingSubscriptionId);
   const itemId = subscription.items.data[0]?.id;
   if (!itemId) {
@@ -61,13 +72,23 @@ async function switchExistingSubscription(
     items: [{ id: itemId, price: priceId }],
     proration_behavior: "create_prorations",
     metadata: updateMetadata,
+    ...(discountEligible ? { discounts: [{ coupon: UPGRADE_DISCOUNT_COUPON_ID }] } : {}),
   });
 
   // Reflect the switch immediately; the customer.subscription.updated
-  // webhook will also fire and confirm the same state (idempotent).
+  // webhook will also fire and confirm the same state (idempotent). The
+  // discount is applied directly above (not via Checkout), so mark it used
+  // here rather than waiting on the webhook.
   if (plan) {
-    await prisma.account.update({ where: { id: account.id }, data: { plan, billingInterval: interval } });
-    return NextResponse.json({ switched: true, plan, interval });
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        plan,
+        billingInterval: interval,
+        ...(discountEligible ? { upgradeDiscountUsedAt: new Date() } : {}),
+      },
+    });
+    return NextResponse.json({ switched: true, plan, interval, discountApplied: discountEligible });
   }
   return NextResponse.json({ switched: true, addOn, interval });
 }
@@ -80,9 +101,10 @@ async function createNewCheckoutSession(
   stripe: Stripe,
   account: Account,
   priceId: string,
-  plan: PaidPlan | undefined,
-  addOn: AddOn | undefined,
+  request: CheckoutRequest,
+  discountEligible: boolean,
 ): Promise<NextResponse> {
+  const { plan, addOn } = request;
   let customerId = account.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -94,7 +116,7 @@ async function createNewCheckoutSession(
   }
 
   const metadata: Record<string, string> = plan
-    ? { accountId: account.id, plan }
+    ? { accountId: account.id, plan, ...(discountEligible ? { discounted: "true" } : {}) }
     : { accountId: account.id, addOn: addOn! };
   const checkoutSession = await stripe.checkout.sessions.create({
     ui_mode: "embedded_page",
@@ -103,11 +125,16 @@ async function createNewCheckoutSession(
     client_reference_id: account.id,
     line_items: [{ price: priceId, quantity: 1 }],
     redirect_on_completion: "never",
-    allow_promotion_codes: true,
     automatic_tax: { enabled: true },
     customer_update: { address: "auto", name: "auto" },
     metadata,
     subscription_data: { metadata },
+    // Checkout can't combine an automatically-applied discount with
+    // customer-entered promo codes, so only offer the code field when we're
+    // not already applying the upgrade discount ourselves.
+    ...(discountEligible
+      ? { discounts: [{ coupon: UPGRADE_DISCOUNT_COUPON_ID }] }
+      : { allow_promotion_codes: true }),
   });
 
   if (!checkoutSession.client_secret) {
@@ -150,14 +177,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "billing is not configured" }, { status: 500 });
   }
 
-  const existingSubscriptionId = plan ? account.stripeSubscriptionId : account.graphicsSubscriptionId;
+  const existingSubscriptionId = plan ? account.stripeSubscriptionId : account[ADDON_SUBSCRIPTION_FIELD[addOn!]];
   const hasExistingSubscription = plan
     ? Boolean(existingSubscriptionId) && (account.plan === "pro" || account.plan === "venue")
     : Boolean(existingSubscriptionId) && account.addOns.includes(addOn!);
 
+  // Only base-plan upgrades qualify for the discount (not add-ons), and only
+  // once per account — see the schema comment on Account.upgradeDiscountUsedAt.
+  const discountEligible =
+    Boolean(plan) && isPlanUpgrade(account.plan, plan!) && !account.upgradeDiscountUsedAt;
+
   if (hasExistingSubscription && existingSubscriptionId) {
-    return switchExistingSubscription(stripe, account, existingSubscriptionId, priceId, plan, addOn, interval);
+    return switchExistingSubscription(stripe, account, existingSubscriptionId, priceId, parsed, discountEligible);
   }
 
-  return createNewCheckoutSession(stripe, account, priceId, plan, addOn);
+  return createNewCheckoutSession(stripe, account, priceId, parsed, discountEligible);
 }

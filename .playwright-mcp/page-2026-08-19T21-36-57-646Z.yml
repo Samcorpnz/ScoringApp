@@ -1,0 +1,57 @@
+- generic [active] [ref=f9e1]:
+  - button "Open Next.js Dev Tools" [ref=f9e33] [cursor=pointer]:
+    - generic [ref=f9e36]:
+      - text: Compiling
+      - generic [ref=f9e37]:
+        - generic [ref=f9e38]: .
+        - generic [ref=f9e39]: .
+        - generic [ref=f9e40]: .
+  - alert [ref=f9e32]: Matches
+  - generic [ref=f9e41]:
+    - generic [ref=f9e42]:
+      - generic [ref=f9e43]: ScoreHub
+      - generic [ref=f9e44]:
+        - generic [ref=f9e45]: Preview Tester
+        - link "Account" [ref=f9e46] [cursor=pointer]:
+          - /url: /account
+        - link "Help" [ref=f9e47] [cursor=pointer]:
+          - /url: https://help.scorehub.co.nz
+        - button "Sign out" [ref=f9e48]
+        - link "Set Up a New Match" [ref=f9e49] [cursor=pointer]:
+          - /url: /setup
+    - generic [ref=f9e50]:
+      - heading "Matches" [level=1] [ref=f9e51]
+      - paragraph [ref=f9e52]: Upcoming fixtures, live matches, and history — click into a match to score it.
+      - generic [ref=f9e53]:
+        - button "live" [ref=f9e54]
+        - button "upcoming" [ref=f9e55]
+        - button "history" [ref=f9e56]
+      - generic [ref=f9e57]:
+        - combobox [ref=f9e58]:
+          - option "All sports" [selected]
+          - option "Netball"
+          - option "Basketball"
+          - option "Rugby Union"
+          - option "Rugby League"
+          - option "Volleyball"
+          - option "Football"
+          - option "Handball"
+          - option "Hockey"
+          - option "Water Polo"
+          - option "Tennis"
+          - option "Touch Rugby"
+          - option "Futsal"
+          - option "Pickleball"
+          - option "Badminton"
+          - option "Table Tennis"
+          - option "Floorball"
+          - option "Squash"
+          - option "Lawn Bowls"
+          - option "Indoor Cricket"
+          - option "Softball"
+          - option "Cricket"
+          - option "Custom"
+        - combobox [ref=f9e59]:
+          - option "All competitions" [selected]
+        - textbox "Search team name…" [ref=f9e60]
+      - paragraph [ref=f9e61]: Loading…

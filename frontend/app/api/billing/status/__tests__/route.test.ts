@@ -8,9 +8,11 @@ const getAccountForOrgMock = vi.fn();
 vi.mock("@/lib/account", () => ({ getAccountForOrg: (...a: unknown[]) => getAccountForOrgMock(...a) }));
 
 const subscriptionsRetrieveMock = vi.fn();
+const customersRetrieveMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   getStripe: () => ({
     subscriptions: { retrieve: (...a: unknown[]) => subscriptionsRetrieveMock(...a) },
+    customers: { retrieve: (...a: unknown[]) => customersRetrieveMock(...a) },
   }),
 }));
 
@@ -22,7 +24,9 @@ function baseAccount(overrides: Record<string, unknown> = {}) {
     stripeCustomerId: "cus_1",
     stripeSubscriptionId: null,
     graphicsSubscriptionId: null,
+    dataFeedSubscriptionId: null,
     addOns: [] as string[],
+    upgradeDiscountUsedAt: null,
     ...overrides,
   };
 }
@@ -50,7 +54,13 @@ describe("GET /api/billing/status", () => {
     authMock.mockReset();
     getAccountForOrgMock.mockReset();
     subscriptionsRetrieveMock.mockReset();
+    customersRetrieveMock.mockReset();
     authMock.mockResolvedValue({ user: { activeOrgId: "org-1" } });
+    customersRetrieveMock.mockResolvedValue({
+      deleted: false,
+      email: "billing@example.com",
+      invoice_settings: { default_payment_method: null },
+    });
   });
 
   it("401s when there's no session/activeOrgId", async () => {
@@ -79,6 +89,10 @@ describe("GET /api/billing/status", () => {
       subscription: null,
       addOns: [],
       graphicsSubscription: null,
+      dataFeedSubscription: null,
+      invoiceEmail: null,
+      paymentMethod: null,
+      upgradeDiscountAvailable: true,
     });
   });
 
@@ -117,6 +131,46 @@ describe("GET /api/billing/status", () => {
     expect(subscriptionsRetrieveMock).toHaveBeenCalledWith("sub_graphics");
     expect(body.graphicsSubscription.status).toBe("trialing");
     expect(body.addOns).toEqual(["graphics-operator"]);
+  });
+
+  it("summarizes the data-feed subscription when dataFeedSubscriptionId is set", async () => {
+    getAccountForOrgMock.mockResolvedValue(
+      baseAccount({ dataFeedSubscriptionId: "sub_datafeed", addOns: ["data-feed"] }),
+    );
+    subscriptionsRetrieveMock.mockResolvedValue(stripeSubscription({ status: "active" }));
+    const { GET } = await import("../route");
+    const res = await GET();
+    const body = await res.json();
+    expect(subscriptionsRetrieveMock).toHaveBeenCalledWith("sub_datafeed");
+    expect(body.dataFeedSubscription.status).toBe("active");
+    expect(body.addOns).toEqual(["data-feed"]);
+  });
+
+  it("surfaces invoice email and masked payment method from the Stripe customer", async () => {
+    getAccountForOrgMock.mockResolvedValue(baseAccount());
+    customersRetrieveMock.mockResolvedValue({
+      deleted: false,
+      email: "billing@example.com",
+      invoice_settings: {
+        default_payment_method: { type: "card", card: { brand: "visa", last4: "4242" } },
+      },
+    });
+    const { GET } = await import("../route");
+    const res = await GET();
+    const body = await res.json();
+    expect(customersRetrieveMock).toHaveBeenCalledWith("cus_1", {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    expect(body.invoiceEmail).toBe("billing@example.com");
+    expect(body.paymentMethod).toEqual({ brand: "visa", last4: "4242" });
+  });
+
+  it("marks the upgrade discount unavailable once the account has used it", async () => {
+    getAccountForOrgMock.mockResolvedValue(baseAccount({ upgradeDiscountUsedAt: new Date("2026-01-01") }));
+    const { GET } = await import("../route");
+    const res = await GET();
+    const body = await res.json();
+    expect(body.upgradeDiscountAvailable).toBe(false);
   });
 
   it("handles a subscription item with no recurring interval / price data gracefully", async () => {

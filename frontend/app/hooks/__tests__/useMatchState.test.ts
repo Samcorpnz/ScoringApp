@@ -120,6 +120,32 @@ describe("useMatchState", () => {
     expect(result.current.status).toBe("connecting");
   });
 
+  it("includes the display token from the URL for an unauthenticated (viewer) connection", () => {
+    const original = window.location.href;
+    window.history.pushState({}, "", "/display/basic?org=org-1&matchId=m1&token=tok-1");
+    renderHook(() => useMatchState());
+    expect(ioMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ auth: { orgId: "org-1", matchId: "m1", token: "tok-1" } }),
+    );
+    window.history.pushState({}, "", original);
+  });
+
+  it("sets unauthorized on a connect_error mentioning the display token", async () => {
+    const { result } = renderHook(() => useMatchState());
+    expect(result.current.unauthorized).toBe(false);
+    act(() => fakeSocket.__trigger("connect_error", new Error("invalid or missing display token")));
+    await waitFor(() => expect(result.current.unauthorized).toBe(true));
+  });
+
+  it("clears unauthorized once the socket successfully connects", async () => {
+    const { result } = renderHook(() => useMatchState());
+    act(() => fakeSocket.__trigger("connect_error", new Error("invalid or missing display token")));
+    await waitFor(() => expect(result.current.unauthorized).toBe(true));
+    act(() => fakeSocket.__trigger("connect"));
+    await waitFor(() => expect(result.current.unauthorized).toBe(false));
+  });
+
   it("opens a socket once a real token replaces the empty placeholder", () => {
     const { rerender } = renderHook(
       ({ secret }) => useMatchState({ secret, role: "control" }),

@@ -7,11 +7,14 @@ import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatScore } from "../../types";
 import { getPeriodLabel, getTemplate } from "../../sport-templates";
+import { DisplayLinkExpiredNotice } from "../components/DisplayLinkExpiredNotice";
 
 export default function AdvancedDisplay() {
-  const { state, status, relayUnreachable } = useMatchState();
+  const { state, status, relayUnreachable, unauthorized } = useMatchState();
   const { textScale: _ts, competitionLogoUrl: _cl, ...themeStyle } = useDisplayTheme(state.displayTheme);
   const DisplayStats = getTemplate(state.sport).displayStats;
+
+  if (unauthorized) return <DisplayLinkExpiredNotice />;
 
   return (
     <div

@@ -27,6 +27,7 @@ function baseAccount(overrides: Record<string, unknown> = {}) {
     id: "acc_1",
     stripeSubscriptionId: "sub_base",
     graphicsSubscriptionId: "sub_graphics",
+    dataFeedSubscriptionId: "sub_datafeed",
     ...overrides,
   };
 }
@@ -109,5 +110,13 @@ describe("POST /api/billing/cancel", () => {
     const { POST } = await import("../route");
     await POST(makeRequest({ addOn: "graphics-operator" }));
     expect(subscriptionsUpdateMock).toHaveBeenCalledWith("sub_graphics", { cancel_at_period_end: true });
+  });
+
+  it("targets the data-feed subscription (its own dedicated field) when addOn is data-feed", async () => {
+    getAccountForOrgMock.mockResolvedValue(baseAccount());
+    subscriptionsUpdateMock.mockResolvedValue({ cancel_at_period_end: true });
+    const { POST } = await import("../route");
+    await POST(makeRequest({ addOn: "data-feed" }));
+    expect(subscriptionsUpdateMock).toHaveBeenCalledWith("sub_datafeed", { cancel_at_period_end: true });
   });
 });

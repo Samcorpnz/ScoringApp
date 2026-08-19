@@ -39,6 +39,7 @@ const freePlanStatus = {
   subscription: null,
   addOns: [],
   graphicsSubscription: null,
+  dataFeedSubscription: null,
 };
 
 function jsonResponse(body: unknown, ok = true) {
@@ -223,15 +224,17 @@ describe("AccountPage", () => {
     render(<AccountPage />);
 
     expect(await screen.findByText("Graphics Operator")).toBeInTheDocument();
-    expect(screen.getByText("Add Graphics")).toBeInTheDocument();
+    expect(screen.getByText("Add Graphics Operator")).toBeInTheDocument();
+    expect(screen.getByText("Data Feed")).toBeInTheDocument();
+    expect(screen.getByText("Add Data Feed")).toBeInTheDocument();
   });
 
-  it("shows an inactive Graphics add-on requiring a base plan note when on Free", async () => {
+  it("shows both add-ons requiring a base plan note when on Free", async () => {
     useSessionMock.mockReturnValue(adminSession);
     vi.stubGlobal("fetch", mockFetchRouter());
     render(<AccountPage />);
 
-    expect(await screen.findByText("Requires a Pro or Venue plan.")).toBeInTheDocument();
+    expect(await screen.findAllByText("Requires a Pro or Venue plan.")).toHaveLength(2);
   });
 
   it("saves a new display name via DisplayNameCard", async () => {

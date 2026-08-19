@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { prisma } from "@scorehub/db";
 import { auth } from "@/auth";
 import { getAccountForOrg } from "@/lib/account";
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
         homeName: home,
         visitorName: visitor,
         scheduledAt: row.scheduledAt ? new Date(row.scheduledAt) : null,
+        displayToken: crypto.randomBytes(24).toString("hex"),
         state: {
           ...DEFAULT_MATCH_STATE,
           sport,

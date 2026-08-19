@@ -10,9 +10,10 @@ import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useInterpolatedClock } from "../../hooks/useInterpolatedClock";
 import { formatClockDisplay, formatScore } from "../../types";
 import { getPeriodLabel, getTemplate } from "../../sport-templates";
+import { DisplayLinkExpiredNotice } from "../components/DisplayLinkExpiredNotice";
 
 export default function OverlayDisplay() {
-  const { state } = useMatchState();
+  const { state, unauthorized } = useMatchState();
   const { home, visitor, clockSeconds, countDown, period, isRunning, hornActive, possession } = state;
   const periodLabel = getPeriodLabel(state);
   const DisplayStats = getTemplate(state.sport).displayStats;
@@ -34,6 +35,8 @@ export default function OverlayDisplay() {
   } else {
     periodText = period === "E" ? "EXTRA" : `${periodLabel} ${period}`;
   }
+
+  if (unauthorized) return <DisplayLinkExpiredNotice />;
 
   return (
     <div

@@ -1,0 +1,105 @@
+- generic [ref=f13e1]:
+  - generic [ref=f13e2]:
+    - generic [ref=f13e3]:
+      - generic [ref=f13e4]:
+        - generic [ref=f13e5]: ScoreHub
+        - generic [ref=f13e6]: Account
+      - generic [ref=f13e7]:
+        - generic [ref=f13e8]: Preview Tester
+        - link "Control Panel" [ref=f13e9] [cursor=pointer]:
+          - /url: /control
+        - link "Help" [ref=f13e10] [cursor=pointer]:
+          - /url: https://help.scorehub.co.nz
+        - button "Sign out" [ref=f13e11]
+    - generic [ref=f13e12]:
+      - generic [ref=f13e13]:
+        - paragraph [ref=f13e14]: Organization
+        - generic [ref=f13e15]:
+          - paragraph [ref=f13e16]: Preview Tester
+          - paragraph [ref=f13e17]: "Role: ADMIN"
+      - generic [ref=f13e18]:
+        - paragraph [ref=f13e19]: Display Name
+        - generic [ref=f13e21]:
+          - textbox [ref=f13e22]: Preview Tester
+          - button "Save" [ref=f13e23]
+      - generic [ref=f13e24]:
+        - paragraph [ref=f13e25]: Password
+        - generic [ref=f13e27]:
+          - textbox "Current password" [ref=f13e28]
+          - textbox "New password (min. 8 characters)" [ref=f13e29]
+          - button "Update Password" [ref=f13e30]
+      - generic [ref=f13e31]:
+        - paragraph [ref=f13e32]: Email Address
+        - generic [ref=f13e33]:
+          - paragraph [ref=f13e34]: preview-tester-19aug@example.test
+          - button "Change email" [ref=f13e36]
+      - generic [ref=f13e37]:
+        - paragraph [ref=f13e38]: Passkeys
+        - generic [ref=f13e39]:
+          - paragraph [ref=f13e40]: No passkeys yet.
+          - button "Add a passkey" [ref=f13e42]
+      - generic [ref=f13e43]:
+        - paragraph [ref=f13e44]: Team
+        - generic [ref=f13e45]:
+          - generic [ref=f13e47]:
+            - paragraph [ref=f13e49]:
+              - text: Preview Tester
+              - generic [ref=f13e50]: (preview-tester-19aug@example.test)
+            - generic [ref=f13e51]: ADMIN
+          - generic [ref=f13e53]:
+            - paragraph [ref=f13e54]: Invite someone
+            - generic [ref=f13e55]:
+              - textbox "Email address" [ref=f13e56]
+              - combobox [ref=f13e57]:
+                - option "ADMIN"
+                - option "MANAGER"
+                - option "OPERATOR"
+                - option "VIEWER" [selected]
+              - button "Invite" [ref=f13e58]
+      - generic [ref=f13e59]:
+        - paragraph [ref=f13e60]: Plan & Billing
+        - generic [ref=f13e61]:
+          - paragraph [ref=f13e62]: Free allows one live match at a time and no custom branding. Pro and Venue unlock custom logos/theme and concurrent matches across your account.
+          - paragraph [ref=f13e119]: couldn't start checkout
+          - paragraph [ref=f13e64]: "Limited-time offer: 20% off for your first 3 months"
+          - generic [ref=f13e65]:
+            - button "Monthly" [ref=f13e66]
+            - button "Annual (2 months free)" [ref=f13e67]
+          - generic [ref=f13e68]:
+            - generic [ref=f13e69]:
+              - paragraph [ref=f13e70]: Free
+              - paragraph [ref=f13e71]: $0
+              - paragraph [ref=f13e72]: Get started with one live match
+              - list [ref=f13e73]:
+                - listitem [ref=f13e74]: • 1 live match at a time
+                - listitem [ref=f13e75]: • No custom branding
+              - button "Current plan" [ref=f13e77]
+            - generic [ref=f13e78]:
+              - paragraph [ref=f13e79]: Pro
+              - paragraph [ref=f13e80]: $89/mo
+              - paragraph [ref=f13e81]: For regular events and clubs
+              - list [ref=f13e82]:
+                - listitem [ref=f13e83]: • Concurrent live matches across your account
+                - listitem [ref=f13e84]: • Custom team logos
+                - listitem [ref=f13e85]: • Custom competition logo
+                - listitem [ref=f13e86]: • Custom sounds
+              - button "Upgrade to Pro" [active] [ref=f13e88]
+            - generic [ref=f13e89]:
+              - paragraph [ref=f13e90]: Venue
+              - paragraph [ref=f13e91]: $349/mo
+              - paragraph [ref=f13e92]: For venues running multiple courts at once
+              - list [ref=f13e93]:
+                - listitem [ref=f13e94]: • Everything in Pro
+                - listitem [ref=f13e95]: • Sized for high-volume, multi-court venues
+              - button "Upgrade to Venue" [ref=f13e97]
+      - generic [ref=f13e98]:
+        - paragraph [ref=f13e99]: Add-ons
+        - generic [ref=f13e102]:
+          - paragraph [ref=f13e103]: Graphics Operator
+          - paragraph [ref=f13e104]: Broadcast-style scene graphics for /display, driven from the control panel
+          - list [ref=f13e105]:
+            - listitem [ref=f13e106]: • Sponsor bugs, lower-thirds, and scoreboard overlays without extra hardware
+            - listitem [ref=f13e107]: • Switch scenes live from the same control panel your operator already uses
+          - paragraph [ref=f13e108]: Requires a Pro or Venue plan.
+  - button "Open Next.js Dev Tools" [ref=f13e114] [cursor=pointer]
+  - alert [ref=f13e118]

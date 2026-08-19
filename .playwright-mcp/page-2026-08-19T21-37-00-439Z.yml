@@ -1,0 +1,98 @@
+- generic [active] [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - generic [ref=f10e3]:
+      - generic [ref=f10e4]:
+        - generic [ref=f10e5]: ScoreHub
+        - generic [ref=f10e6]: Account
+      - generic [ref=f10e7]:
+        - generic [ref=f10e8]: Preview Tester
+        - link "Control Panel" [ref=f10e9] [cursor=pointer]:
+          - /url: /control
+        - link "Help" [ref=f10e10] [cursor=pointer]:
+          - /url: https://help.scorehub.co.nz
+        - button "Sign out" [ref=f10e11]
+    - generic [ref=f10e12]:
+      - generic [ref=f10e13]:
+        - paragraph [ref=f10e14]: Organization
+        - generic [ref=f10e15]:
+          - paragraph [ref=f10e16]: Preview Tester
+          - paragraph [ref=f10e17]: "Role: ADMIN"
+      - generic [ref=f10e18]:
+        - paragraph [ref=f10e19]: Display Name
+        - generic [ref=f10e21]:
+          - textbox [ref=f10e22]: Preview Tester
+          - button "Save" [ref=f10e23]
+      - generic [ref=f10e24]:
+        - paragraph [ref=f10e25]: Password
+        - generic [ref=f10e27]:
+          - textbox "Current password" [ref=f10e28]
+          - textbox "New password (min. 8 characters)" [ref=f10e29]
+          - button "Update Password" [ref=f10e30]
+      - generic [ref=f10e31]:
+        - paragraph [ref=f10e32]: Email Address
+        - generic [ref=f10e33]:
+          - paragraph [ref=f10e34]: preview-tester-19aug@example.test
+          - button "Change email" [ref=f10e36]
+      - generic [ref=f10e37]:
+        - paragraph [ref=f10e38]: Passkeys
+        - generic [ref=f10e39]:
+          - paragraph [ref=f10e40]: No passkeys yet.
+          - button "Add a passkey" [ref=f10e42]
+      - generic [ref=f10e43]:
+        - paragraph [ref=f10e44]: Team
+        - generic [ref=f10e46]:
+          - paragraph [ref=f10e47]: Invite someone
+          - generic [ref=f10e48]:
+            - textbox "Email address" [ref=f10e49]
+            - combobox [ref=f10e50]:
+              - option "ADMIN"
+              - option "MANAGER"
+              - option "OPERATOR"
+              - option "VIEWER" [selected]
+            - button "Invite" [ref=f10e51]
+      - generic [ref=f10e52]:
+        - paragraph [ref=f10e53]: Plan & Billing
+        - generic [ref=f10e54]:
+          - paragraph [ref=f10e55]: Free allows one live match at a time and no custom branding. Pro and Venue unlock custom logos/theme and concurrent matches across your account.
+          - generic [ref=f10e56]:
+            - generic [ref=f10e57]:
+              - generic [ref=f10e58]:
+                - paragraph [ref=f10e60]: Pro plan
+                - paragraph [ref=f10e61]: —
+                - paragraph [ref=f10e62]: Billed monthly
+                - paragraph [ref=f10e63]: Renews —
+                - generic [ref=f10e64]:
+                  - paragraph [ref=f10e65]: "Payment method: —"
+                  - paragraph [ref=f10e66]: "Invoices sent to: —"
+              - button "Downgrade to Free" [ref=f10e68]
+            - generic [ref=f10e69]:
+              - generic [ref=f10e70]:
+                - paragraph [ref=f10e71]: Need more capacity? Upgrade to Venue
+                - paragraph [ref=f10e72]: For venues running multiple courts at once
+                - paragraph [ref=f10e74]: "Limited-time offer: 20% off for your first 3 months"
+              - generic [ref=f10e75]:
+                - button "Monthly" [ref=f10e76]
+                - button "Annual (2 months free)" [ref=f10e77]
+                - button "Upgrade to Venue" [ref=f10e78]
+      - generic [ref=f10e79]:
+        - paragraph [ref=f10e80]: Add-ons
+        - generic [ref=f10e82]:
+          - generic [ref=f10e83]:
+            - paragraph [ref=f10e84]: Graphics Operator
+            - paragraph [ref=f10e85]: Broadcast-style scene graphics for /display, driven from the control panel
+            - list [ref=f10e86]:
+              - listitem [ref=f10e87]: • Sponsor bugs, lower-thirds, and scoreboard overlays without extra hardware
+              - listitem [ref=f10e88]: • Switch scenes live from the same control panel your operator already uses
+          - generic [ref=f10e89]:
+            - button "Monthly" [ref=f10e90]
+            - button "Annual (2 months free)" [ref=f10e91]
+            - generic [ref=f10e92]: $29/mo
+            - button "Add Graphics" [ref=f10e93]
+  - button "Open Next.js Dev Tools" [ref=f10e99] [cursor=pointer]:
+    - generic [ref=f10e102]:
+      - text: Compiling
+      - generic [ref=f10e103]:
+        - generic [ref=f10e104]: .
+        - generic [ref=f10e105]: .
+        - generic [ref=f10e106]: .
+  - alert [ref=f10e107]

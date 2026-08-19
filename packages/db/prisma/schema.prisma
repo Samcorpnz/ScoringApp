@@ -23,10 +23,15 @@ model Account {
   addOns               String[] @default([])
   // Add-ons bill on their own Stripe subscription (separate from the base
   // plan's stripeSubscriptionId) so an add-on purchase/cancellation never
-  // touches the base plan's subscription items. Same "single add-on today"
-  // pragmatism as addOns above — becomes a join table if a second add-on
-  // needs its own subscription tracking.
+  // touches the base plan's subscription items. One dedicated column per
+  // add-on (see ADDON_SUBSCRIPTION_FIELD in frontend/lib/plans.ts) — becomes
+  // a join table if a third add-on makes this unwieldy.
   graphicsSubscriptionId String?
+  dataFeedSubscriptionId String?
+  // Set the first time a plan-upgrade discount (see UPGRADE_DISCOUNT_COUPON_ID
+  // in frontend/lib/plans.ts) is applied to this account, so the offer can't
+  // be re-triggered by downgrading and upgrading again.
+  upgradeDiscountUsedAt DateTime?
   createdAt            DateTime @default(now())
 
   orgs Org[]
@@ -94,6 +99,14 @@ model Match {
   scheduledAt DateTime?
   createdAt   DateTime    @default(now())
   endedAt     DateTime?
+  // Required alongside matchId on every /display/* URL, GET /state, and the
+  // viewer socket join once DISPLAY_TOKEN_REQUIRED is set (relay/src/server.ts)
+  // — a bare org id is guessable/shareable, this isn't. Auto-generated at
+  // match creation so opening a display link stays a zero-config action;
+  // regenerable via POST /api/orgs/[orgId]/matches/[matchId]/rotate-display-token
+  // if a link leaks. Nullable only until the backfill migration populates
+  // existing rows, then a follow-up migration makes it NOT NULL.
+  displayToken String? @unique
 
   tokens ScopedToken[]
 
@@ -269,6 +282,7 @@ enum ScopedTokenType {
   BRIDGE
   CONTROL
   GRAPHICS
+  DATA_FEED
 }
 
 // Per-org credential for headless devices (the bridge) that can't do an

@@ -36,6 +36,11 @@ const TIME_SYNC_SAMPLE_WINDOW = 5;
 export function useMatchState(auth?: { secret: string; role: string }) {
   const [state, setState] = useState<MatchState>({ ...DEFAULT_MATCH_STATE });
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  // Set when the relay rejects a display connection for a bad/missing
+  // displayToken (see DISPLAY_TOKEN_REQUIRED in relay/src/server.ts) — lets
+  // display pages show a "get a fresh link" fallback instead of a blank
+  // screen indistinguishable from a normal connection drop.
+  const [unauthorized, setUnauthorized] = useState(false);
   const [feedStale, setFeedStale] = useState(false);
   const [relayUnreachable, setRelayUnreachable] = useState(false);
   const [controllerStatus, setControllerStatus] = useState<ControllerStatus>(
@@ -74,18 +79,24 @@ export function useMatchState(auth?: { secret: string; role: string }) {
     // Viewers/displays have no secret — scope them to an org via the page's
     // ?org= query param so multiple tenants on one relay stay isolated.
     // An optional &matchId= further scopes them to one specific match
-    // instead of the org's singleton "default" match.
+    // instead of the org's singleton "default" match. &token= is the
+    // per-match displayToken (see DISPLAY_TOKEN_REQUIRED) — required once
+    // enforcement is on, harmlessly ignored by the relay until then.
     const params = secret === undefined && globalThis.window !== undefined
       ? new URLSearchParams(globalThis.location.search)
       : undefined;
     const orgId = params?.get("org") ?? undefined;
     const matchId = params?.get("matchId") ?? undefined;
+    const token = params?.get("token") ?? undefined;
 
-    let socketAuth: { secret: string; role: string | undefined } | { orgId?: string; matchId?: string } | Record<string, never>;
+    let socketAuth:
+      | { secret: string; role: string | undefined }
+      | { orgId?: string; matchId?: string; token?: string }
+      | Record<string, never>;
     if (secret !== undefined) {
       socketAuth = { secret, role };
     } else if (orgId || matchId) {
-      socketAuth = { orgId, matchId };
+      socketAuth = { orgId, matchId, token };
     } else {
       socketAuth = {};
     }
@@ -121,6 +132,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
 
     socket.on("connect", () => {
       setStatus("connected");
+      setUnauthorized(false);
       lastUpdateRef.current = Date.now();
       setFeedStale(false);
       disconnectedSinceRef.current = null;
@@ -158,10 +170,11 @@ export function useMatchState(auth?: { secret: string; role: string }) {
       setFeedStale(false);
       disconnectedSinceRef.current ??= Date.now();
     });
-    socket.on("connect_error", () => {
+    socket.on("connect_error", (err: Error) => {
       setStatus("disconnected");
       setFeedStale(false);
       disconnectedSinceRef.current ??= Date.now();
+      if (/display token/i.test(err.message)) setUnauthorized(true);
     });
 
     socket.on("matchStateChange", (incoming: MatchState) => {
@@ -253,7 +266,7 @@ export function useMatchState(auth?: { secret: string; role: string }) {
   };
 
   return {
-    state, status, feedStale, relayUnreachable, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
+    state, status, feedStale, relayUnreachable, unauthorized, sendManualUpdate, sendReset, sendUndo, controllerStatus, takeControl,
     sendCricketBall, sendCricketOverComplete, sendCricketInningsChange, sendCricketDeclare,
     sendScoreAdjust, sendIndoorCricketWicket, estimateServerNow,
   };
