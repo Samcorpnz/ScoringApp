@@ -11,7 +11,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { MatchState, DEFAULT_MATCH_STATE, IndoorCricketState } from "./types";
 import { getMatchStore, allActiveStores, evictMatchStore, createLiveMatch, MatchNotFoundError } from "./persistence";
 import { prisma } from "@scorehub/db";
-import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, LEGACY_ROOM_ID } from "./auth";
+import { verifyBridgeSecret, verifyControlSecret, verifyActionSecret, verifyGraphicsSecret, verifyDataFeedSecret, LEGACY_ROOM_ID } from "./auth";
 import { getRedisClients, acquireTickLock, closeRedis, publishStateUpdate, subscribeStateUpdates } from "./redis";
 import { requirePlan, requireAddOn, ConcurrentMatchLimitError, orgHasAddOn } from "./entitlements";
 import { r2Enabled, putObject, deleteByPrefix } from "./storage";
@@ -30,10 +30,21 @@ export interface ServerOptions {
   bridgeSecret?: string;
   controlSecret?: string;
   graphicsSecret?: string;
+  dataFeedSecret?: string;
+  displayTokenRequired?: boolean;
   uploadDir?: string;
   allowedOrigins?: string | string[];
   controlRateLimit?: number;
   controllerTokenTtlMs?: number;
+}
+
+// Constant-time secret/token compare — same approach as auth.ts's
+// secretsEqual, duplicated here (not imported) because it's used against a
+// plaintext Match.displayToken column, not a hashed ScopedToken lookup.
+function tokensEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
 }
 
 // BRIDGE_SECRET/CONTROL_SECRET are the legacy plain-secret auth path, only
@@ -84,6 +95,18 @@ function roomFor(orgId: string, matchId?: string): string {
   return matchId ? `match:${matchId}` : orgId;
 }
 
+// See the Match.displayToken schema comment and DISPLAY_TOKEN_REQUIRED above
+// for the rollout story. `displayToken` is null when the match predates the
+// backfill migration (packages/db/scripts/backfill-display-tokens.ts) — treat
+// that as "not enforceable yet" regardless of the flag, same as a caller
+// supplying no matchId at all (org-singleton links have nothing to check a
+// token against).
+export function isDisplayTokenValid(displayToken: string | null | undefined, token: string | undefined, required: boolean): boolean {
+  if (!displayToken) return true;
+  if (token) return tokensEqual(token, displayToken);
+  return !required;
+}
+
 export function createServer(options: ServerOptions = {}) {
   const BRIDGE_SECRET  = requireSecret("BRIDGE_SECRET", options.bridgeSecret || process.env.BRIDGE_SECRET);
   const CONTROL_SECRET = requireSecret("CONTROL_SECRET", options.controlSecret || process.env.CONTROL_SECRET);
@@ -93,6 +116,16 @@ export function createServer(options: ServerOptions = {}) {
   // auth simply always fails closed — the add-on isn't usable until an
   // operator explicitly configures it, which is the correct default.
   const GRAPHICS_SECRET = options.graphicsSecret || process.env.GRAPHICS_SECRET || "";
+  // Same non-mandatory reasoning as GRAPHICS_SECRET above — the Data Feed
+  // add-on is opt-in, left unset means legacy-mode data-feed auth always
+  // fails closed until an operator configures it.
+  const DATA_FEED_SECRET = options.dataFeedSecret || process.env.DATA_FEED_SECRET || "";
+  // Display-URL lockdown rollout flag (see the Match.displayToken column
+  // comment in packages/db/prisma/schema.prisma) — false/unset validates a
+  // token IF one is present but still allows requests with none at all, so
+  // this can ship well before enforcement actually flips on. Flip once
+  // existing /display/* links have had time to be regenerated with a token.
+  const DISPLAY_TOKEN_REQUIRED = options.displayTokenRequired ?? (process.env.DISPLAY_TOKEN_REQUIRED === "true");
   const UPLOAD_DIR     = options.uploadDir     ?? process.env.UPLOAD_DIR     ?? path.join(process.cwd(), "uploads");
   const ALLOWED_ORIGINS: string[] = requireAllowedOrigins(
     options.allowedOrigins ?? process.env.ALLOWED_ORIGINS?.split(",").map(o => o.trim())
@@ -333,6 +366,17 @@ export function createServer(options: ServerOptions = {}) {
   const controlRateLimit = rateLimit({
     windowMs: 60_000,
     limit: options.controlRateLimit ?? 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "too many requests" },
+  });
+
+  // Sized for legitimate 1-5Hz polling (per OutputsTab's REST snapshot docs)
+  // plus headroom, not the 20/min control-secret limit above — this is a
+  // read-only feed a third-party graphics engine polls continuously.
+  const dataFeedRateLimit = rateLimit({
+    windowMs: 60_000,
+    limit: 600,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "too many requests" },
@@ -602,13 +646,21 @@ export function createServer(options: ServerOptions = {}) {
   app.get("/state", async (req, res) => {
     let orgId = typeof req.query.org === "string" ? req.query.org : undefined;
     const matchId = typeof req.query.matchId === "string" ? req.query.matchId : undefined;
+    const token = typeof req.query.token === "string" ? req.query.token : undefined;
     // A display link only carries matchId (org is optional sugar) — resolve
     // orgId from the match row rather than falling through to LEGACY_ROOM_ID,
     // which doesn't exist as a real org once DATABASE_URL is set and would
     // otherwise 500 trying to auto-create a match under a non-existent org.
-    if (!orgId && matchId && process.env.DATABASE_URL) {
-      const row = await prisma.match.findUnique({ where: { id: matchId } });
-      if (row) orgId = row.orgId;
+    // Also the one place displayToken is checked — see DISPLAY_TOKEN_REQUIRED.
+    if (matchId && process.env.DATABASE_URL) {
+      const row = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true, displayToken: true } });
+      if (row) {
+        orgId = orgId ?? row.orgId;
+        if (!isDisplayTokenValid(row.displayToken, token, DISPLAY_TOKEN_REQUIRED)) {
+          res.status(403).json({ error: "invalid or missing display token" });
+          return;
+        }
+      }
     }
     if (!orgId) {
       if (process.env.DATABASE_URL) {
@@ -619,6 +671,28 @@ export function createServer(options: ServerOptions = {}) {
     }
     try {
       res.json(await getState(orgId, matchId));
+    } catch (err) {
+      respondToStateError(res, err);
+    }
+  });
+
+  // Data Feed add-on: authenticated equivalent of GET /state for third-party
+  // consumers (Singular.live, VIZRT) that can't use the public/display path —
+  // see verifyDataFeedSecret and POST /api/orgs/[orgId]/tokens (frontend).
+  app.get("/api/data-feed/state", dataFeedRateLimit, async (req, res) => {
+    const secret = req.headers["x-data-feed-secret"];
+    const result = await verifyDataFeedSecret(typeof secret === "string" ? secret : undefined, DATA_FEED_SECRET);
+    if (!result) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!(await orgHasAddOn(result.orgId, "data-feed"))) {
+      res.status(403).json({ error: "This feature requires the data-feed add-on — upgrade at /account/billing" });
+      return;
+    }
+    const matchId = result.matchId ?? (typeof req.query.matchId === "string" ? req.query.matchId : undefined);
+    try {
+      res.json(await getState(result.orgId, matchId));
     } catch (err) {
       respondToStateError(res, err);
     }
@@ -855,11 +929,12 @@ export function createServer(options: ServerOptions = {}) {
   // ─── Socket.io ───────────────────────────────────────────────────────────────
 
   io.use(async (socket, next) => {
-    const { secret, role, orgId: requestedOrgId, matchId: requestedMatchId } = socket.handshake.auth as {
+    const { secret, role, orgId: requestedOrgId, matchId: requestedMatchId, token: requestedToken } = socket.handshake.auth as {
       secret?: string;
       role?: string;
       orgId?: string;
       matchId?: string;
+      token?: string;
     };
 
     let orgId: string | null = null;
@@ -891,6 +966,13 @@ export function createServer(options: ServerOptions = {}) {
         matchId = result.matchId;
         (socket as any).isGraphics = true;
       }
+    } else if (role === "data-feed") {
+      const result = await verifyDataFeedSecret(secret, DATA_FEED_SECRET);
+      if (result && (await orgHasAddOn(result.orgId, "data-feed"))) {
+        orgId = result.orgId;
+        matchId = result.matchId;
+        (socket as any).isDataFeed = true;
+      }
     }
 
     orgId = orgId ?? requestedOrgId ?? null;
@@ -901,10 +983,18 @@ export function createServer(options: ServerOptions = {}) {
     // If orgId is absent (a display link with only ?matchId=, e.g. hand-edited
     // or from an older link format), resolve it from the match row instead of
     // falling through to LEGACY_ROOM_ID — otherwise the lookup below always
-    // misses and the viewer silently joins the wrong (empty) room.
+    // misses and the viewer silently joins the wrong (empty) room. This is
+    // also where the displayToken is checked (see DISPLAY_TOKEN_REQUIRED) —
+    // a role branch above (bridge/control/graphics/data-feed) already proved
+    // itself via a signed secret, so only the unauthenticated viewer path
+    // needs this.
     if (!matchId && requestedMatchId && process.env.DATABASE_URL) {
-      const row = await prisma.match.findUnique({ where: { id: requestedMatchId } });
+      const row = await prisma.match.findUnique({ where: { id: requestedMatchId }, select: { orgId: true, displayToken: true } });
       if (row && (!orgId || row.orgId === orgId)) {
+        if (!isDisplayTokenValid(row.displayToken, requestedToken, DISPLAY_TOKEN_REQUIRED)) {
+          next(new Error("invalid or missing display token"));
+          return;
+        }
         matchId = requestedMatchId;
         orgId = orgId ?? row.orgId;
       }
@@ -931,13 +1021,16 @@ export function createServer(options: ServerOptions = {}) {
     const isBridge   = (socket as any).isBridge   === true;
     const isControl  = (socket as any).isControl  === true;
     const isGraphics = (socket as any).isGraphics === true;
-    let role: "bridge" | "control" | "graphics" | "viewer";
+    const isDataFeed = (socket as any).isDataFeed === true;
+    let role: "bridge" | "control" | "graphics" | "data-feed" | "viewer";
     if (isBridge) {
       role = "bridge";
     } else if (isControl) {
       role = "control";
     } else if (isGraphics) {
       role = "graphics";
+    } else if (isDataFeed) {
+      role = "data-feed";
     } else {
       role = "viewer";
     }

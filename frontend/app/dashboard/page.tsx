@@ -22,6 +22,7 @@ interface MatchRow {
   scheduledAt: string | null;
   createdAt: string;
   endedAt: string | null;
+  displayToken: string | null;
 }
 
 const TAB_STATUS: Record<TabKey, MatchStatus> = {
@@ -248,7 +249,8 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {matches.map(m => {
               const title = `${m.homeName || "Home"} v ${m.visitorName || "Visitor"}`;
-              const displayUrl = `${SITE_URL}/display/fullscreen?org=${orgId}&matchId=${m.id}`;
+              const tokenParam = m.displayToken ? `&token=${m.displayToken}` : "";
+              const displayUrl = `${SITE_URL}/display/fullscreen?org=${orgId}&matchId=${m.id}${tokenParam}`;
               const clickable = m.status !== "ENDED";
               const controlLinkLabel = m.status === "LIVE" ? "Open Control →" : "Start →";
               return (

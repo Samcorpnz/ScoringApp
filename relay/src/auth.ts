@@ -100,6 +100,27 @@ export async function verifyControlSecret(
   }
 }
 
+// Data Feed add-on persona: third-party consumers (Singular.live, VIZRT, a
+// physical console's own read-back if it ever needs one) that can't do an
+// interactive login. Long-lived DATA_FEED ScopedToken only — unlike
+// verifyGraphicsSecret there's no JWT fallback, since this credential is
+// never minted for ScoreHub's own UI, only for the org's Settings-tab token
+// generation flow (see POST /api/orgs/[orgId]/tokens).
+export async function verifyDataFeedSecret(
+  secret: string | undefined,
+  legacySecret: string
+): Promise<AuthResult | null> {
+  if (!secret) return null;
+
+  if (!process.env.DATABASE_URL) {
+    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
+  }
+
+  const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
+  if (token?.type !== "DATA_FEED" || token?.revokedAt) return null;
+  return { orgId: token.orgId, matchId: token.matchId ?? undefined };
+}
+
 // Graphics Operator add-on persona. Deliberately separate from
 // verifyControlSecret even though it accepts the same two credential shapes
 // (long-lived GRAPHICS ScopedToken, or a short-lived JWT minted by the

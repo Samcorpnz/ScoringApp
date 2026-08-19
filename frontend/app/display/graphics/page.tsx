@@ -12,6 +12,7 @@ import { useGraphicsScene } from "../../hooks/useGraphicsScene";
 import { useDisplayTheme } from "../../hooks/useDisplayTheme";
 import { useRoster } from "../../hooks/useRoster";
 import { SCENE_REGISTRY } from "./scenes/sceneRegistry";
+import { DisplayLinkExpiredNotice } from "../components/DisplayLinkExpiredNotice";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
@@ -29,7 +30,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 export default function GraphicsDisplay() {
-  const { state } = useMatchState();
+  const { state, unauthorized } = useMatchState();
   const { scene } = useGraphicsScene();
   const [entitled, setEntitled] = useState<boolean | null>(null);
   const [org, setOrg] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function GraphicsDisplay() {
       } as React.CSSProperties}
     >
       {(() => {
+        if (unauthorized) return <DisplayLinkExpiredNotice />;
         if (entitled === false) return <UpgradePrompt />;
         if (SceneComponent) return <SceneComponent payload={scene?.payload} state={state} roster={roster} />;
         return null;

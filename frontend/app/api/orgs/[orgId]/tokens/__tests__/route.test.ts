@@ -8,9 +8,11 @@ vi.mock("@/auth", () => ({ auth: () => authMock() }));
 const matchFindUniqueMock = vi.fn();
 const tokenCreateMock = vi.fn();
 const tokenFindManyMock = vi.fn();
+const orgFindUniqueMock = vi.fn();
 vi.mock("@scorehub/db", () => ({
   prisma: {
     match: { findUnique: (...a: unknown[]) => matchFindUniqueMock(...a) },
+    org: { findUnique: (...a: unknown[]) => orgFindUniqueMock(...a) },
     scopedToken: {
       create: (...a: unknown[]) => tokenCreateMock(...a),
       findMany: (...a: unknown[]) => tokenFindManyMock(...a),
@@ -38,6 +40,7 @@ describe("/api/orgs/[orgId]/tokens", () => {
     matchFindUniqueMock.mockReset();
     tokenCreateMock.mockReset();
     tokenFindManyMock.mockReset();
+    orgFindUniqueMock.mockReset();
     authMock.mockResolvedValue({ user: { activeOrgId: "org-1", activeRole: "ADMIN" } });
   });
 
@@ -130,6 +133,25 @@ describe("/api/orgs/[orgId]/tokens", () => {
       await POST(makePostRequest({ label: "L".repeat(150) }), { params });
       const call = tokenCreateMock.mock.calls[0][0];
       expect(call.data.label).toHaveLength(100);
+    });
+
+    it("403s when creating a DATA_FEED token for an org without the data-feed add-on", async () => {
+      orgFindUniqueMock.mockResolvedValue({ account: { addOns: [] } });
+      const { POST } = await import("../route");
+      const res = await POST(makePostRequest({ type: "DATA_FEED" }), { params });
+      expect(res.status).toBe(403);
+      expect(tokenCreateMock).not.toHaveBeenCalled();
+    });
+
+    it("creates a DATA_FEED token when the org has the data-feed add-on", async () => {
+      orgFindUniqueMock.mockResolvedValue({ account: { addOns: ["data-feed"] } });
+      tokenCreateMock.mockResolvedValue({});
+      const { POST } = await import("../route");
+      const res = await POST(makePostRequest({ type: "DATA_FEED" }), { params });
+      expect(res.status).toBe(201);
+      expect(tokenCreateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: "DATA_FEED" }) }),
+      );
     });
   });
 

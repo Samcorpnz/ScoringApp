@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAccountForOrg } from "@/lib/account";
 import { getStripe } from "@/lib/stripe";
-import { AddOn } from "@/lib/plans";
+import { ADDON_SUBSCRIPTION_FIELD, AddOn } from "@/lib/plans";
+
+const KNOWN_ADDONS: AddOn[] = ["graphics-operator", "data-feed"];
 
 // Downgrading to Free (or dropping an add-on) means letting the current paid
 // period run out rather than revoking access immediately —
@@ -21,12 +23,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const resume = body?.resume === true;
   const addOn = body?.addOn as AddOn | undefined;
-  if (addOn && addOn !== "graphics-operator") {
+  if (addOn && !KNOWN_ADDONS.includes(addOn)) {
     return NextResponse.json({ error: "unknown add-on" }, { status: 400 });
   }
 
   const account = await getAccountForOrg(session.user.activeOrgId);
-  const subscriptionId = addOn ? account?.graphicsSubscriptionId : account?.stripeSubscriptionId;
+  const subscriptionId = addOn ? account?.[ADDON_SUBSCRIPTION_FIELD[addOn]] : account?.stripeSubscriptionId;
   if (!subscriptionId) {
     return NextResponse.json({ error: "no active subscription" }, { status: 404 });
   }

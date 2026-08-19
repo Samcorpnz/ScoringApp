@@ -39,27 +39,58 @@ const PLANS = [
   },
 ];
 
-const GRAPHICS_ADDON = {
-  id: "graphics-operator" as const,
-  name: "Graphics Operator",
-  monthlyPrice: "$29",
-  annualPrice: "$290",
-  tagline: "Broadcast-style scene graphics for /display, driven from the control panel",
+type AddOnId = "graphics-operator" | "data-feed";
+type BillingInterval = "month" | "year";
+
+type AddOnConfig = {
+  id: AddOnId;
+  name: string;
+  monthlyPrice: string;
+  annualPrice: string;
+  tagline: string;
+  valueProps: string[];
+  subscriptionKey: "graphicsSubscription" | "dataFeedSubscription";
 };
 
-type BillingInterval = "month" | "year";
+const ADD_ONS: AddOnConfig[] = [
+  {
+    id: "graphics-operator",
+    name: "Graphics Operator",
+    monthlyPrice: "$29",
+    annualPrice: "$290",
+    tagline: "Broadcast-style scene graphics for /display, driven from the control panel",
+    valueProps: [
+      "Sponsor bugs, lower-thirds, and scoreboard overlays without extra hardware",
+      "Switch scenes live from the same control panel your operator already uses",
+    ],
+    subscriptionKey: "graphicsSubscription",
+  },
+  {
+    id: "data-feed",
+    name: "Data Feed",
+    monthlyPrice: "$39",
+    annualPrice: "$390",
+    tagline: "Bridge a physical scoreboard console, or pipe live match state into a third-party graphics engine",
+    valueProps: [
+      "Connect a physical Saturn/Vega console to score from at the venue",
+      "Authenticated REST/WebSocket feed for Singular.live, Chyron, VIZRT, and similar",
+    ],
+    subscriptionKey: "dataFeedSubscription",
+  },
+];
+
+type SubscriptionInfo = {
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: number | null;
+  amount: number | null;
+  currency: string | null;
+  interval: BillingInterval | null;
+};
 
 export default function AccountPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.activeRole === "ADMIN";
-  type SubscriptionInfo = {
-    status: string;
-    cancelAtPeriodEnd: boolean;
-    currentPeriodEnd: number | null;
-    amount: number | null;
-    currency: string | null;
-    interval: BillingInterval | null;
-  };
   const [billingStatus, setBillingStatus] = useState<{
     plan: string;
     billingInterval: BillingInterval | null;
@@ -67,16 +98,26 @@ export default function AccountPage() {
     subscription: SubscriptionInfo | null;
     addOns: string[];
     graphicsSubscription: SubscriptionInfo | null;
+    dataFeedSubscription: SubscriptionInfo | null;
+    invoiceEmail: string | null;
+    paymentMethod: { brand: string; last4: string } | null;
+    upgradeDiscountAvailable: boolean;
   } | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
   const [checkoutSecret, setCheckoutSecret] = useState<string | null>(null);
-  const [checkoutKind, setCheckoutKind] = useState<"plan" | "addOn" | null>(null);
+  const [checkoutKind, setCheckoutKind] = useState<"plan" | AddOnId | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("month");
-  const [graphicsInterval, setGraphicsInterval] = useState<BillingInterval>("month");
+  const [addOnInterval, setAddOnInterval] = useState<Record<AddOnId, BillingInterval>>({
+    "graphics-operator": "month",
+    "data-feed": "month",
+  });
   const [switchNotice, setSwitchNotice] = useState<string | null>(null);
   const [finishingUp, setFinishingUp] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
-  const [graphicsBusy, setGraphicsBusy] = useState(false);
+  const [addOnBusy, setAddOnBusy] = useState<Record<AddOnId, boolean>>({
+    "graphics-operator": false,
+    "data-feed": false,
+  });
 
   const fetchBillingStatus = () =>
     fetch("/api/billing/status")
@@ -84,7 +125,10 @@ export default function AccountPage() {
       .then(data => {
         setBillingStatus(data);
         if (data.billingInterval) setBillingInterval(data.billingInterval);
-        if (data.graphicsSubscription?.interval) setGraphicsInterval(data.graphicsSubscription.interval);
+        setAddOnInterval(prev => ({
+          "graphics-operator": data.graphicsSubscription?.interval ?? prev["graphics-operator"],
+          "data-feed": data.dataFeedSubscription?.interval ?? prev["data-feed"],
+        }));
         return data;
       })
       .catch(() => null);
@@ -109,13 +153,13 @@ export default function AccountPage() {
 
   // Same polling gap as waitForPlanChange, but for the add-on's own webhook
   // path (checkout.session.completed -> Account.addOns).
-  async function waitForAddOnChange(hadAddOn: boolean) {
+  async function waitForAddOnChange(addOnId: AddOnId, hadAddOn: boolean) {
     setFinishingUp(true);
     try {
       for (let attempt = 0; attempt < 8; attempt++) {
         await new Promise(r => setTimeout(r, 1500));
         const data = await fetchBillingStatus();
-        if (data && data.addOns.includes("graphics-operator") !== hadAddOn) return;
+        if (data && data.addOns.includes(addOnId) !== hadAddOn) return;
       }
     } finally {
       setFinishingUp(false);
@@ -150,41 +194,41 @@ export default function AccountPage() {
     }
   }
 
-  async function purchaseGraphicsAddOn() {
-    setGraphicsBusy(true);
+  async function purchaseAddOn(addOnId: AddOnId) {
+    setAddOnBusy(prev => ({ ...prev, [addOnId]: true }));
     setSwitchNotice(null);
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addOn: "graphics-operator", interval: graphicsInterval }),
+        body: JSON.stringify({ addOn: addOnId, interval: addOnInterval[addOnId] }),
       });
       const data = await res.json();
       if (data.clientSecret) {
-        setCheckoutKind("addOn");
+        setCheckoutKind(addOnId);
         setCheckoutSecret(data.clientSecret);
       } else if (data.switched) {
         await refreshBillingStatus();
-        setSwitchNotice("Switched the Graphics Operator add-on billing interval.");
+        setSwitchNotice(`Switched the ${ADD_ONS.find(a => a.id === addOnId)?.name} add-on billing interval.`);
       } else if (data.error) {
         setSwitchNotice(data.error);
       }
     } finally {
-      setGraphicsBusy(false);
+      setAddOnBusy(prev => ({ ...prev, [addOnId]: false }));
     }
   }
 
-  async function setGraphicsCancelAtPeriodEnd(resume: boolean) {
-    setGraphicsBusy(true);
+  async function setAddOnCancelAtPeriodEnd(addOnId: AddOnId, resume: boolean) {
+    setAddOnBusy(prev => ({ ...prev, [addOnId]: true }));
     try {
       const res = await fetch("/api/billing/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume, addOn: "graphics-operator" }),
+        body: JSON.stringify({ resume, addOn: addOnId }),
       });
       if (res.ok) await refreshBillingStatus();
     } finally {
-      setGraphicsBusy(false);
+      setAddOnBusy(prev => ({ ...prev, [addOnId]: false }));
     }
   }
 
@@ -249,11 +293,11 @@ export default function AccountPage() {
               clientSecret: checkoutSecret,
               onComplete: () => {
                 const previousPlan = billingStatus?.plan;
-                const hadAddOn = billingStatus?.addOns.includes("graphics-operator") ?? false;
                 const kind = checkoutKind;
+                const hadAddOn = kind && kind !== "plan" ? (billingStatus?.addOns.includes(kind) ?? false) : false;
                 setCheckoutSecret(null);
                 setCheckoutKind(null);
-                if (kind === "addOn") waitForAddOnChange(hadAddOn);
+                if (kind && kind !== "plan") waitForAddOnChange(kind, hadAddOn);
                 else waitForPlanChange(previousPlan);
               },
             }}
@@ -289,6 +333,9 @@ export default function AccountPage() {
             />
           ) : (
             <>
+              {billingStatus?.upgradeDiscountAvailable && (
+                <DiscountBanner className="mb-4" />
+              )}
               <div className="flex items-center gap-2 mb-4">
                 <SmallBtn label="Monthly" onClick={() => setBillingInterval("month")} active={billingInterval === "month"} />
                 <SmallBtn label="Annual (2 months free)" onClick={() => setBillingInterval("year")} active={billingInterval === "year"} />
@@ -365,86 +412,81 @@ export default function AccountPage() {
       )}
 
       {!checkoutSecret && billingStatus && (
-        <GraphicsAddOnCard
-          billingStatus={billingStatus}
-          isAdmin={isAdmin}
-          graphicsInterval={graphicsInterval}
-          setGraphicsInterval={setGraphicsInterval}
-          graphicsBusy={graphicsBusy}
-          onPurchase={purchaseGraphicsAddOn}
-          onCancel={() => setGraphicsCancelAtPeriodEnd(false)}
-          onResume={() => setGraphicsCancelAtPeriodEnd(true)}
-        />
+        <Card title="Add-ons">
+          <div className="space-y-3">
+            {ADD_ONS.map(config => (
+              <AddOnRow
+                key={config.id}
+                config={config}
+                billingStatus={billingStatus}
+                isAdmin={isAdmin}
+                interval={addOnInterval[config.id]}
+                setInterval={value => setAddOnInterval(prev => ({ ...prev, [config.id]: value }))}
+                busy={addOnBusy[config.id]}
+                onPurchase={() => purchaseAddOn(config.id)}
+                onCancel={() => setAddOnCancelAtPeriodEnd(config.id, false)}
+                onResume={() => setAddOnCancelAtPeriodEnd(config.id, true)}
+              />
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );
 }
 
-function GraphicsAddOnCard({
+function AddOnRow({
+  config,
   billingStatus,
   isAdmin,
-  graphicsInterval,
-  setGraphicsInterval,
-  graphicsBusy,
+  interval,
+  setInterval,
+  busy,
   onPurchase,
   onCancel,
   onResume,
 }: {
+  readonly config: AddOnConfig;
   readonly billingStatus: {
     plan: string;
     addOns: string[];
-    graphicsSubscription: {
-      status: string;
-      cancelAtPeriodEnd: boolean;
-      currentPeriodEnd: number | null;
-      amount: number | null;
-      currency: string | null;
-      interval: BillingInterval | null;
-    } | null;
+    graphicsSubscription: SubscriptionInfo | null;
+    dataFeedSubscription: SubscriptionInfo | null;
   };
   readonly isAdmin: boolean;
-  readonly graphicsInterval: BillingInterval;
-  readonly setGraphicsInterval: (interval: BillingInterval) => void;
-  readonly graphicsBusy: boolean;
+  readonly interval: BillingInterval;
+  readonly setInterval: (interval: BillingInterval) => void;
+  readonly busy: boolean;
   readonly onPurchase: () => void;
   readonly onCancel: () => void;
   readonly onResume: () => void;
 }) {
   const hasBasePlan = billingStatus.plan === "pro" || billingStatus.plan === "venue";
-  const isActive = billingStatus.addOns.includes(GRAPHICS_ADDON.id);
-  const sub = billingStatus.graphicsSubscription;
+  const isActive = billingStatus.addOns.includes(config.id);
+  const sub = billingStatus[config.subscriptionKey];
 
-  return (
-    <Card title="Add-ons">
-      {isActive && sub ? (
-        <ActiveGraphicsAddOn sub={sub} isAdmin={isAdmin} graphicsBusy={graphicsBusy} onCancel={onCancel} onResume={onResume} />
-      ) : (
-        <InactiveGraphicsAddOn
-          hasBasePlan={hasBasePlan}
-          isAdmin={isAdmin}
-          graphicsInterval={graphicsInterval}
-          setGraphicsInterval={setGraphicsInterval}
-          graphicsBusy={graphicsBusy}
-          onPurchase={onPurchase}
-        />
-      )}
-    </Card>
+  return isActive && sub ? (
+    <ActiveAddOn config={config} sub={sub} isAdmin={isAdmin} busy={busy} onCancel={onCancel} onResume={onResume} />
+  ) : (
+    <InactiveAddOn
+      config={config}
+      hasBasePlan={hasBasePlan}
+      isAdmin={isAdmin}
+      interval={interval}
+      setInterval={setInterval}
+      busy={busy}
+      onPurchase={onPurchase}
+    />
   );
 }
 
-function ActiveGraphicsAddOn({
-  sub, isAdmin, graphicsBusy, onCancel, onResume,
+function ActiveAddOn({
+  config, sub, isAdmin, busy, onCancel, onResume,
 }: {
-  readonly sub: NonNullable<{
-    status: string;
-    cancelAtPeriodEnd: boolean;
-    currentPeriodEnd: number | null;
-    amount: number | null;
-    currency: string | null;
-    interval: "month" | "year" | null;
-  }>;
+  readonly config: AddOnConfig;
+  readonly sub: NonNullable<SubscriptionInfo>;
   readonly isAdmin: boolean;
-  readonly graphicsBusy: boolean;
+  readonly busy: boolean;
   readonly onCancel: () => void;
   readonly onResume: () => void;
 }) {
@@ -455,7 +497,7 @@ function ActiveGraphicsAddOn({
     >
       <div>
         <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--accent)" }}>
-          {GRAPHICS_ADDON.name}
+          {config.name}
         </p>
         <p className="text-lg font-black mt-1" style={{ color: "var(--text-primary)" }}>
           {formatAmount(sub.amount, sub.currency, sub.interval)}
@@ -473,9 +515,9 @@ function ActiveGraphicsAddOn({
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
           {sub.cancelAtPeriodEnd ? (
-            <SmallBtn label={graphicsBusy ? "Loading…" : "Resume add-on"} onClick={onResume} primary />
+            <SmallBtn label={busy ? "Loading…" : "Resume add-on"} onClick={onResume} primary />
           ) : (
-            <SmallBtn label={graphicsBusy ? "Loading…" : "Cancel add-on"} onClick={onCancel} />
+            <SmallBtn label={busy ? "Loading…" : "Cancel add-on"} onClick={onCancel} />
           )}
         </div>
       )}
@@ -483,14 +525,15 @@ function ActiveGraphicsAddOn({
   );
 }
 
-function InactiveGraphicsAddOn({
-  hasBasePlan, isAdmin, graphicsInterval, setGraphicsInterval, graphicsBusy, onPurchase,
+function InactiveAddOn({
+  config, hasBasePlan, isAdmin, interval, setInterval, busy, onPurchase,
 }: {
+  readonly config: AddOnConfig;
   readonly hasBasePlan: boolean;
   readonly isAdmin: boolean;
-  readonly graphicsInterval: "month" | "year";
-  readonly setGraphicsInterval: (interval: "month" | "year") => void;
-  readonly graphicsBusy: boolean;
+  readonly interval: BillingInterval;
+  readonly setInterval: (interval: BillingInterval) => void;
+  readonly busy: boolean;
   readonly onPurchase: () => void;
 }) {
   return (
@@ -499,21 +542,26 @@ function InactiveGraphicsAddOn({
       style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
     >
       <div>
-        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{GRAPHICS_ADDON.name}</p>
-        <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{GRAPHICS_ADDON.tagline}</p>
+        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{config.name}</p>
+        <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{config.tagline}</p>
+        <ul className="text-xs mt-2 space-y-0.5" style={{ color: "var(--text-secondary)" }}>
+          {config.valueProps.map(v => (
+            <li key={v}>• {v}</li>
+          ))}
+        </ul>
         {!hasBasePlan && (
           <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>Requires a Pro or Venue plan.</p>
         )}
       </div>
       {hasBasePlan && isAdmin && (
         <div className="flex items-center gap-2">
-          <SmallBtn label="Monthly" onClick={() => setGraphicsInterval("month")} active={graphicsInterval === "month"} />
-          <SmallBtn label="Annual (2 months free)" onClick={() => setGraphicsInterval("year")} active={graphicsInterval === "year"} />
+          <SmallBtn label="Monthly" onClick={() => setInterval("month")} active={interval === "month"} />
+          <SmallBtn label="Annual (2 months free)" onClick={() => setInterval("year")} active={interval === "year"} />
           <span className="text-sm font-black" style={{ color: "var(--accent)" }}>
-            {graphicsInterval === "month" ? GRAPHICS_ADDON.monthlyPrice : GRAPHICS_ADDON.annualPrice}
-            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{graphicsInterval === "month" ? "/mo" : "/yr"}</span>
+            {interval === "month" ? config.monthlyPrice : config.annualPrice}
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{interval === "month" ? "/mo" : "/yr"}</span>
           </span>
-          <SmallBtn label={graphicsBusy ? "Loading…" : "Add Graphics"} onClick={onPurchase} primary />
+          <SmallBtn label={busy ? "Loading…" : `Add ${config.name}`} onClick={onPurchase} primary />
         </div>
       )}
     </div>
@@ -546,6 +594,9 @@ function SubscriptionPanel({
     plan: string;
     billingInterval: BillingInterval | null;
     subscription: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null; amount: number | null; currency: string | null } | null;
+    invoiceEmail: string | null;
+    paymentMethod: { brand: string; last4: string } | null;
+    upgradeDiscountAvailable: boolean;
   };
   readonly billingInterval: BillingInterval;
   readonly setBillingInterval: (interval: BillingInterval) => void;
@@ -564,15 +615,21 @@ function SubscriptionPanel({
   return (
     <div>
       <div
-        className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+        className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
         style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-accent)" }}
       >
         <div>
-          <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--accent)" }}>
-            {plan?.name ?? billingStatus.plan} plan
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--accent)" }}>
+              {plan?.name ?? billingStatus.plan} plan
+            </p>
+            <SubscriptionStatusPill status={sub?.status} cancelAtPeriodEnd={sub?.cancelAtPeriodEnd} />
+          </div>
           <p className="text-lg font-black mt-1" style={{ color: "var(--text-primary)" }}>
             {formatAmount(sub?.amount ?? null, sub?.currency ?? null, interval)}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>
+            Billed {interval === "year" ? "annually" : "monthly"}
           </p>
           {sub?.cancelAtPeriodEnd ? (
             <p className="text-xs mt-1" style={{ color: "var(--danger, #e05252)" }}>
@@ -583,6 +640,18 @@ function SubscriptionPanel({
               Renews {formatRenewalDate(sub?.currentPeriodEnd ?? null)}
             </p>
           )}
+
+          <div className="mt-3 pt-3 space-y-1" style={{ borderTop: "1px solid var(--border)" }}>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Payment method:{" "}
+              {billingStatus.paymentMethod
+                ? `${capitalize(billingStatus.paymentMethod.brand)} •••• ${billingStatus.paymentMethod.last4}`
+                : "—"}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Invoices sent to: {billingStatus.invoiceEmail ?? "—"}
+            </p>
+          </div>
         </div>
 
         {isAdmin && (
@@ -606,6 +675,7 @@ function SubscriptionPanel({
               Need more capacity? Upgrade to {nextTier.name}
             </p>
             <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{nextTier.tagline}</p>
+            {billingStatus.upgradeDiscountAvailable && <DiscountBanner className="mt-2" compact />}
           </div>
           <div className="flex items-center gap-2">
             <SmallBtn label="Monthly" onClick={() => setBillingInterval("month")} active={billingInterval === "month"} />
@@ -618,6 +688,47 @@ function SubscriptionPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function SubscriptionStatusPill({ status, cancelAtPeriodEnd }: { readonly status?: string; readonly cancelAtPeriodEnd?: boolean }) {
+  if (!status) return null;
+  let label = "Active";
+  let color = "var(--accent)";
+  if (cancelAtPeriodEnd) {
+    label = "Canceling";
+    color = "var(--danger, #e05252)";
+  } else if (status === "past_due" || status === "unpaid") {
+    label = "Payment issue";
+    color = "var(--danger, #e05252)";
+  } else if (status !== "active" && status !== "trialing") {
+    label = status;
+    color = "var(--text-dim)";
+  }
+  return (
+    <span
+      className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5"
+      style={{ color, border: `1px solid ${color}` }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function DiscountBanner({ className, compact }: { readonly className?: string; readonly compact?: boolean }) {
+  return (
+    <div
+      className={`rounded-lg ${compact ? "px-2.5 py-1.5" : "px-3 py-2"} ${className ?? ""}`}
+      style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", border: "1px solid var(--accent)" }}
+    >
+      <p className={compact ? "text-xs font-bold" : "text-sm font-bold"} style={{ color: "var(--accent)" }}>
+        Limited-time offer: upgrade now and get 20% off your first 3 months
+      </p>
     </div>
   );
 }

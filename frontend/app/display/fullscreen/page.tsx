@@ -17,13 +17,14 @@ import { ClockPanel } from "../../components/ClockPanel";
 import { ConnectionBadge } from "../../components/ConnectionBadge";
 import { TeamState, Possession, formatClockDisplay, formatScore } from "../../types";
 import { getPeriodLabel, getTemplate } from "../../sport-templates";
+import { DisplayLinkExpiredNotice } from "../components/DisplayLinkExpiredNotice";
 
 const RELAY_URL = process.env.NEXT_PUBLIC_RELAY_URL ?? "http://localhost:4000";
 
 type Layout = "wide" | "stacked" | "minimal";
 
 export default function FullscreenDisplay() {
-  const { state, status, relayUnreachable } = useMatchState();
+  const { state, status, relayUnreachable, unauthorized } = useMatchState();
   const [layout, setLayout] = useState<Layout>("wide");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHud, setShowHud] = useState(true);
@@ -66,6 +67,8 @@ export default function FullscreenDisplay() {
     timer = setTimeout(() => setShowHud(false), 3000);
     return () => { globalThis.removeEventListener("mousemove", show); clearTimeout(timer); };
   }, []);
+
+  if (unauthorized) return <DisplayLinkExpiredNotice />;
 
   return (
     <div

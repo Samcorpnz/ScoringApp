@@ -24,7 +24,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const body = await req.json().catch(() => ({}));
   const label = typeof body?.label === "string" ? body.label.slice(0, 100) : undefined;
   const matchId = typeof body?.matchId === "string" ? body.matchId : undefined;
-  const type = body?.type === "CONTROL" ? "CONTROL" : "BRIDGE";
+  const requestedType = body?.type === "CONTROL" || body?.type === "DATA_FEED" ? body.type : "BRIDGE";
+  const type: "BRIDGE" | "CONTROL" | "DATA_FEED" = requestedType;
+
+  if (type === "DATA_FEED") {
+    const org = await prisma.org.findUnique({
+      where: { id: orgId },
+      select: { account: { select: { addOns: true } } },
+    });
+    if (!org?.account.addOns.includes("data-feed")) {
+      return NextResponse.json(
+        { error: "This feature requires the data-feed add-on — upgrade at /account/billing" },
+        { status: 403 }
+      );
+    }
+  }
 
   if (matchId) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { orgId: true } });

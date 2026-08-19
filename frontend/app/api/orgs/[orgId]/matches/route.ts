@@ -59,6 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
   const sport = searchParams.get("sport") ?? undefined;
   const competition = searchParams.get("competition") ?? undefined;
   const q = searchParams.get("q")?.trim();
+  const id = searchParams.get("id") ?? undefined;
 
   const statuses = statusParam
     ?.split(",")
@@ -68,6 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
   const matches = await prisma.match.findMany({
     where: {
       orgId,
+      ...(id ? { id } : {}),
       ...(statuses?.length ? { status: { in: statuses } } : {}),
       ...(sport ? { sport } : {}),
       ...(competition ? { competition } : {}),
@@ -80,7 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
     },
     select: {
       id: true, status: true, sport: true, competition: true,
-      homeName: true, visitorName: true, scheduledAt: true, createdAt: true, endedAt: true,
+      homeName: true, visitorName: true, scheduledAt: true, createdAt: true, endedAt: true, displayToken: true,
     },
     orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
   });

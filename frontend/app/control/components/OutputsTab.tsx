@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { RELAY_URL } from "../lib/relay";
 import { SectionLabel } from "./primitives";
@@ -45,22 +46,66 @@ export function OutputsTab({ matchId }: { readonly matchId?: string }) {
   const orgId = session?.user?.activeOrgId;
   const origin = typeof globalThis.window !== "undefined" ? globalThis.window.location.origin : "";
 
+  // Required alongside matchId once DISPLAY_TOKEN_REQUIRED is on
+  // (relay/src/server.ts) — fetched here rather than threaded down as a prop
+  // since this is the only tab that needs it.
+  const [displayToken, setDisplayToken] = useState<string | null>(null);
+  useEffect(() => {
+    if (!orgId || !matchId) { setDisplayToken(null); return; }
+    fetch(`/api/orgs/${orgId}/matches?id=${matchId}`)
+      .then(res => res.json())
+      .then(data => setDisplayToken(data?.matches?.[0]?.displayToken ?? null))
+      .catch(() => setDisplayToken(null));
+  }, [orgId, matchId]);
+
+  const [rotating, setRotating] = useState(false);
+  const rotateDisplayToken = async () => {
+    if (!orgId || !matchId) return;
+    if (!confirm("Regenerate the display link? Every link/OBS scene currently using the old one will stop working.")) return;
+    setRotating(true);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/matches/${matchId}/rotate-display-token`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setDisplayToken(data.displayToken);
+      }
+    } finally {
+      setRotating(false);
+    }
+  };
+
   // Display pages scope themselves to a tenant via ?org= (see useMatchState) —
   // without it the relay falls back to the legacy single-tenant room, which
   // no longer exists post-multi-tenant migration and yields no data (SA-65).
   // ?matchId= further scopes to this specific match — without it a display
   // falls back to the org's singleton "default" match, which is wrong (or
-  // empty) once an org has more than one match going.
+  // empty) once an org has more than one match going. ?token= is the
+  // per-match displayToken (see DISPLAY_TOKEN_REQUIRED) — always included
+  // once known so freshly copied/opened links keep working after enforcement
+  // flips on.
   const withOrg = (path: string) => {
     const params = new URLSearchParams();
     if (orgId) params.set("org", orgId);
     if (matchId) params.set("matchId", matchId);
+    if (displayToken) params.set("token", displayToken);
     const qs = params.toString();
     return qs ? `${path}?${qs}` : path;
   };
 
   return (
     <div className="space-y-6">
+      {matchId && (
+        <div className="flex justify-end">
+          <button
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            onClick={rotateDisplayToken}
+            disabled={rotating}
+          >
+            {rotating ? "Regenerating…" : "Regenerate display link"}
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4">
         {DISPLAYS.map(d => {
           const href = withOrg(d.href);
@@ -141,7 +186,7 @@ export function OutputsTab({ matchId }: { readonly matchId?: string }) {
         <div className="mt-4 rounded-lg p-3 text-xs font-mono overflow-x-auto"
           style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", whiteSpace: "pre" }}>
 {`// Example: connect from any JS graphics template
-const socket = io("${RELAY_URL}", { auth: { orgId: "${orgId ?? "<your-org-id>"}"${matchId ? `, matchId: "${matchId}"` : ""} } });
+const socket = io("${RELAY_URL}", { auth: { orgId: "${orgId ?? "<your-org-id>"}"${matchId ? `, matchId: "${matchId}"` : ""}${displayToken ? `, token: "${displayToken}"` : ""} } });
 socket.on("matchStateChange", (state) => {
   // state.home.name, state.home.score, state.home.color, state.home.logoUrl
   // state.visitor.name, state.visitor.score

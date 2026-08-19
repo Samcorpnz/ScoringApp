@@ -55,11 +55,62 @@ const pillars = [
 ] as const;
 
 const plans = [
-  { name: "Free", price: "$0", detail: "One live match at a time — try it before a first game." },
-  { name: "Pro", price: "$89/mo", detail: "Concurrent matches for a single venue or club." },
-  { name: "Venue", price: "$349/mo", detail: "Multi-court venues, NSOs, and tournaments." },
-  { name: "Graphics add-on", price: "+$29/mo", detail: "Broadcast overlays for Pro/Venue streamers." },
-  { name: "Data Feed add-on", price: "Ask us", detail: "Bridge in a physical scoreboard console or a third-party live data feed — optional, on top of Pro or Venue." },
+  {
+    name: "Free",
+    price: "$0",
+    period: "",
+    detail: "One live match at a time — try it before a first game.",
+  },
+  {
+    name: "Pro",
+    price: "$89",
+    period: "/mo",
+    annual: "$890/yr — 2 months free",
+    detail: "Concurrent matches for a single venue or club.",
+  },
+  {
+    name: "Venue",
+    price: "$349",
+    period: "/mo",
+    annual: "$3,490/yr — 2 months free",
+    detail: "Multi-court venues, NSOs, and tournaments.",
+  },
+] as const;
+
+// Optional add-ons stack on top of Pro or Venue — see requireAddOn() in
+// relay/src/entitlements.ts. Both bill monthly or annually (10x monthly, 2
+// months free), same as the base plans.
+const addOns = [
+  {
+    name: "Graphics add-on",
+    price: "$29",
+    period: "/mo",
+    annual: "$290/yr",
+    detail: "Scene-driven broadcast overlays — lower-thirds, player cards, stat panels — on one stable Browser Source URL for OBS/vMix/Wirecast.",
+  },
+  {
+    name: "Data Feed add-on",
+    price: "$39",
+    period: "/mo",
+    annual: "$390/yr",
+    detail: "Bridge a physical Saturn/Vega scoreboard console, or pipe the live match state into a third-party graphics engine (Singular.live, Chyron, VIZRT) over REST or WebSocket.",
+  },
+] as const;
+
+// Rows shown "as-is" per plan use a literal string; boolean rows render a
+// check or dash. Kept to claims already made elsewhere on this page/in
+// requirePlan() calls (relay/src/server.ts) — no capability implied here
+// that isn't gated or marketed as such today.
+const comparisonRows = [
+  { label: "Concurrent live matches", free: "1 at a time", pro: "Unlimited", venue: "Unlimited" },
+  { label: "Sports supported", free: "21 sports", pro: "21 sports", venue: "21 sports" },
+  { label: "Browser control panel", free: true, pro: true, venue: true },
+  { label: "Venue & broadcast displays", free: true, pro: true, venue: true },
+  { label: "Custom team & competition logos", free: false, pro: true, venue: true },
+  { label: "Custom sound cues", free: false, pro: true, venue: true },
+  { label: "Org structure", free: "Single org", pro: "Single org", venue: "Multi-org (NSOs, tournaments)" },
+  { label: "Graphics add-on eligible", free: false, pro: true, venue: true },
+  { label: "Data Feed add-on eligible", free: false, pro: true, venue: true },
 ] as const;
 
 const structuredData = {
@@ -75,6 +126,8 @@ const structuredData = {
     { "@type": "Offer", name: "Free", price: "0", priceCurrency: "NZD" },
     { "@type": "Offer", name: "Pro", price: "89", priceCurrency: "NZD" },
     { "@type": "Offer", name: "Venue", price: "349", priceCurrency: "NZD" },
+    { "@type": "Offer", name: "Graphics add-on", price: "29", priceCurrency: "NZD" },
+    { "@type": "Offer", name: "Data Feed add-on", price: "39", priceCurrency: "NZD" },
   ],
 };
 
@@ -258,15 +311,20 @@ export default function Home() {
 
       <section id="pricing" aria-labelledby="pricing-heading" className="section section-tight">
         <p className="eyebrow">Plans</p>
-        <h2 id="pricing-heading" style={{ fontSize: "1.7rem", fontWeight: 600, textTransform: "uppercase", margin: "0 0 1.5rem" }}>
+        <h2 id="pricing-heading" style={{ fontSize: "1.7rem", fontWeight: 600, textTransform: "uppercase", margin: "0 0 0.5rem" }}>
           Pick your plan
         </h2>
+        <p style={{ margin: "0 0 1.5rem", fontSize: "0.95rem", color: "var(--text-secondary)", maxWidth: "62ch" }}>
+          Three plans, billed monthly or annually. Two optional add-ons stack on top of Pro or
+          Venue — pick either, both, or neither.
+        </p>
+
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: "0.9rem",
-            marginBottom: "1.75rem",
+            marginBottom: "1.5rem",
           }}
         >
           {plans.map((plan) => (
@@ -275,18 +333,105 @@ export default function Home() {
               style={{
                 border: "1px solid var(--border)",
                 borderRadius: 10,
-                padding: "1.1rem 1.25rem",
+                padding: "1.25rem 1.35rem",
                 background: "var(--bg-surface)",
               }}
             >
               <p style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800 }}>{plan.name}</p>
-              <p className="mono" style={{ margin: "0.25rem 0 0.6rem", fontSize: "1.15rem", color: "var(--accent)" }}>
+              <p className="mono" style={{ margin: "0.25rem 0 0.15rem", fontSize: "1.4rem", color: "var(--accent)" }}>
                 {plan.price}
+                <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{plan.period}</span>
               </p>
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>{plan.detail}</p>
+              {"annual" in plan && (
+                <p className="mono" style={{ margin: "0 0 0.6rem", fontSize: "0.72rem", color: "var(--text-secondary)" }}>
+                  {plan.annual}
+                </p>
+              )}
+              <p style={{ margin: "annual" in plan ? 0 : "0.6rem 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                {plan.detail}
+              </p>
             </div>
           ))}
         </div>
+
+        <p className="eyebrow" style={{ margin: "0 0 0.75rem" }}>
+          + Optional add-ons
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: "0.9rem",
+            marginBottom: "2rem",
+          }}
+        >
+          {addOns.map((addOn) => (
+            <div
+              key={addOn.name}
+              style={{
+                border: "1px dashed var(--border-strong)",
+                borderRadius: 10,
+                padding: "1.1rem 1.25rem",
+                background: "var(--bg-surface)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}>
+                <p style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800 }}>{addOn.name}</p>
+                <p className="mono" style={{ margin: 0, fontSize: "1rem", color: "var(--accent)" }}>
+                  +{addOn.price}
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{addOn.period}</span>
+                </p>
+              </div>
+              <p className="mono" style={{ margin: "0.1rem 0 0.5rem", fontSize: "0.7rem", color: "var(--text-secondary)" }}>
+                {addOn.annual} · requires Pro or Venue
+              </p>
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>{addOn.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ overflowX: "auto", marginBottom: "1.75rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560, fontSize: "0.85rem" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "0.6rem 0.75rem", borderBottom: "1px solid var(--border-strong)", color: "var(--text-secondary)", fontWeight: 600 }}>
+                  Feature
+                </th>
+                {["Free", "Pro", "Venue"].map((col) => (
+                  <th
+                    key={col}
+                    style={{ textAlign: "left", padding: "0.6rem 0.75rem", borderBottom: "1px solid var(--border-strong)", fontWeight: 800 }}
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonRows.map((row) => (
+                <tr key={row.label}>
+                  <td style={{ padding: "0.55rem 0.75rem", borderBottom: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                    {row.label}
+                  </td>
+                  {[row.free, row.pro, row.venue].map((cell, i) => (
+                    // eslint-disable-next-line react/no-array-index-key
+                    <td key={i} style={{ padding: "0.55rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+                      {typeof cell === "boolean" ? (
+                        <span aria-hidden="true" style={{ color: cell ? "var(--broadcast)" : "var(--text-secondary)" }}>
+                          {cell ? "✓" : "—"}
+                        </span>
+                      ) : (
+                        cell
+                      )}
+                      {typeof cell === "boolean" && <span className="sr-only">{cell ? "Included" : "Not included"}</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <a href={`${APP_URL}/signup`} className="btn btn-primary">
           Get Started
         </a>
