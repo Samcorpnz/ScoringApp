@@ -989,6 +989,10 @@ function PasskeysCard() {
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   async function refresh() {
     try {
@@ -1019,15 +1023,41 @@ function PasskeysCard() {
       const verifyRes = await fetch("/api/webauthn/register/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ response: attestation }),
+        body: JSON.stringify({ response: attestation, name: newName.trim() || undefined }),
       });
       const data = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok) throw new Error(data?.error ?? "couldn't save passkey");
 
       await refresh();
+      setAdding(false);
+      setNewName("");
       setStatus({ message: "Passkey added.", isError: false });
     } catch (e) {
       Sentry.captureException(e);
+      setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRename(id: string) {
+    const name = editName.trim();
+    if (!name) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/webauthn/passkeys/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "couldn't rename passkey");
+      await refresh();
+      setEditingId(null);
+      setEditName("");
+      setStatus({ message: "Passkey renamed.", isError: false });
+    } catch (e) {
       setStatus({ message: e instanceof Error ? e.message : String(e), isError: true });
     } finally {
       setBusy(false);
@@ -1058,17 +1088,57 @@ function PasskeysCard() {
       {passkeys.length > 0 && (
         <div className="space-y-2">
           {passkeys.map(pk => (
-            <div key={pk.id} className="flex items-center justify-between">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                {pk.name ?? "Unnamed passkey"} · added {new Date(pk.createdAt).toLocaleDateString()}
-              </span>
-              <SmallBtn label="Remove" onClick={() => handleRemove(pk.id)} />
+            <div key={pk.id} className="flex items-center justify-between gap-2">
+              {editingId === pk.id ? (
+                <div className="flex flex-1 gap-2">
+                  <input
+                    type="text"
+                    maxLength={100}
+                    autoFocus
+                    className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleRename(pk.id); }}
+                  />
+                  <SmallBtn label={busy ? "Working…" : "Save"} onClick={() => handleRename(pk.id)} primary />
+                  <SmallBtn label="Cancel" onClick={() => { setEditingId(null); setEditName(""); }} />
+                </div>
+              ) : (
+                <>
+                  <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                    {pk.name ?? "Unnamed passkey"} · added {new Date(pk.createdAt).toLocaleDateString()}
+                  </span>
+                  <div className="flex gap-2">
+                    <SmallBtn label="Rename" onClick={() => { setEditingId(pk.id); setEditName(pk.name ?? ""); }} />
+                    <SmallBtn label="Remove" onClick={() => handleRemove(pk.id)} />
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
       <div className="mt-3">
-        <SmallBtn label={busy ? "Working…" : "Add a passkey"} onClick={handleAdd} primary />
+        {adding ? (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="e.g. MacBook Pro"
+              maxLength={100}
+              autoFocus
+              className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)", outline: "none" }}
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+            />
+            <SmallBtn label={busy ? "Working…" : "Continue"} onClick={handleAdd} primary />
+            <SmallBtn label="Cancel" onClick={() => { setAdding(false); setNewName(""); }} />
+          </div>
+        ) : (
+          <SmallBtn label="Add a passkey" onClick={() => setAdding(true)} primary />
+        )}
       </div>
       {status && <StatusText message={status.message} isError={status.isError} />}
     </Card>
