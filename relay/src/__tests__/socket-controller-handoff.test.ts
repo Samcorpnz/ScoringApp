@@ -12,6 +12,7 @@ import { SignJWT } from "jose";
 // non-deterministically hanging or crashing the process on teardown
 // depending on DNS/network state, rather than failing fast and predictably.
 jest.mock("@scorehub/db", () => ({
+  recordAuditEvent: jest.fn(),
   prisma: {
     org: {
       findUnique: jest.fn(async () => null), // no org row -> getOrgAccount returns null -> not free-tier-gated

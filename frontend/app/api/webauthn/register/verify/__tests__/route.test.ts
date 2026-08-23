@@ -14,6 +14,7 @@ vi.mock("@/lib/rateLimit", () => ({
 const authenticatorCreateMock = vi.fn();
 vi.mock("@scorehub/db", () => ({
   prisma: { authenticator: { create: (...a: unknown[]) => authenticatorCreateMock(...a) } },
+  recordAuditEvent: vi.fn(),
 }));
 
 const verifyRegistrationResponseMock = vi.fn();

@@ -330,3 +330,32 @@ model Player {
   @@unique([orgId, provider, externalId])
   @@index([orgId])
 }
+
+// Durable security/compliance audit trail — failed auth attempts, permission
+// denials, rate-limit trips, and admin actions (invites, role changes, token
+// issuance/revocation). Deliberately has no FK relations to User/Org/Account:
+// an audit record must survive deletion of the thing it describes, and a
+// failed-auth event often has no resolvable userId/orgId at all (bad token,
+// unknown email). orgId/accountId/userId/actor are therefore plain nullable
+// columns, populated best-effort. eventType is a free-form dot-namespaced
+// string (e.g. "auth.failure", "permission.denied", "token.revoked") rather
+// than an enum, since new event types will be added far more often than this
+// migration-heavy schema wants to churn — see Account.plan for the same
+// pragmatic string-over-enum call.
+model AuditLog {
+  id        String   @id @default(uuid())
+  eventType String
+  accountId String?
+  orgId     String?
+  userId    String?
+  // Human-readable identifier of the actor when there's no userId to point
+  // to — an attempted email address, a token label, an IP. Never a secret.
+  actor     String?
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([accountId, createdAt])
+  @@index([eventType, createdAt])
+}

@@ -10,6 +10,7 @@ jest.mock("@scorehub/db", () => {
   const accounts = new Map<string, { plan: string; addOns: string[] }>();
 
   return {
+    recordAuditEvent: jest.fn(),
     __seed(orgId: string, accountId: string, addOns: string[] = []) {
       orgs.set(orgId, { accountId });
       accounts.set(accountId, { plan: "free", addOns });

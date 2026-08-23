@@ -55,7 +55,10 @@ export function OutputsTab({ matchId }: { readonly matchId?: string }) {
     fetch(`/api/orgs/${orgId}/matches?id=${matchId}`)
       .then(res => res.json())
       .then(data => setDisplayToken(data?.matches?.[0]?.displayToken ?? null))
-      .catch(() => setDisplayToken(null));
+      .catch(err => {
+        console.warn("[OutputsTab] failed to fetch display token:", err);
+        setDisplayToken(null);
+      });
   }, [orgId, matchId]);
 
   const [rotating, setRotating] = useState(false);

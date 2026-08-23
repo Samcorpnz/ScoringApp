@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "@scorehub/db";
+import { prisma, recordAuditEvent } from "@scorehub/db";
+import { logger } from "./logger";
+
+function logPermissionDenied(orgId: string, reason: string, extra?: Record<string, unknown>): void {
+  logger.warn("permission.denied", { orgId, reason, ...extra });
+  recordAuditEvent({
+    eventType: "permission.denied",
+    orgId,
+    message: reason,
+    metadata: { reason, ...extra },
+  });
+}
 
 // Thrown by persistence.ts when a Free-tier account tries to bring up a
 // second concurrent live match across any of its orgs. Caught at the HTTP
@@ -66,6 +77,7 @@ export function requirePlan(allowed: string[]) {
     }
     const account = await getOrgAccount(orgId);
     if (!account || !allowed.includes(account.plan)) {
+      logPermissionDenied(orgId, "plan_not_allowed", { allowed, plan: account?.plan, path: req.path });
       res.status(403).json({ error: upgradeMessage(allowed) });
       return;
     }
@@ -88,6 +100,7 @@ export function requireAddOn(name: string) {
       return;
     }
     if (!(await orgHasAddOn(orgId, name))) {
+      logPermissionDenied(orgId, "addon_not_active", { addOn: name, path: req.path });
       res.status(403).json({ error: addOnUpgradeMessage(name) });
       return;
     }

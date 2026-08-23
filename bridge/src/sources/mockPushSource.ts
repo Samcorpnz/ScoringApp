@@ -17,6 +17,7 @@ import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { buildGraphicsFeed, GraphicsFeed } from "../graphics/feedTransform";
 import { findFeedMapping } from "../graphics/feedMappingRegistry";
+import { log } from "../logger";
 
 export type PushFeed = EventEmitter;
 
@@ -36,7 +37,7 @@ function buildGraphicsFeedSafely(
     if (!mapping) return state.graphicsFeed;
     return buildGraphicsFeed(raw, mapping, state.graphicsFeed?.version ?? 0) ?? state.graphicsFeed;
   } catch (err) {
-    console.error(`[mock-push] graphics feed mapping error: ${(err as Error).message}`);
+    log.error(`[mock-push] graphics feed mapping error: ${(err as Error).message}`);
     return state.graphicsFeed;
   }
 }
@@ -60,7 +61,7 @@ export function startPushSource(
   };
 
   feed.on("message", onMessage);
-  console.log(`[mock-push] Listening for pushed graphics payloads (provider: ${provider})`);
+  log.info(`[mock-push] Listening for pushed graphics payloads (provider: ${provider})`);
 
   return () => {
     feed.off("message", onMessage);

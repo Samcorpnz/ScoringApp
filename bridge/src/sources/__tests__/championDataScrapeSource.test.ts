@@ -276,7 +276,7 @@ describe("startScrapeSource", () => {
     jest.advanceTimersByTime(500);
     await flushMicrotasks(10);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Reload failed"), expect.any(String));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Reload failed"));
     expect(launchMock).toHaveBeenCalledTimes(2);
     warnSpy.mockRestore();
   });

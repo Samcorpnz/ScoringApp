@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyRegistrationResponse, type RegistrationResponseJSON } from "@simplewebauthn/server";
-import { prisma } from "@scorehub/db";
+import { prisma, recordAuditEvent } from "@scorehub/db";
 import { auth } from "@/auth";
 import { isRateLimited } from "@/lib/rateLimit";
 import { consumeChallenge, expectedOrigin, rpID } from "@/lib/webauthn";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -45,10 +46,28 @@ export async function POST(req: NextRequest) {
       expectedOrigin: expectedOrigin(),
       expectedRPID: rpID(),
     });
-  } catch {
+  } catch (err) {
+    // Individual failures are often legitimate (stale/replayed response,
+    // wrong device) and not worth alerting on, but log so a systemic issue
+    // (e.g. misconfigured RP ID/origin failing every attempt) is traceable.
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn("auth.failure", { fn: "webauthn.register.verify", reason, userId: session.user.id });
+    recordAuditEvent({
+      eventType: "auth.failure",
+      userId: session.user.id,
+      message: `webauthn registration verification failed: ${reason}`,
+      metadata: { fn: "webauthn.register.verify", reason },
+    });
     return NextResponse.json({ error: "couldn't verify passkey" }, { status: 400 });
   }
   if (!verification.verified || !verification.registrationInfo) {
+    logger.warn("auth.failure", { fn: "webauthn.register.verify", reason: "not_verified", userId: session.user.id });
+    recordAuditEvent({
+      eventType: "auth.failure",
+      userId: session.user.id,
+      message: "webauthn registration not verified",
+      metadata: { fn: "webauthn.register.verify", reason: "not_verified" },
+    });
     return NextResponse.json({ error: "couldn't verify passkey" }, { status: 400 });
   }
 

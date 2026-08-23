@@ -1,3 +1,6 @@
+import { logger } from "./logger";
+import { recordAuditEvent } from "@scorehub/db";
+
 // In-memory sliding-window rate limiter for Next.js API routes / NextAuth
 // callbacks. Good enough for a single-instance deployment; on a
 // multi-instance/serverless deployment each instance tracks its own window,
@@ -9,7 +12,12 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
   const timestamps = (hits.get(key) ?? []).filter(t => now - t < windowMs);
   timestamps.push(now);
   hits.set(key, timestamps);
-  return timestamps.length > limit;
+  const limited = timestamps.length > limit;
+  if (limited) {
+    logger.warn("rate_limit.tripped", { key, limit, windowMs });
+    recordAuditEvent({ eventType: "rate_limit.tripped", actor: key, message: `rate limit tripped for ${key}`, metadata: { limit, windowMs } });
+  }
+  return limited;
 }
 
 // Derive the client IP from the trusted proxy position, NOT the first

@@ -44,7 +44,15 @@ project-level deployment protection (Vercel Authentication / SSO) is left enable
 Cloudflare Access already gates this hostname before requests reach Vercel, so it doesn't add a
 second login for testers, and turning it off project-wide would also strip protection from every
 ad-hoc PR preview deployment (Vercel's Hobby plan has no per-branch protection setting — see the
-Custom Environments note above).
+Custom Environments note above). Confirmed 2026-08-22: `app.uat.scorehub.co.nz` **is** correctly
+assigned to the `uat` git branch (not falling back to Production) — verified via the Vercel API,
+which showed the branch's latest deployment's `alias` list including this hostname.
+
+**Two-layer protection means server-to-server callers (webhooks) need two bypasses, not one** —
+learned the hard way fixing Stripe's UAT webhook (2026-08-22). Cloudflare Access and Vercel
+Authentication both gate this hostname independently; a caller that can't do an interactive login
+(Stripe, cron, CI) needs an exception carved out of **each** layer for the specific path it calls,
+or it 403s/401s. See the Stripe entry under Known gaps for the concrete recipe.
 
 ## Secrets
 
@@ -61,23 +69,40 @@ prod, or vice versa).
 
 ## Known gaps / not yet done
 
-- **`app.uat.scorehub.co.nz` branch targeting — worth double-checking**: `app.uat.scorehub.co.nz`
-  was registered on the `scoring-app` Vercel project and confirmed loading past the Cloudflare
-  Access gate on 2026-08-15, but whether it was explicitly assigned to Git Branch `uat` in the
-  Vercel dashboard (Settings → Domains) — as opposed to falling back to serving **Production** —
-  was never independently confirmed. Verify by checking it's talking to the UAT relay/DB (e.g. a
-  match created there shouldn't appear in production) before relying on it for real UAT testing;
-  if it turns out to be serving Production, do the branch assignment in the dashboard (no CLI/API
-  path exists for this).
 - **CORS**: confirmed — `ALLOWED_ORIGINS` on the relay matches the actual
   Vercel branch-alias URL (`https://scoring-app-git-uat-sam-kerins-projects.vercel.app`),
   verified against a live deployment after the first `uat` push.
-- **Stripe**: webhook endpoint URL for UAT is
-  `https://scoring-app-git-uat-sam-kerins-projects.vercel.app/api/billing/webhook`
-  (stable branch alias). A `uat`-branch-scoped `STRIPE_WEBHOOK_SECRET` is
-  now set on Vercel (2026-08-15) — confirm the endpoint in the test-mode
-  Stripe dashboard still points at the branch-alias URL above if webhook
-  events stop arriving.
+- **Stripe webhook — fixed 2026-08-22, see below for the working recipe.** The original
+  branch-alias endpoint URL was replaced with the custom domain, and two separate protection
+  layers had to be bypassed to get Stripe's server-to-server POSTs through:
+  1. **Cloudflare Access**: created a second, path-scoped Access application at
+     `app.uat.scorehub.co.nz/api/billing/webhook` (account `c0c396b5f4c3cf71c2ecb3821febaf92`,
+     app id `1b770d26-2f5b-49c4-9b9a-b548711e123b`) with a single `bypass` policy (`everyone`).
+     A more specific application path takes precedence over the broader domain-level app that
+     gates the rest of the site, so only this one path is public.
+  2. **Vercel Authentication**: the "custom domains are exempt from Vercel Authentication"
+     behavior only applies to a **Production** domain — `app.uat.scorehub.co.nz` is a Preview
+     (branch) domain, so it still sits behind the login wall. Generated a Protection Bypass for
+     Automation secret (`PATCH /v1/projects/{id}/protection-bypass`, empty body — the `vercel
+     api` CLI needs `--input -` piped `{}` to avoid a 415, since an empty invocation sends no
+     body at all) and appended it as a query param on the endpoint URL registered in Stripe.
+     **Do not** add `x-vercel-set-bypass-cookie=true` — that makes Vercel 307-redirect once to
+     set a cookie, which is meant for browsers that follow redirects, not one-shot webhook
+     POSTs; Stripe just sees the 307 and fails.
+  3. The endpoint URL now registered in Stripe (test mode, "UAT" endpoint) is:
+     `https://app.uat.scorehub.co.nz/api/billing/webhook?x-vercel-protection-bypass=<secret>`
+     (secret is the sensitive `STRIPE_WEBHOOK_SECRET`-adjacent Vercel value, not committed here —
+     see the project's Protection Bypass for Automation setting, or `vercel env ls` won't show it
+     since it isn't a regular env var, though `isEnvVar: true` on the bypass token means it's
+     also injected as `VERCEL_AUTOMATION_BYPASS_SECRET` at runtime if ever needed from code).
+  4. Separately, the `uat`-branch-scoped `STRIPE_WEBHOOK_SECRET` on Vercel had never actually
+     matched the endpoint's real signing secret (`whsec_...`, visible via "Reveal" in the Stripe
+     dashboard) — this alone would have caused "invalid signature" errors even once the two
+     protection layers were bypassed. Fixed via `vercel env add STRIPE_WEBHOOK_SECRET preview
+     --git-branch uat --force --sensitive`, then a `vercel redeploy <latest-uat-deployment>
+     --target preview` (env var changes need a fresh deployment to reach running functions).
+  5. The unrelated `git-main`-alias webhook endpoint in Stripe (stray, not the real production
+     one) still needs manual deletion — low priority, it's just noisy in the dashboard.
 - **Mailgun**: UAT shares the generic Preview environment's Mailgun config
   — real emails will send to real addresses on signup/invite flows tested
   in UAT. Consider a sandbox domain if that's not acceptable.

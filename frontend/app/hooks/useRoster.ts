@@ -36,7 +36,10 @@ export function useRoster(org: string | null | undefined, externalIds: string[])
     fetch(url)
       .then(res => res.json())
       .then(data => setPlayers(Array.isArray(data.players) ? data.players : []))
-      .catch(() => setPlayers([]));
+      .catch(err => {
+        console.warn("[useRoster] failed to fetch roster:", err);
+        setPlayers([]);
+      });
   }, [org, idsKey]);
 
   return players;

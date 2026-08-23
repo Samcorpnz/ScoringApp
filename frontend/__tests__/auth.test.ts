@@ -43,6 +43,7 @@ vi.mock("@scorehub/db", () => ({
     },
   },
   Role: {},
+  recordAuditEvent: vi.fn(),
 }));
 
 const isRateLimitedMock = vi.fn();
