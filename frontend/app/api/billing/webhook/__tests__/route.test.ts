@@ -52,8 +52,14 @@ vi.mock("@/lib/plans", () => ({
 }));
 
 const sendPaymentFailedEmailMock = vi.fn();
+const sendPaymentActionRequiredEmailMock = vi.fn();
+const sendPaymentRecoveredEmailMock = vi.fn();
+const sendSubscriptionEndedEmailMock = vi.fn();
 vi.mock("@/lib/email", () => ({
   sendPaymentFailedEmail: (...a: unknown[]) => sendPaymentFailedEmailMock(...a),
+  sendPaymentActionRequiredEmail: (...a: unknown[]) => sendPaymentActionRequiredEmailMock(...a),
+  sendPaymentRecoveredEmail: (...a: unknown[]) => sendPaymentRecoveredEmailMock(...a),
+  sendSubscriptionEndedEmail: (...a: unknown[]) => sendSubscriptionEndedEmailMock(...a),
 }));
 
 function makeRequest(body = "{}", signature: string | null = "sig_test") {
@@ -87,6 +93,9 @@ describe("POST /api/billing/webhook", () => {
       planForPriceIdMock,
       addOnForPriceIdMock,
       sendPaymentFailedEmailMock,
+      sendPaymentActionRequiredEmailMock,
+      sendPaymentRecoveredEmailMock,
+      sendSubscriptionEndedEmailMock,
     ]) {
       m.mockReset();
     }
@@ -95,6 +104,7 @@ describe("POST /api/billing/webhook", () => {
     subscriptionsCancelMock.mockResolvedValue({});
     planForPriceIdMock.mockReturnValue(null);
     addOnForPriceIdMock.mockReturnValue(null);
+    membershipFindManyMock.mockResolvedValue([]);
   });
 
   it("returns 500 when the stripe-signature header is missing", async () => {
@@ -403,6 +413,7 @@ describe("POST /api/billing/webhook", () => {
         plan: "venue",
         graphicsSubscriptionId: "sub_graphics",
       });
+      membershipFindManyMock.mockResolvedValue([{ user: { email: "admin@example.com" } }]);
 
       const { POST } = await import("../route");
       await POST(makeRequest());
@@ -414,6 +425,27 @@ describe("POST /api/billing/webhook", () => {
       expect(subscriptionsCancelMock).toHaveBeenCalledWith("sub_graphics");
       // removeAddOn's own findUnique/update — the account was already fetched above
       expect(accountFindUniqueMock).toHaveBeenCalledWith({ where: { id: "acc_1" } });
+      expect(sendSubscriptionEndedEmailMock).toHaveBeenCalledWith({
+        to: ["admin@example.com"],
+        plan: "venue",
+      });
+    });
+
+    it("does not send a subscription-ended email when the account was already on the free plan", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("customer.subscription.updated", {
+          id: "sub_1",
+          status: "canceled",
+          metadata: {},
+          items: { data: [] },
+        }),
+      );
+      accountFindFirstMock.mockResolvedValue({ id: "acc_1", plan: "free" });
+
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+
+      expect(sendSubscriptionEndedEmailMock).not.toHaveBeenCalled();
     });
 
     it("no-ops the base-plan branch when the account can't be found", async () => {
@@ -473,7 +505,8 @@ describe("POST /api/billing/webhook", () => {
       constructEventMock.mockReturnValue(
         stripeEvent("customer.subscription.deleted", { id: "sub_1", metadata: {} }),
       );
-      accountFindFirstMock.mockResolvedValue({ id: "acc_1", graphicsSubscriptionId: null });
+      accountFindFirstMock.mockResolvedValue({ id: "acc_1", plan: "pro", graphicsSubscriptionId: null });
+      membershipFindManyMock.mockResolvedValue([{ user: { email: "admin@example.com" } }]);
 
       const { POST } = await import("../route");
       await POST(makeRequest());
@@ -481,6 +514,10 @@ describe("POST /api/billing/webhook", () => {
       expect(accountUpdateManyMock).toHaveBeenCalledWith({
         where: { stripeSubscriptionId: "sub_1" },
         data: { plan: "free", stripeSubscriptionId: null, billingInterval: null },
+      });
+      expect(sendSubscriptionEndedEmailMock).toHaveBeenCalledWith({
+        to: ["admin@example.com"],
+        plan: "pro",
       });
     });
 
@@ -535,6 +572,72 @@ describe("POST /api/billing/webhook", () => {
       expect(sendPaymentFailedEmailMock).toHaveBeenCalledWith({
         to: ["admin@example.com", "second-admin@example.com"],
       });
+    });
+  });
+
+  describe("invoice.payment_action_required / invoice.payment_attempt_required", () => {
+    it.each(["invoice.payment_action_required", "invoice.payment_attempt_required"])(
+      "emails admins with the hosted invoice link for %s",
+      async type => {
+        constructEventMock.mockReturnValue(
+          stripeEvent(type, { customer: "cus_1", hosted_invoice_url: "https://stripe.example/invoice" }),
+        );
+        accountFindFirstMock.mockResolvedValue({ id: "acc_1" });
+        membershipFindManyMock.mockResolvedValue([{ user: { email: "admin@example.com" } }]);
+
+        const { POST } = await import("../route");
+        await POST(makeRequest());
+
+        expect(sendPaymentActionRequiredEmailMock).toHaveBeenCalledWith({
+          to: ["admin@example.com"],
+          hostedInvoiceUrl: "https://stripe.example/invoice",
+        });
+      },
+    );
+
+    it("no-ops when no account matches the Stripe customer id", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("invoice.payment_action_required", { customer: "cus_1" }),
+      );
+      accountFindFirstMock.mockResolvedValue(null);
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+      expect(sendPaymentActionRequiredEmailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("invoice.payment_succeeded", () => {
+    it("no-ops on a routine renewal (attempt_count 1)", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("invoice.payment_succeeded", { customer: "cus_1", attempt_count: 1 }),
+      );
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+      expect(accountFindFirstMock).not.toHaveBeenCalled();
+      expect(sendPaymentRecoveredEmailMock).not.toHaveBeenCalled();
+    });
+
+    it("emails admins when the payment succeeded after a prior failed attempt", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("invoice.payment_succeeded", { customer: "cus_1", attempt_count: 2 }),
+      );
+      accountFindFirstMock.mockResolvedValue({ id: "acc_1" });
+      membershipFindManyMock.mockResolvedValue([{ user: { email: "admin@example.com" } }]);
+
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+
+      expect(sendPaymentRecoveredEmailMock).toHaveBeenCalledWith({ to: ["admin@example.com"] });
+    });
+
+    it("no-ops when no account matches the Stripe customer id", async () => {
+      constructEventMock.mockReturnValue(
+        stripeEvent("invoice.payment_succeeded", { customer: "cus_1", attempt_count: 2 }),
+      );
+      accountFindFirstMock.mockResolvedValue(null);
+      const { POST } = await import("../route");
+      await POST(makeRequest());
+      expect(sendPaymentRecoveredEmailMock).not.toHaveBeenCalled();
     });
   });
 });

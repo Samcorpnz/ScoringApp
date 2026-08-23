@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/nextjs";
 import { prisma } from "@scorehub/db";
 import { getStripe } from "@/lib/stripe";
-import { planForPriceId, addOnForPriceId, ADDON_SUBSCRIPTION_FIELD, AddOn } from "@/lib/plans";
-import { sendPaymentFailedEmail } from "@/lib/email";
+import { planForPriceId, addOnForPriceId, ADDON_SUBSCRIPTION_FIELD, AddOn, PaidPlan } from "@/lib/plans";
+import {
+  sendPaymentFailedEmail,
+  sendPaymentActionRequiredEmail,
+  sendPaymentRecoveredEmail,
+  sendSubscriptionEndedEmail,
+} from "@/lib/email";
+
+function isPaidPlan(plan: string): plan is PaidPlan {
+  return plan === "pro" || plan === "venue";
+}
 
 // Stripe retries webhooks on any non-2xx response, so on a real processing
-// failure we return 500 deliberately to get that retry — full alerting on
-// repeated failures arrives with Sentry/structured logging (Horizon 0 Phase
-// 8, SA-28), not yet wired up. This is a known, deliberate gap, not a
-// missed requirement of this phase.
+// failure we return 500 deliberately to get that retry. Errors are caught
+// here rather than rethrown (so we can clean up the stripeEvent row first),
+// which means Next.js's global onRequestError/Sentry.captureRequestError
+// hook never sees them — each catch below reports to Sentry explicitly.
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -23,6 +33,7 @@ export async function POST(req: NextRequest) {
     event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (err) {
     console.error("[billing] webhook signature verification failed:", err);
+    Sentry.captureException(err, { tags: { area: "billing-webhook", stage: "signature" } });
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 
@@ -42,6 +53,10 @@ export async function POST(req: NextRequest) {
     await handleEvent(event);
   } catch (err) {
     console.error("[billing] failed to process webhook event:", event.id, event.type, err);
+    Sentry.captureException(err, {
+      tags: { area: "billing-webhook", stage: "processing", eventType: event.type },
+      extra: { eventId: event.id },
+    });
     await prisma.stripeEvent.delete({ where: { id: event.id } }).catch(() => {});
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
@@ -62,6 +77,13 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       break;
     case "invoice.payment_failed":
       await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+      break;
+    case "invoice.payment_action_required":
+    case "invoice.payment_attempt_required":
+      await handleInvoicePaymentActionRequired(event.data.object as Stripe.Invoice);
+      break;
+    case "invoice.payment_succeeded":
+      await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
       break;
   }
 }
@@ -87,6 +109,11 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   // rather than silently granting Pro.
   if (!plan) {
     console.error(`[billing] unmapped priceId on checkout.session.completed: ${priceId} (account ${accountId})`);
+    Sentry.captureMessage("billing webhook: unmapped priceId on checkout.session.completed", {
+      level: "error",
+      tags: { area: "billing-webhook" },
+      extra: { priceId, accountId },
+    });
   }
   // The checkout route stamps this metadata flag when it attached the
   // upgrade-discount coupon at Checkout Session creation time (see
@@ -144,6 +171,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
   // for a feature the account can no longer use.
   if (nextPlan === "free") {
     await cancelActiveAddOnSubscriptions(account);
+    if (isPaidPlan(account.plan)) await sendSubscriptionEndedEmailToAdmins(account.id, account.plan);
   }
 }
 
@@ -168,22 +196,57 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   });
   // Same cascade as the "updated" case above, for when the base plan
   // subscription is cancelled outright rather than just lapsing.
-  if (account) await cancelActiveAddOnSubscriptions(account);
+  if (account) {
+    await cancelActiveAddOnSubscriptions(account);
+    if (isPaidPlan(account.plan)) await sendSubscriptionEndedEmailToAdmins(account.id, account.plan);
+  }
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-  if (typeof invoice.customer !== "string") return;
+  const emails = await adminEmailsForStripeCustomer(invoice.customer);
+  if (!emails) return;
+  await sendPaymentFailedEmail({ to: emails });
+}
 
-  const account = await prisma.account.findFirst({ where: { stripeCustomerId: invoice.customer } });
-  if (!account) return;
+async function handleInvoicePaymentActionRequired(invoice: Stripe.Invoice): Promise<void> {
+  const emails = await adminEmailsForStripeCustomer(invoice.customer);
+  if (!emails) return;
+  await sendPaymentActionRequiredEmail({ to: emails, hostedInvoiceUrl: invoice.hosted_invoice_url ?? undefined });
+}
 
+// invoice.payment_succeeded fires for every routine renewal, not just
+// recoveries — attempt_count > 1 means a prior charge attempt on this same
+// invoice already failed, so this is specifically the "it went through after
+// all" case worth notifying admins about, not a monthly "thanks for paying".
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+  if (!invoice.attempt_count || invoice.attempt_count <= 1) return;
+
+  const emails = await adminEmailsForStripeCustomer(invoice.customer);
+  if (!emails) return;
+  await sendPaymentRecoveredEmail({ to: emails });
+}
+
+async function adminEmailsForStripeCustomer(customer: Stripe.Invoice["customer"]): Promise<string[] | null> {
+  if (typeof customer !== "string") return null;
+
+  const account = await prisma.account.findFirst({ where: { stripeCustomerId: customer } });
+  if (!account) return null;
+
+  return adminEmailsForAccountId(account.id);
+}
+
+async function adminEmailsForAccountId(accountId: string): Promise<string[]> {
   const admins = await prisma.membership.findMany({
-    where: { role: "ADMIN", org: { accountId: account.id } },
+    where: { role: "ADMIN", org: { accountId } },
     select: { user: { select: { email: true } } },
     distinct: ["userId"],
   });
-  const emails = [...new Set(admins.map(m => m.user.email))];
-  await sendPaymentFailedEmail({ to: emails });
+  return [...new Set(admins.map(m => m.user.email))];
+}
+
+async function sendSubscriptionEndedEmailToAdmins(accountId: string, plan: PaidPlan): Promise<void> {
+  const emails = await adminEmailsForAccountId(accountId);
+  await sendSubscriptionEndedEmail({ to: emails, plan });
 }
 
 // A webhook that only carries a bare subscription id (no accountId/addOn

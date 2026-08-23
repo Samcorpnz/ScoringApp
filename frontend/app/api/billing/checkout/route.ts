@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
 import { prisma } from "@scorehub/db";
 import { getAccountForOrg } from "@/lib/account";
@@ -138,6 +139,12 @@ async function createNewCheckoutSession(
   });
 
   if (!checkoutSession.client_secret) {
+    console.error("[billing] checkout session created without a client_secret:", checkoutSession.id);
+    Sentry.captureMessage("billing checkout: session created without client_secret", {
+      level: "error",
+      tags: { area: "billing-checkout" },
+      extra: { accountId: account.id, sessionId: checkoutSession.id },
+    });
     return NextResponse.json({ error: "failed to create checkout session" }, { status: 500 });
   }
   return NextResponse.json({ clientSecret: checkoutSession.client_secret });
@@ -173,7 +180,12 @@ export async function POST(req: NextRequest) {
   try {
     stripe = getStripe();
     priceId = plan ? priceIdForPlan(plan, interval) : priceIdForAddOn(addOn!, interval);
-  } catch {
+  } catch (err) {
+    console.error("[billing] checkout config error:", err);
+    Sentry.captureException(err, {
+      tags: { area: "billing-checkout", stage: "config" },
+      extra: { accountId: account.id, plan, addOn, interval },
+    });
     return NextResponse.json({ error: "billing is not configured" }, { status: 500 });
   }
 

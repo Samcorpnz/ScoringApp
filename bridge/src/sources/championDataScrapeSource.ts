@@ -16,6 +16,7 @@ import { promisify } from "node:util";
 import { Socket } from "socket.io-client";
 import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
+import { log } from "../logger";
 
 const dnsLookup = promisify(dns.lookup);
 
@@ -146,12 +147,12 @@ export async function startScrapeSource(
           latestPayload = json;
         }
       } catch (err) {
-        console.warn(`[cd-scrape] Failed to parse JSON response from ${responseUrl}: ${(err as Error).message}`);
+        log.warn(`[cd-scrape] Failed to parse JSON response from ${responseUrl}: ${(err as Error).message}`);
       }
     });
 
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30_000 });
-    console.log(`[cd-scrape] Page loaded: ${url}`);
+    log.info(`[cd-scrape] Page loaded: ${url}`);
   }
 
   async function poll(): Promise<void> {
@@ -163,12 +164,12 @@ export async function startScrapeSource(
         await page.reload({ waitUntil: "networkidle0", timeout: 10_000 });
       }
     } catch (err) {
-      console.warn("[cd-scrape] Reload failed, relaunching browser:", (err as Error).message);
+      log.warn(`[cd-scrape] Reload failed, relaunching browser: ${(err as Error).message}`);
       await teardown();
       try {
         await launchBrowser();
       } catch (launchErr) {
-        console.error("[cd-scrape] Relaunch failed:", (launchErr as Error).message);
+        log.error(`[cd-scrape] Relaunch failed: ${(launchErr as Error).message}`);
       }
     }
 
@@ -178,7 +179,7 @@ export async function startScrapeSource(
         setState(next);
         if (socket.connected) socket.emit("stateUpdate", next);
       } catch (parseErr) {
-        console.warn("[cd-scrape] Parse error:", (parseErr as Error).message);
+        log.warn(`[cd-scrape] Parse error: ${(parseErr as Error).message}`);
       }
     }
 
@@ -196,7 +197,7 @@ export async function startScrapeSource(
     browser = null;
   }
 
-  console.log(`[cd-scrape] Launching browser for ${url} (${pollMs}ms interval)`);
+  log.info(`[cd-scrape] Launching browser for ${url} (${pollMs}ms interval)`);
   await launchBrowser();
 
   // Start the poll loop after initial page load

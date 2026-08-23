@@ -434,7 +434,10 @@ function DataFeedTokensCard({ orgId }: { readonly orgId: string }) {
     fetch("/api/billing/status")
       .then(res => res.ok ? res.json() : { addOns: [] })
       .then(data => setEntitled((data.addOns ?? []).includes("data-feed")))
-      .catch(() => setEntitled(false));
+      .catch(err => {
+        console.warn("[SettingsTab] failed to fetch billing status:", err);
+        setEntitled(false);
+      });
   }, []);
 
   const loadTokens = async () => {

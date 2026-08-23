@@ -17,6 +17,7 @@ import { MatchState } from "../types";
 import { parseChampionDataJson } from "../protocol/championDataParser";
 import { buildGraphicsFeed, GraphicsFeed } from "../graphics/feedTransform";
 import { findFeedMapping } from "../graphics/feedMappingRegistry";
+import { log } from "../logger";
 
 // Never throws — a graphics-mapping failure must never affect score state
 // (the caller merges the result onto an already-parsed MatchState).
@@ -30,7 +31,7 @@ function buildGraphicsFeedSafely(
     if (!mapping) return state.graphicsFeed;
     return buildGraphicsFeed(raw, mapping, state.graphicsFeed?.version ?? 0) ?? state.graphicsFeed;
   } catch (err) {
-    console.error(`[cd-json] graphics feed mapping error: ${(err as Error).message}`);
+    log.error(`[cd-json] graphics feed mapping error: ${(err as Error).message}`);
     return state.graphicsFeed;
   }
 }
@@ -145,7 +146,7 @@ export function startJsonSource(
     try {
       const res = await fetch(url, { headers, agent: selectSafeAgent });
       if (!res.ok) {
-        console.warn(`[cd-json] HTTP ${res.status} from ${url}`);
+        log.warn(`[cd-json] HTTP ${res.status} from ${url}`);
       } else {
         const json = await res.json();
         const parsed = parseChampionDataJson(json, getState());
@@ -154,13 +155,13 @@ export function startJsonSource(
         if (socket.connected) socket.emit("stateUpdate", next);
       }
     } catch (err) {
-      console.error(`[cd-json] Fetch/parse error for ${url}: ${(err as Error).message}`);
+      log.error(`[cd-json] Fetch/parse error for ${url}: ${(err as Error).message}`);
     }
 
     if (active) setTimeout(poll, pollMs);
   }
 
-  console.log(`[cd-json] Polling ${url} every ${pollMs}ms`);
+  log.info(`[cd-json] Polling ${url} every ${pollMs}ms`);
   poll();
 
   return () => {

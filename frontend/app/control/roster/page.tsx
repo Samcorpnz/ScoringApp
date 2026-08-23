@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, Suspense } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMatchState } from "../../hooks/useMatchState";
@@ -73,7 +74,9 @@ function RosterControl() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setPlayers(data.players ?? []);
-    } catch {
+    } catch (err) {
+      console.error("[roster] failed to load roster:", err);
+      Sentry.captureException(err, { tags: { area: "roster" } });
       setError("Failed to load roster");
     } finally {
       setLoading(false);

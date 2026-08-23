@@ -1,5 +1,6 @@
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
+import type { PaidPlan } from "./plans";
 
 // Lazily constructed, mirroring lib/stripe.ts's getStripe() — importing this
 // module during Next.js's build-time page-data collection shouldn't throw
@@ -162,5 +163,84 @@ export async function sendPaymentFailedEmail({ to }: { to: string[] }): Promise<
     subject: "Your ScoreHub payment failed",
     text: `We couldn't charge your card for your ScoreHub subscription. Stripe will retry automatically, but you may want to update your payment method to avoid losing access.\n\n${link}\n\nIf you've already resolved this, you can ignore this email.`,
     html: `<p>We couldn't charge your card for your ScoreHub subscription. Stripe will retry automatically, but you may want to update your payment method to avoid losing access.</p><p><a href="${link}">Update payment method</a></p><p>If you've already resolved this, you can ignore this email.</p>`,
+  });
+}
+
+export async function sendPaymentActionRequiredEmail({
+  to,
+  hostedInvoiceUrl,
+}: {
+  to: string[];
+  hostedInvoiceUrl?: string;
+}): Promise<void> {
+  if (to.length === 0) return;
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = hostedInvoiceUrl ?? `${baseUrl}/account`;
+
+  await getMailgun().messages.create(domain, {
+    from,
+    to,
+    subject: "Action required to complete your ScoreHub payment",
+    text: `Your bank requires additional verification to complete a payment for your ScoreHub subscription. Please complete this step to avoid losing access.\n\n${link}\n\nIf you've already resolved this, you can ignore this email.`,
+    html: `<p>Your bank requires additional verification to complete a payment for your ScoreHub subscription. Please complete this step to avoid losing access.</p><p><a href="${link}">Complete payment verification</a></p><p>If you've already resolved this, you can ignore this email.</p>`,
+  });
+}
+
+export async function sendPaymentRecoveredEmail({ to }: { to: string[] }): Promise<void> {
+  if (to.length === 0) return;
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
+
+  await getMailgun().messages.create(domain, {
+    from,
+    to,
+    subject: "Your ScoreHub payment succeeded",
+    text: `Good news — we successfully charged your card for your ScoreHub subscription after a previous attempt failed. No further action is needed.`,
+    html: `<p>Good news — we successfully charged your card for your ScoreHub subscription after a previous attempt failed. No further action is needed.</p>`,
+  });
+}
+
+// Shown to the recipient, so kept distinct from the internal PaidPlan values
+// ("pro"/"venue") — and paired with the one concrete thing they're losing,
+// since a vague "premium features" line undersells what's actually changing.
+const PLAN_INFO: Record<PaidPlan, { label: string; losing: string }> = {
+  pro: { label: "Pro", losing: "concurrent live matches and priority support" },
+  venue: { label: "Venue", losing: "multi-venue control, concurrent live matches, and priority support" },
+};
+
+export async function sendSubscriptionEndedEmail({ to, plan }: { to: string[]; plan: PaidPlan }): Promise<void> {
+  if (to.length === 0) return;
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error("MAILGUN_DOMAIN is not configured");
+  }
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const link = `${baseUrl}/account/billing`;
+  const { label, losing } = PLAN_INFO[plan];
+
+  await getMailgun().messages.create(domain, {
+    from,
+    to,
+    subject: `Your ScoreHub ${label} plan has ended`,
+    text: `Your ScoreHub ${label} subscription has ended, and your account is back on the Free plan.\n\nThat means ${losing} are switched off for now — but nothing else has changed. Your matches, your scoreboards, your settings: all exactly where you left them, ready the moment you're back.\n\nGetting back to full strength takes under a minute:\n\n${link}\n\nIf something about ${label} wasn't working for you, just hit reply and tell us — we read every message, and it shapes what we build next.\n\n— The ScoreHub team`,
+    html: `<p>Your ScoreHub ${label} subscription has ended, and your account is back on the Free plan.</p><p>That means ${escapeHtml(losing)} are switched off for now — but nothing else has changed. Your matches, your scoreboards, your settings: all exactly where you left them, ready the moment you're back.</p><p><a href="${link}">Reactivate ${label}</a> — it takes under a minute.</p><p>If something about ${label} wasn't working for you, just hit reply and tell us — we read every message, and it shapes what we build next.</p><p>— The ScoreHub team</p>`,
   });
 }

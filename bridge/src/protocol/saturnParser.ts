@@ -6,6 +6,7 @@
  */
 
 import { MatchState, TeamPlayer, SportType, Possession } from "../types";
+import { log } from "../logger";
 
 const STX = 0x02;
 const ETX = 0x03;
@@ -86,7 +87,8 @@ export function applySaturnMessage(
       case "T":  return applyDateTime(msg.raw, state);
       default:   return state;
     }
-  } catch {
+  } catch (err) {
+    log.error(`saturnParser: failed to apply '${msg.type}' message: ${err instanceof Error ? err.message : err}`);
     return state;
   }
 }
