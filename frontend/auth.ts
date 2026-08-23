@@ -6,9 +6,23 @@ import {
   type AuthenticationResponseJSON,
   type AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
-import { prisma, Role } from "@scorehub/db";
+import { prisma, Role, recordAuditEvent } from "@scorehub/db";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
 import { consumeChallenge, expectedOrigin, rpID } from "@/lib/webauthn";
+import { logger } from "@/lib/logger";
+
+// Logged only for a login attempt that was actually made (an email+password
+// or a credential was presented) and failed — not for the "form submitted
+// empty" case, which is client-side validation noise, not a security event.
+function logLoginFailure(provider: "credentials" | "passkey", reason: string, extra?: Record<string, unknown>): void {
+  logger.warn("auth.failure", { provider, reason, ...extra });
+  recordAuditEvent({
+    eventType: "auth.failure",
+    actor: typeof extra?.email === "string" ? extra.email : undefined,
+    message: `login failed via ${provider}: ${reason}`,
+    metadata: { provider, reason, ...extra },
+  });
+}
 
 export type SessionMembership = {
   orgId: string;
@@ -67,16 +81,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Throttle by IP+email so credential stuffing against one account
         // from one source can't run unbounded (SA-81).
         const key = `login:${clientIp(request)}:${email.toLowerCase()}`;
-        if (isRateLimited(key, 10, 60_000)) return null;
+        if (isRateLimited(key, 10, 60_000)) {
+          logLoginFailure("credentials", "rate_limited", { email });
+          return null;
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },
           include: { memberships: { include: { org: true } } },
         });
-        if (!user) return null;
+        if (!user) {
+          logLoginFailure("credentials", "unknown_email", { email });
+          return null;
+        }
 
         const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          logLoginFailure("credentials", "wrong_password", { email, userId: user.id });
+          return null;
+        }
 
         const memberships: SessionMembership[] = user.memberships.map((m) => ({
           orgId: m.orgId,
@@ -110,12 +133,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!raw) return null;
 
         const key = `login-passkey:${clientIp(request)}`;
-        if (isRateLimited(key, 10, 60_000)) return null;
+        if (isRateLimited(key, 10, 60_000)) {
+          logLoginFailure("passkey", "rate_limited");
+          return null;
+        }
 
         let response: AuthenticationResponseJSON;
         try {
           response = JSON.parse(raw);
         } catch {
+          logLoginFailure("passkey", "malformed_credential");
           return null;
         }
 
@@ -123,18 +150,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { credentialId: response.id },
           include: { user: { include: { memberships: { include: { org: true } } } } },
         });
-        if (!authenticator) return null;
+        if (!authenticator) {
+          logLoginFailure("passkey", "unknown_credential");
+          return null;
+        }
 
         let clientData: { challenge?: string };
         try {
           clientData = JSON.parse(Buffer.from(response.response.clientDataJSON, "base64url").toString("utf8"));
         } catch {
+          logLoginFailure("passkey", "malformed_client_data", { userId: authenticator.userId });
           return null;
         }
-        if (!clientData.challenge) return null;
+        if (!clientData.challenge) {
+          logLoginFailure("passkey", "missing_challenge", { userId: authenticator.userId });
+          return null;
+        }
 
         const challengeRow = await consumeChallenge(clientData.challenge, "authentication");
-        if (!challengeRow) return null; // expired, replayed, or unknown challenge
+        if (!challengeRow) {
+          logLoginFailure("passkey", "expired_or_replayed_challenge", { userId: authenticator.userId });
+          return null;
+        }
 
         let verification;
         try {
@@ -151,9 +188,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
           });
         } catch {
+          logLoginFailure("passkey", "verification_error", { userId: authenticator.userId });
           return null;
         }
-        if (!verification.verified) return null;
+        if (!verification.verified) {
+          logLoginFailure("passkey", "verification_failed", { userId: authenticator.userId });
+          return null;
+        }
 
         await prisma.authenticator.update({
           where: { id: authenticator.id },

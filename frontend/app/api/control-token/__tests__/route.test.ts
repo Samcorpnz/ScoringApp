@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const findUniqueMock = vi.fn();
-vi.mock("@scorehub/db", () => ({ prisma: { match: { findUnique: (...a: unknown[]) => findUniqueMock(...a) } } }));
+vi.mock("@scorehub/db", () => ({
+  prisma: { match: { findUnique: (...a: unknown[]) => findUniqueMock(...a) } },
+  recordAuditEvent: vi.fn(),
+}));
 
 const authMock = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => authMock() }));

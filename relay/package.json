@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
+    "@logtail/node": "^0.5.8",
     "@scorehub/db": "*",
     "@scorehub/types": "*",
     "@sentry/node": "^10.62.0",

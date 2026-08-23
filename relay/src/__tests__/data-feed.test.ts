@@ -20,6 +20,7 @@ jest.mock("@scorehub/db", () => {
   }
 
   return {
+    recordAuditEvent: jest.fn(),
     __seedOrg(orgId: string, accountId: string, addOns: string[] = []) {
       orgs.set(orgId, { accountId });
       accounts.set(accountId, { plan: "pro", addOns });

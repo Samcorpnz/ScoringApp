@@ -25,6 +25,7 @@ import {
 import { applyCricketBall, applyOverComplete, applyInningsChange, applyDeclare } from "./cricket";
 import { resyncClock } from "./clock";
 import { captureException } from "./sentry";
+import { logger } from "./logger";
 
 export interface ServerOptions {
   bridgeSecret?: string;
@@ -363,12 +364,17 @@ export function createServer(options: ServerOptions = {}) {
   // 20 requests per IP per minute on control-secret-gated endpoints — must run
   // before controlAuth, or failed auth attempts (brute force) bypass the limit
   // entirely since the limiter would only see requests that already passed auth.
+  function onRateLimited(req: express.Request, res: express.Response): void {
+    logger.warn("rate_limit.tripped", { path: req.path, ip: req.ip });
+    res.status(429).json({ error: "too many requests" });
+  }
+
   const controlRateLimit = rateLimit({
     windowMs: 60_000,
     limit: options.controlRateLimit ?? 20,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "too many requests" },
+    handler: onRateLimited,
   });
 
   // Sized for legitimate 1-5Hz polling (per OutputsTab's REST snapshot docs)
@@ -379,7 +385,7 @@ export function createServer(options: ServerOptions = {}) {
     limit: 600,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "too many requests" },
+    handler: onRateLimited,
   });
 
   app.post(
@@ -773,7 +779,7 @@ export function createServer(options: ServerOptions = {}) {
     limit: options.controlRateLimit ?? 120,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "too many requests" },
+    handler: onRateLimited,
   });
 
   async function actionAuth(

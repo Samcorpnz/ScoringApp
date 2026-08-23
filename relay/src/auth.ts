@@ -1,6 +1,20 @@
 import { jwtVerify } from "jose";
 import crypto from "node:crypto";
-import { prisma } from "@scorehub/db";
+import { prisma, recordAuditEvent } from "@scorehub/db";
+import { logger } from "./logger";
+
+// Logged (not just returned as null) only for a secret that was actually
+// presented and failed validation — an absent header is the normal shape of
+// most unauthenticated requests and would drown genuine signal in noise.
+function logAuthFailure(fn: string, reason: string, extra?: Record<string, unknown>): void {
+  logger.warn("auth.failure", { fn, reason, ...extra });
+  recordAuditEvent({
+    eventType: "auth.failure",
+    orgId: typeof extra?.orgId === "string" ? extra.orgId : undefined,
+    message: `${fn}: ${reason}`,
+    metadata: { fn, reason, ...extra },
+  });
+}
 
 // Used when DATABASE_URL is unset (local dev / Jest) — every connection
 // shares one room, matching the relay's original single-tenant behaviour.
@@ -40,11 +54,16 @@ export async function verifyBridgeSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
+    if (secretsEqual(secret, legacySecret)) return { orgId: LEGACY_ROOM_ID };
+    logAuthFailure("verifyBridgeSecret", "legacy_secret_mismatch");
+    return null;
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
-  if (token?.type !== "BRIDGE" || token?.revokedAt) return null;
+  if (token?.type !== "BRIDGE" || token?.revokedAt) {
+    logAuthFailure("verifyBridgeSecret", token ? "wrong_type_or_revoked" : "token_not_found", { orgId: token?.orgId });
+    return null;
+  }
   return { orgId: token.orgId, matchId: token.matchId ?? undefined };
 }
 
@@ -81,11 +100,19 @@ export async function verifyControlSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
+    if (secretsEqual(secret, legacySecret)) return { orgId: LEGACY_ROOM_ID };
+    logAuthFailure("verifyControlSecret", "legacy_secret_mismatch");
+    return null;
   }
 
   const authSecret = process.env.AUTH_SECRET;
-  if (!authSecret) return null; // misconfigured multi-tenant deployment — fail closed
+  if (!authSecret) {
+    // Misconfigured multi-tenant deployment — fail closed, but this is a
+    // deploy-config bug worth surfacing loudly rather than the usual
+    // best-effort audit log (every request will fail identically until fixed).
+    logger.error("auth.misconfigured", { fn: "verifyControlSecret", reason: "AUTH_SECRET unset" });
+    return null;
+  }
 
   try {
     const key = new TextEncoder().encode(authSecret);
@@ -93,9 +120,13 @@ export async function verifyControlSecret(
     const orgId = payload.orgId as string | undefined;
     const role = payload.role as string | undefined;
     const matchId = payload.matchId as string | undefined;
-    if (!orgId || !["ADMIN", "MANAGER", "OPERATOR"].includes(role ?? "")) return null;
+    if (!orgId || !["ADMIN", "MANAGER", "OPERATOR"].includes(role ?? "")) {
+      logAuthFailure("verifyControlSecret", "invalid_role_or_missing_org", { orgId, role, userId: payload.sub });
+      return null;
+    }
     return { orgId, matchId, userId: payload.sub };
   } catch {
+    logAuthFailure("verifyControlSecret", "jwt_verify_failed");
     return null;
   }
 }
@@ -113,11 +144,16 @@ export async function verifyDataFeedSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
+    if (secretsEqual(secret, legacySecret)) return { orgId: LEGACY_ROOM_ID };
+    logAuthFailure("verifyDataFeedSecret", "legacy_secret_mismatch");
+    return null;
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
-  if (token?.type !== "DATA_FEED" || token?.revokedAt) return null;
+  if (token?.type !== "DATA_FEED" || token?.revokedAt) {
+    logAuthFailure("verifyDataFeedSecret", token ? "wrong_type_or_revoked" : "token_not_found", { orgId: token?.orgId });
+    return null;
+  }
   return { orgId: token.orgId, matchId: token.matchId ?? undefined };
 }
 
@@ -136,7 +172,9 @@ export async function verifyGraphicsSecret(
   if (!secret) return null;
 
   if (!process.env.DATABASE_URL) {
-    return secretsEqual(secret, legacySecret) ? { orgId: LEGACY_ROOM_ID } : null;
+    if (secretsEqual(secret, legacySecret)) return { orgId: LEGACY_ROOM_ID };
+    logAuthFailure("verifyGraphicsSecret", "legacy_secret_mismatch");
+    return null;
   }
 
   const token = await prisma.scopedToken.findUnique({ where: { tokenHash: hashToken(secret) } });
@@ -145,7 +183,10 @@ export async function verifyGraphicsSecret(
   }
 
   const authSecret = process.env.AUTH_SECRET;
-  if (!authSecret) return null;
+  if (!authSecret) {
+    logger.error("auth.misconfigured", { fn: "verifyGraphicsSecret", reason: "AUTH_SECRET unset" });
+    return null;
+  }
 
   try {
     const key = new TextEncoder().encode(authSecret);
@@ -153,9 +194,13 @@ export async function verifyGraphicsSecret(
     const orgId = payload.orgId as string | undefined;
     const role = payload.role as string | undefined;
     const matchId = payload.matchId as string | undefined;
-    if (!orgId || role !== "graphics") return null;
+    if (!orgId || role !== "graphics") {
+      logAuthFailure("verifyGraphicsSecret", "invalid_role_or_missing_org", { orgId, role });
+      return null;
+    }
     return { orgId, matchId };
   } catch {
+    logAuthFailure("verifyGraphicsSecret", "jwt_verify_failed", { orgId: token?.orgId });
     return null;
   }
 }

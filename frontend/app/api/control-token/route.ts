@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
-import { prisma } from "@scorehub/db";
+import { prisma, recordAuditEvent } from "@scorehub/db";
 import { auth } from "@/auth";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
+import { logger } from "@/lib/logger";
 
 // Mints a short-lived token the control panel presents to the relay instead
 // of a long-lived shared CONTROL_SECRET. The relay verifies it with the same
@@ -33,6 +34,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!["ADMIN", "MANAGER", "OPERATOR"].includes(session.user.activeRole)) {
+    logger.warn("permission.denied", { userId: session.user.id, orgId: session.user.activeOrgId, role: session.user.activeRole, route: "control-token" });
+    recordAuditEvent({
+      eventType: "permission.denied",
+      userId: session.user.id,
+      orgId: session.user.activeOrgId,
+      message: `control-token denied for role ${session.user.activeRole}`,
+      metadata: { role: session.user.activeRole, route: "control-token" },
+    });
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
-import { prisma } from "@scorehub/db";
+import { prisma, recordAuditEvent } from "@scorehub/db";
 import { auth } from "@/auth";
 import { isRateLimited, clientIp } from "@/lib/rateLimit";
+import { logger } from "@/lib/logger";
 
 // Mints a short-lived token for the Graphics Operator add-on's control UI
 // (frontend/app/control/graphics), presented to the relay the same way the
@@ -21,6 +22,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!["ADMIN", "MANAGER", "OPERATOR"].includes(session.user.activeRole)) {
+    logger.warn("permission.denied", { userId: session.user.id, orgId: session.user.activeOrgId, role: session.user.activeRole, route: "graphics-token" });
+    recordAuditEvent({
+      eventType: "permission.denied",
+      userId: session.user.id,
+      orgId: session.user.activeOrgId,
+      message: `graphics-token denied for role ${session.user.activeRole}`,
+      metadata: { role: session.user.activeRole, route: "graphics-token" },
+    });
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -30,6 +39,14 @@ export async function GET(req: NextRequest) {
       select: { account: { select: { addOns: true } } },
     });
     if (!org?.account.addOns.includes("graphics-operator")) {
+      logger.warn("permission.denied", { userId: session.user.id, orgId: session.user.activeOrgId, route: "graphics-token", reason: "addon_not_active" });
+      recordAuditEvent({
+        eventType: "permission.denied",
+        userId: session.user.id,
+        orgId: session.user.activeOrgId,
+        message: "graphics-token denied: graphics-operator add-on not active",
+        metadata: { route: "graphics-token", reason: "addon_not_active" },
+      });
       return NextResponse.json(
         { error: "This feature requires the graphics-operator add-on — upgrade at /account/billing" },
         { status: 403 }

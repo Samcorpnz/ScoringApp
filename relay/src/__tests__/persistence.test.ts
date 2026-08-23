@@ -5,6 +5,7 @@ const matchUpdateMock = jest.fn();
 const matchCountMock = jest.fn();
 
 jest.mock("@scorehub/db", () => ({
+  recordAuditEvent: jest.fn(),
   prisma: {
     match: {
       findUnique: (...a: unknown[]) => matchFindUniqueMock(...a),

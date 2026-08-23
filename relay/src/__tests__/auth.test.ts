@@ -3,6 +3,7 @@ import { SignJWT } from "jose";
 const findUniqueMock = jest.fn();
 jest.mock("@scorehub/db", () => ({
   prisma: { scopedToken: { findUnique: (...a: unknown[]) => findUniqueMock(...a) } },
+  recordAuditEvent: jest.fn(),
 }));
 
 import {

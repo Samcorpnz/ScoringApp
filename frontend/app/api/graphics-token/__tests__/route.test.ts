@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 const matchFindUniqueMock = vi.fn();
 vi.mock("@scorehub/db", () => ({
   prisma: { match: { findUnique: (...a: unknown[]) => matchFindUniqueMock(...a) } },
+  recordAuditEvent: vi.fn(),
 }));
 
 const authMock = vi.fn();
