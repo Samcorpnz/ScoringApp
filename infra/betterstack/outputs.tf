@@ -9,3 +9,7 @@ output "relay_monitor_id" {
 output "frontend_monitor_id" {
   value = betteruptime_monitor.frontend_health.id
 }
+
+output "sentry_error_rate_monitor_id" {
+  value = betteruptime_monitor.sentry_error_rate.id
+}

@@ -10,6 +10,12 @@ variable "frontend_health_url" {
   default     = "https://app.scorehub.co.nz/api/health"
 }
 
+variable "sentry_error_rate_url" {
+  description = "Synthetic health signal for recent Sentry error volume (SA-48 free-tier path, see README)."
+  type        = string
+  default     = "https://app.scorehub.co.nz/api/health/sentry-error-rate"
+}
+
 variable "status_page_subdomain" {
   description = "Subdomain under betteruptime.com for Phase 1 (custom domain deferred to SA-111)."
   type        = string
