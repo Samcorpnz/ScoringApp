@@ -23,7 +23,7 @@ team upgrades to Pro.
 | Database | Neon branch `UAT` (project `ScoringApp`, id `patient-morning-97818497`) | Copy-on-write off `production`. No auto-refresh policy yet — reset with `neonctl branches reset UAT --parent` when data drifts too far from useful. |
 | Redis | Upstash `ScoreHub-UAT` (pay-as-you-go, `ap-southeast-2`) | Deliberately a separate database from prod's `ScoreHub` — isolates the Socket.io cross-instance adapter and clock tick-lock so UAT traffic can't touch prod's Redis keyspace. |
 | Object storage | R2 bucket `scorehub-uat`, custom domain `cdn-uat.scorehub.co.nz` | Access key scoped to this bucket only (Object Read & Write), created via the Cloudflare dashboard (not available through `wrangler`/the account API token used for other Cloudflare ops). Account ID `c0c396b5f4c3cf71c2ecb3821febaf92`. |
-| Marketing site | Cloudflare Worker `scorehub-marketing-uat`, custom domain `uat.scorehub.co.nz` | Deploy: `cd marketing && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. Uses a Mailgun sandbox domain and routes contact-form submissions to `sam@samcorp.co.nz` instead of `hello@scorehub.co.nz` — see the `uat` env block in `marketing/wrangler.jsonc`. |
+| Marketing site | Cloudflare Worker `scorehub-marketing-uat`, custom domain `uat.scorehub.co.nz` | Deploy: `cd marketing && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. Uses the verified `mail.scorehub.co.nz` Mailgun domain but still routes contact-form submissions to `sam@samcorp.co.nz` instead of `hello@scorehub.co.nz`, to keep UAT test submissions out of the real inbox — see the `uat` env block in `marketing/wrangler.jsonc`. |
 | Help centre | Cloudflare Worker `scorehub-help-uat`, custom domain `help.uat.scorehub.co.nz` | Deploy: `cd help && npm run build && npx wrangler deploy --env uat`. Manual only, no CI job. |
 
 UAT hostnames mirror production's structure — bare domain is marketing, `app.` is the frontend, `help.` is the help centre — just with everything nested a level under `uat.`: `uat.scorehub.co.nz` (marketing), `app.uat.scorehub.co.nz` (frontend), `help.uat.scorehub.co.nz` (help centre).
@@ -103,9 +103,9 @@ prod, or vice versa).
      --target preview` (env var changes need a fresh deployment to reach running functions).
   5. The unrelated `git-main`-alias webhook endpoint in Stripe (stray, not the real production
      one) still needs manual deletion — low priority, it's just noisy in the dashboard.
-- **Mailgun**: UAT shares the generic Preview environment's Mailgun config
-  — real emails will send to real addresses on signup/invite flows tested
-  in UAT. Consider a sandbox domain if that's not acceptable.
+- **Mailgun**: UAT shares the generic Preview environment's Mailgun config, now on
+  the verified `mail.scorehub.co.nz` domain (SA-107) — real emails send to real addresses
+  on signup/invite flows tested in UAT.
 - **Sentry**: `uat`-branch-scoped `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`,
   `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, and `SENTRY_ENVIRONMENT` are now set on
   Vercel (2026-08-15).
