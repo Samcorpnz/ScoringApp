@@ -27,7 +27,7 @@
         { "pattern": "uat.scorehub.co.nz", "custom_domain": true }
       ],
       "vars": {
-        "MAILGUN_DOMAIN": "sandboxb942a665e95b4eefaa84301b0cd15dce.mailgun.org",
+        "MAILGUN_DOMAIN": "mail.scorehub.co.nz",
         "CONTACT_TO_EMAIL": "sam@samcorp.co.nz"
       }
     }

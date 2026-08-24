@@ -4,7 +4,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-14",
   "vars": {
-    "GITHUB_REPO": "Samcorpnz/ScoringApp",
+    "GITHUB_REPO": "Samcorpnz/ScoreHub",
     "RELEASE_TAG_PREFIX": "bridge-v"
   },
   "routes": [
@@ -21,7 +21,7 @@
         { "pattern": "downloads.uat.scorehub.co.nz", "custom_domain": true }
       ],
       "vars": {
-        "GITHUB_REPO": "Samcorpnz/ScoringApp",
+        "GITHUB_REPO": "Samcorpnz/ScoreHub",
         "RELEASE_TAG_PREFIX": "bridge-v"
       }
     }

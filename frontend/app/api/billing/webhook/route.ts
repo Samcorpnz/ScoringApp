@@ -92,7 +92,24 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   const accountId = session.client_reference_id ?? session.metadata?.accountId;
   if (!accountId || typeof session.customer !== "string" || typeof session.subscription !== "string") return;
 
-  const subscription = await getStripe().subscriptions.retrieve(session.subscription);
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await getStripe().subscriptions.retrieve(session.subscription);
+  } catch (err) {
+    // The subscription can be gone by the time we look it up (e.g. a stale
+    // event replayed against test data that's since been reset) — that's not
+    // a transient failure, so don't let Stripe retry this forever.
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === "resource_missing") {
+      console.error(`[billing] checkout.session.completed references missing subscription: ${session.subscription} (account ${accountId})`);
+      Sentry.captureMessage("billing webhook: checkout.session.completed references missing subscription", {
+        level: "warning",
+        tags: { area: "billing-webhook" },
+        extra: { subscriptionId: session.subscription, accountId },
+      });
+      return;
+    }
+    throw err;
+  }
   const priceId = subscription.items.data[0]?.price.id;
   const addOn = session.metadata?.addOn as AddOn | undefined;
 

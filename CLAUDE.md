@@ -163,7 +163,7 @@ Environment. That environment's `required_reviewers` protection rule (added 2026
 reviewer: the repo owner) is what actually pauses the workflow for approval — the `environment:`
 key in the YAML alone does nothing if the environment has no protection rules configured, which
 was the case for weeks (every push deployed immediately, no gate). Check
-`gh api repos/Samcorpnz/ScoringApp/environments/production` if this ever needs re-verifying; the
+`gh api repos/Samcorpnz/ScoreHub/environments/production` if this ever needs re-verifying; the
 name is matched case-insensitively. Fly.io's and Vercel's own git-push auto-deploy must also stay
 disabled in their dashboards — otherwise every push deploys immediately, bypassing this gate.
 `AUTH_SECRET` must be identical between relay and frontend deployments (it's the shared JWT
