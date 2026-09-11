@@ -10,7 +10,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "next": "^15",
+    "next": "^16.3.4",
     "react": "^19",
     "react-dom": "^19"
   },
@@ -22,7 +22,7 @@
     "wrangler": "^4"
   },
   "overrides": {
-    "sharp": "^0.35.0",
+    "sharp": ">=0.35.4",
     "postcss": "^8.5.23",
     "next": {
       "postcss": "^8.5.23"
